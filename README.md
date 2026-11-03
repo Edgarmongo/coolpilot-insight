@@ -1,6 +1,9 @@
-# DY-Comment — 抖音多视频评论分析与可视化平台
+# CoolPilot Insight — 智能内容洞察平台
 
-> 一站式抖音评论数据采集、清洗、分析与可视化平台。支持多视频管理、AI 核心话题分析、多维度数据可视化大屏。
+> **AI-Powered Content Intelligence Platform**
+> 从内容数据到用户洞察，让 AI 发现真实需求。
+
+> 一站式内容评论数据采集、清洗、分析与可视化平台。当前支持抖音视频评论，提供多视频管理、AI 核心话题分析、多维度数据可视化大屏。
 
 > ⚠️ **部署前必读（安全）**
 > 仓库内的数据库密码、JWT 密钥均为**本地开发默认值**，仅供开箱即用，**不可用于生产环境**。
@@ -14,7 +17,7 @@
 
 ## 📖 项目简介
 
-DY-Comment 是一个面向抖音创作者和运营人员的评论数据分析工具。用户只需提供抖音视频链接，即可自动完成**评论采集 → 数据清洗（情感标注/去重） → 多维度分析 → 可视化大屏展示**的全流程。平台内置 DeepSeek API，可自动生成智能化的「核心话题分析报告」，帮助运营人员快速把握评论区舆情动态。
+CoolPilot Insight 是一个面向抖音创作者和运营人员的评论数据分析工具。用户只需提供抖音视频链接，即可自动完成**评论采集 → 数据清洗（情感标注/去重） → 多维度分析 → 可视化大屏展示**的全流程。平台内置 DeepSeek API，可自动生成智能化的「核心话题分析报告」，帮助运营人员快速把握评论区舆情动态。
 
 ---
 
@@ -72,7 +75,7 @@ DY-Comment 是一个面向抖音创作者和运营人员的评论数据分析工
 ## 📁 项目结构
 
 ```
-DY-Comment/
+CoolPilot Insight/
 │
 ├── Py_Data/                                # Python 数据层
 │   ├── douyin_comment.py                   # 抖音评论采集（DrissionPage 自动化浏览器）
@@ -149,7 +152,7 @@ DY-Comment/
 │           ├── WordCloud                   # 词云图
 │           └── SankeyChart                # 桑基图
 │
-├── dy_comment.sql                          # 建库建表 SQL（直接执行）
+├── coolpilot_insight.sql                          # 建库建表 SQL（直接执行）
 ├── docker-compose.yml                     # Docker 一键部署编排
 ├── .env.example                           # 环境变量示例（复制为 .env 后使用）
 ├── docker/                                # 容器化配置
@@ -249,19 +252,19 @@ docker compose up -d --build
 
 ```sql
 -- 直接执行项目根目录下的建库建表脚本
-source dy_comment.sql;
+source coolpilot_insight.sql;
 ```
 
 或手动执行：
 ```sql
-CREATE DATABASE IF NOT EXISTS dy_comment DEFAULT CHARSET utf8mb4;
-use dy_comment;
--- 然后执行 dy_comment.sql 中的建表语句
+CREATE DATABASE IF NOT EXISTS coolpilot_insight DEFAULT CHARSET utf8mb4;
+use coolpilot_insight;
+-- 然后执行 coolpilot_insight.sql 中的建表语句
 ```
 
 插入管理员（可选）：
 ```sql
-INSERT INTO dy_comment.user (username, phone, password, role, created_at)
+INSERT INTO coolpilot_insight.user (username, phone, password, role, created_at)
 VALUES ('管理员', '13800000000', MD5('123456'), 1, NOW());
 ```
 

@@ -10,18 +10,18 @@
 #   mysql(:3306)   ->  数据存储
 # ============================================================
 
-name: dy-comment
+name: coolpilot-insight
 
 services:
 
   # ---------------- MySQL ----------------
   mysql:
     image: mysql:8.0
-    container_name: dy-mysql
+    container_name: cpi-mysql
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
-      MYSQL_DATABASE: ${DB_NAME:-dy_comment}
+      MYSQL_DATABASE: ${DB_NAME:-coolpilot_insight}
       TZ: Asia/Shanghai
     command:
       - --character-set-server=utf8mb4
@@ -29,7 +29,7 @@ services:
     volumes:
       - mysql-data:/var/lib/mysql
       # 首次启动自动执行建库建表脚本
-      - ./dy_comment.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./coolpilot_insight.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
       # 本机 3306 已被占用，映射到 3307 避免冲突
       - "${MYSQL_HOST_PORT:-3307}:3306"
@@ -40,21 +40,21 @@ services:
       retries: 20
       start_period: 40s
     networks:
-      - dy-net
+      - cpi-net
 
   # ---------------- Flask 分词/AI 服务 ----------------
   flask:
     build:
       context: .
       dockerfile: docker/flask.Dockerfile
-    container_name: dy-flask
+    container_name: cpi-flask
     restart: unless-stopped
     environment:
       DB_HOST: mysql
       DB_PORT: 3306
       DB_USER: root
       DB_PASSWORD: ${DB_PASSWORD:-root}
-      DB_NAME: ${DB_NAME:-dy_comment}
+      DB_NAME: ${DB_NAME:-coolpilot_insight}
       FLASK_HOST: 0.0.0.0
       FLASK_PORT: 5000
       # 可选：DeepSeek API Key，未配置则 AI 分析自动降级为统计报告
@@ -70,23 +70,23 @@ services:
       retries: 10
       start_period: 30s
     networks:
-      - dy-net
+      - cpi-net
 
   # ---------------- Spring Boot 后端 ----------------
   backend:
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
-    container_name: dy-backend
+    container_name: cpi-backend
     restart: unless-stopped
     environment:
       DB_HOST: mysql
       DB_PORT: 3306
       DB_USER: root
       DB_PASSWORD: ${DB_PASSWORD:-root}
-      DB_NAME: ${DB_NAME:-dy_comment}
+      DB_NAME: ${DB_NAME:-coolpilot_insight}
       SERVER_PORT: 8080
-      JWT_SECRET: ${JWT_SECRET:-dy_comment_jwt_secret_key_2026}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET 未配置，请在 .env 中设置随机字符串（openssl rand -hex 32）}
       # 容器内固定路径
       APP_PROJECT_ROOT: /app
       PYTHON_EXE: /opt/venv/bin/python
@@ -121,14 +121,14 @@ services:
       retries: 20
       start_period: 60s
     networks:
-      - dy-net
+      - cpi-net
 
   # ---------------- 前端 ----------------
   frontend:
     build:
       context: .
       dockerfile: docker/frontend.Dockerfile
-    container_name: dy-frontend
+    container_name: cpi-frontend
     restart: unless-stopped
     environment:
       TZ: Asia/Shanghai
@@ -138,12 +138,12 @@ services:
     depends_on:
       - backend
     networks:
-      - dy-net
+      - cpi-net
 
 volumes:
   mysql-data:
   chrome-data:
 
 networks:
-  dy-net:
+  cpi-net:
     driver: bridge

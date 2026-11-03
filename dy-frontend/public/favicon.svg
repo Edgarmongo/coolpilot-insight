@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="CoolPilot Insight">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0EA5E9"/>
+      <stop offset="55%" stop-color="#0891B2"/>
+      <stop offset="100%" stop-color="#0F766E"/>
+    </linearGradient>
+    <linearGradient id="iris" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ECFEFF"/>
+      <stop offset="100%" stop-color="#A5F3FC"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#bg)"/>
+  <!-- 洞察之眼：外轮廓 -->
+  <path d="M12 32c8-11 28-11 40 0-12 11-32 11-40 0Z"
+        fill="none" stroke="#FFFFFF" stroke-width="3.6"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- 虹膜 -->
+  <circle cx="32" cy="32" r="8.2" fill="url(#iris)"/>
+  <!-- 瞳孔 + 高光 -->
+  <circle cx="32" cy="32" r="4.2" fill="#0F766E"/>
+  <circle cx="29.6" cy="29.6" r="1.5" fill="#FFFFFF" opacity="0.95"/>
+  <!-- 扫描弧：暗示 AI 分析 -->
+  <path d="M45 17.5a17 17 0 0 1 5.2 6.4"
+        fill="none" stroke="#FFFFFF" stroke-width="2.4"
+        stroke-linecap="round" opacity="0.75"/>
+</svg>

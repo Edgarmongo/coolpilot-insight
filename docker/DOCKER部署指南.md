@@ -41,7 +41,7 @@ docker compose logs -f backend
 
 ### 默认管理员账号
 
-`dy_comment.sql` 初始化时已自动创建管理员：
+`coolpilot_insight.sql` 初始化时已自动创建管理员：
 
 - 手机号：`13800000000`（或 `10000000000`）
 - 密码：`123456`
@@ -92,7 +92,7 @@ docker compose down -v
 
 | 服务 | 镜像 | 职责 |
 |------|------|------|
-| `mysql` | mysql:8.0 | 数据存储，首次启动自动执行 `dy_comment.sql` |
+| `mysql` | mysql:8.0 | 数据存储，首次启动自动执行 `coolpilot_insight.sql` |
 | `flask` | python:3.12-slim | jieba 分词 + DeepSeek AI 话题分析 |
 | `backend` | eclipse-temurin:8-jre-jammy | Spring Boot 主服务，内置 Python/Chrome 以执行爬虫与清洗脚本 |
 | `frontend` | node:18-alpine → nginx:alpine | 构建前端静态产物并托管，反代 `/api` |
@@ -115,7 +115,7 @@ docker compose down -v
 | `PY_DATAS_DIR` | 采集 CSV 目录 | `<root>/Py_Data/Datas` |
 | `FLASK_BASE_URL` | 分词服务地址 | `http://127.0.0.1:5000` |
 | `FLASK_AUTOSTART` | 是否由后端拉起 Flask | `true` |
-| `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | 数据库连接 | `localhost` / `3306` / `root` / `root` / `dy_comment` |
+| `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | 数据库连接 | `localhost` / `3306` / `root` / `root` / `coolpilot_insight` |
 
 **这套改造不影响本地开发**：不设任何环境变量时，行为与改造前完全一致，
 `mvn spring-boot:run` 仍会自动拉起 Flask 并调用本地 Chrome。
@@ -153,7 +153,7 @@ CHROME_BROWSER_PATH=/usr/bin/google-chrome
 若自动迁移被跳过（如数据库尚未就绪），可手动执行幂等迁移脚本：
 
 ```bash
-docker compose exec -T mysql mysql -uroot -proot dy_comment < docker/migrate_user_fields.sql
+docker compose exec -T mysql mysql -uroot -proot coolpilot_insight < docker/migrate_user_fields.sql
 ```
 
 该脚本可重复执行，已存在的字段会自动跳过。
@@ -213,7 +213,7 @@ docker compose logs mysql
 docker compose exec backend curl -s "http://localhost:8080/api/analysis/summary?video_id=test"
 ```
 
-MySQL 首次启动会自动导入 `dy_comment.sql`（约 30 秒）。
+MySQL 首次启动会自动导入 `coolpilot_insight.sql`（约 30 秒）。
 若修改过该脚本，需 `docker compose down -v` 后重建数据卷。
 
 ### 端口被占用

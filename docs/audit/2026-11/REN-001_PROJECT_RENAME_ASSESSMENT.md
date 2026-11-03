@@ -591,3 +591,76 @@ CoolPilot Insight（智能内容洞察平台）
 | 新增文件 | 仅本文 `docs/audit/2026-11/REN-001_PROJECT_RENAME_ASSESSMENT.md` |
 
 **本任务仅完成只读盘点和方案设计，不代表授权实际修改工程。**
+
+---
+
+## 附录 A：执行后状态更新（2026-11-03 23:25）
+
+> 本附录记录报告提交后发生的实际变更，**不修改正文的历史记录**。正文结论以撰写时（23:10）状态为准；现状以本附录为准。
+
+### A.1 用户已执行的操作（超出本轮只读范围）
+
+用户提供了新仓库 `https://github.com/Edgarmongo/coolpilot-insight.git` 并要求推送。执行结果：
+
+| 动作 | 结果 |
+|---|---|
+| remote 调整 | `origin` → `Edgarmongo/coolpilot-insight`（SSH）；原仓库保留为 `upstream` |
+| 凭据脱敏 | `.env.example`、`dy_comment.sql`、`docs/` 7 文件 16 处、README 安全提示 |
+| 提交 | `99d4d9b`，**112 文件 / +13962 行** |
+| 推送 | `main -> main` 成功，本地与远程同步 |
+
+### A.2 Git 状态对比
+
+| 项 | 报告撰写时（23:10） | 当前（23:25） |
+|---|---|---|
+| `origin` | `suhuideyu/douyin_opinion_analysis`（SSH） | **`Edgarmongo/coolpilot-insight`（SSH）** |
+| `upstream` | 不存在 | **`suhuideyu/douyin_opinion_analysis`** |
+| 提交总数 | 5 | **6** |
+| 工作区 | 26 改 + 42 未跟踪 | **0 / 0（干净）** |
+| 远程同步 | 未推送 | **已同步** |
+
+### A.3 正文中已过时的结论（5 处）
+
+| 章节 | 原结论 | 现状 |
+|---|---|---|
+| 一、原工程名称及来源（第 76 行） | Git remote = suhuideyu | origin 已改为 Edgarmongo；旧仓库降为 upstream |
+| 一、（第 79 行） | 提交总数 5 | **6** |
+| 一、（第 82 行） | 在制品规模 26 改 / 42 未跟踪 | **0 / 0** |
+| 八、Git 仓库更名影响 | 建议「先 GitHub 改名再 set-url」 | **已用 rename + add 方式完成**，未走 set-url |
+| 十三、分阶段顺序 | 阶段 0～4 全部待做 | **仅完成「仓库推送」**；工程内部标识 **0 改动** |
+
+### A.4 新增的配置事实（正文未覆盖）
+
+| 项 | 说明 |
+|---|---|
+| **origin 协议变更** | HTTPS → SSH。原因：沙箱环境 HTTPS 报 `CRYPT_E_REVOCATION_OFFLINE` 与 `CONNECT tunnel failed 502`；SSH 通道认证为 `Edgarmongo` 账号 |
+| **协作影响** | 他人 clone 需配置 SSH key；若用 HTTPS 需 PAT |
+| **`upstream` 保留** | 符合正文「保留原始上游仓库地址」的要求 |
+| **脱敏影响** | `dy_comment.sql` 种子管理员密码改为 `CHANGE_ME_BEFORE_DEPLOY`，手机号改为 `00000000001/2` —— **下次重建数据库时需注意** |
+
+### A.5 仍未执行的阶段（正文第十三节不变）
+
+| 阶段 | 状态 | 说明 |
+|---|---|---|
+| 0 前置确认 | ❌ 未完成 | LICENSE、权属仍未解决 |
+| **1 产品展示名** | ❌ **未执行** | README 标题仍为 `DY-Comment`，`index.html` 仍为「抖音多视频评论分析与可视化平台」 |
+| **2 工程名** | ❌ **未执行** | `pom.xml` 的 name/artifactId、`package.json` name 均未改 |
+| **3 部署标识** | ❌ **未执行** | `docker-compose.yml` 的 `name: dy-comment`、容器名、网络名均未改；卷未被锁定 |
+| **4 内部标识** | ❌ **未执行** | `com.dy` 106 处、`dy_comment` 库名均未改 |
+
+**结论**：目前只完成了「代码托管位置变更」，**产品与工程命名 100% 保持原状**。
+
+### A.6 待你确认的事项（正文第十五节不变，7 项）
+
+| # | 事项 | 优先级 |
+|---|---|---|
+| 1 | `guo'jun'ru` 与你的关系？代码权属？ | 🔴 阻塞 |
+| 2 | 是否补 LICENSE？Apache-2.0 / MIT / 不补 | 🔴 高 |
+| 3 | Docker 卷：「锁定旧名」还是「迁移」 | 🔴 高 |
+| 4 | 数据库名是否改 | 🟡 中 |
+| 5 | `com.dy` 是否改、何时改 | 🟡 中 |
+| 6 | 「抖音」文案哪些保留 | 🟢 低 |
+| 7 | 是否需要 favicon/Logo 设计 | 🟢 低 |
+
+> 附录 A 由后续执行操作产生，不影响正文作为「更名方案」的有效性。
+

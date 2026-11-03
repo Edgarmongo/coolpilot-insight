@@ -8,11 +8,11 @@
         <artifactId>spring-boot-starter-parent</artifactId>
         <version>2.7.18</version>
     </parent>
-    <groupId>com.dy</groupId>
-    <artifactId>dy-comment</artifactId>
+    <groupId>com.coolskyai</groupId>
+    <artifactId>coolpilot-insight-server</artifactId>
     <version>1.0.0</version>
-    <name>DY-Comment</name>
-    <description>抖音多视频评论分析与可视化平台 - 后端</description>
+    <name>coolpilot-insight-server</name>
+    <description>CoolPilot Insight - 智能内容洞察平台 - 后端服务</description>
 
     <properties>
         <java.version>1.8</java.version>

@@ -1,8 +1,8 @@
 <template>
   <div class="login-page">
     <div class="login-left">
-      <h1>DY Comment</h1>
-      <p>抖音多视频评论分析可视化平台，一站式洞察评论数据</p>
+      <h1>CoolPilot Insight</h1>
+      <p>从内容数据到用户洞察，让 AI 发现真实需求。</p>
     </div>
     <div class="login-right">
       <div class="login-card">

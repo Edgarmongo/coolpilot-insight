@@ -88,7 +88,7 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.
 
 # 应用代码
 WORKDIR /app
-COPY --from=builder /build/target/dy-comment-1.0.0.jar app.jar
+COPY --from=builder /build/target/coolpilot-insight-server-1.0.0.jar app.jar
 COPY Py_Data /app/Py_Data
 
 # 采集数据目录（挂载卷后此处为持久化位置）

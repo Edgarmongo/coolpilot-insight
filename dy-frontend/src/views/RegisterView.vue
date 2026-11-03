@@ -2,7 +2,7 @@
   <div class="register-page">
     <div class="register-left">
       <h1>加入我们</h1>
-      <p>注册账号，开始分析你的抖音评论数据</p>
+      <p>创建账号，开启内容洞察之旅</p>
     </div>
     <div class="register-right">
       <div class="register-card">
