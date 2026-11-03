@@ -66,7 +66,8 @@ services:
       mysql:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:5000/wordcloud?video_id=__health__',timeout=10)\""]
+      # 使用 /health 而非业务端点：业务端点要求 X-Internal-Token
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:5000/health',timeout=10)\""]
       interval: 15s
       timeout: 10s
       retries: 10
@@ -121,7 +122,8 @@ services:
       flask:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/analysis/summary?video_id=__health__ >/dev/null || exit 1"]
+      # 公开健康端点，不依赖登录 Token
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/health >/dev/null || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 20
