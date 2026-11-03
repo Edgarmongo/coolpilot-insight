@@ -7,10 +7,10 @@
     <div class="login-right">
       <div class="login-card">
         <h2>欢迎回来</h2>
-        <p class="subtitle">使用手机号登录你的账号</p>
+        <p class="subtitle">使用手机号或管理员账号登录</p>
         <el-form :model="form" :rules="rules" ref="formRef" size="large">
           <el-form-item prop="phone">
-            <el-input v-model="form.phone" placeholder="手机号" />
+            <el-input v-model="form.phone" placeholder="手机号 / 管理员账号" />
           </el-form-item>
           <el-form-item prop="password">
             <el-input v-model="form.password" type="password" placeholder="密码" show-password />
@@ -30,6 +30,7 @@
 <script setup>
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 import { useUserStore } from '../stores/user'
 import { userApi } from '../api'
 
@@ -39,7 +40,12 @@ const formRef = ref()
 const loading = ref(false)
 const form = reactive({ phone: '', password: '' })
 const rules = {
-  phone: [{ required: true, message: '请输入手机号', trigger: 'blur' }, { pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' }],
+  // 登录只校验「非空 + 数字账号」，不套用注册的手机号规则：
+  // 管理员种子账号是 00000000001 这类内部账号，用 1[3-9] 规则会把自己挡住。
+  phone: [
+    { required: true, message: '请输入账号', trigger: 'blur' },
+    { pattern: /^\d{6,20}$/, message: '账号格式不正确（请输入手机号或管理员账号）', trigger: 'blur' },
+  ],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
 }
 
@@ -50,7 +56,12 @@ async function doLogin() {
   try {
     const res = await userApi.login(form)
     userStore.setLogin(res.data)
+    if (res.data?.mustChangePwd === 1) {
+      ElMessage.warning('当前是初始密码，请尽快在「用户」页修改')
+    }
     router.push('/dashboard')
+  } catch (e) {
+    // 具体错误信息由请求拦截器统一提示
   } finally { loading.value = false }
 }
 </script>
