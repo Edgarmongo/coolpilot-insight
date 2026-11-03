@@ -3,6 +3,7 @@ package com.dy.comment.service.impl;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.dy.comment.config.AppProperties;
 import com.dy.comment.entity.AnalysisResult;
 import com.dy.comment.entity.Comment;
 import com.dy.comment.mapper.AnalysisResultMapper;
@@ -34,6 +35,9 @@ public class AnalysisServiceImpl implements AnalysisService {
 
     @Autowired
     private MemoryCache cache;
+
+    @Autowired
+    private AppProperties appProperties;
 
     private static final String CACHE_PREFIX = "analysis:";
     private static final long CACHE_TTL = 30 * 60 * 1000L;
@@ -195,18 +199,26 @@ public class AnalysisServiceImpl implements AnalysisService {
         wrapper.last("LIMIT 20");
         List<Comment> topList = commentMapper.selectList(wrapper);
 
-        List<Map<String, Object>> result = topList.stream().map(c -> {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("nickname", c.getNickname());
-            item.put("content", c.getContent());
-            item.put("likes", c.getLikes());
-            item.put("region", c.getRegion());
-            item.put("publishTime", c.getPublishTime() != null ? c.getPublishTime().toString() : "");
-            return item;
-        }).collect(Collectors.toList());
+        List<Map<String, Object>> result = topList.stream().map(c -> buildTopCommentItem(c))
+                .collect(Collectors.toList());
 
         cache.put(cacheKey, JSON.toJSONString(result), CACHE_TTL);
         return result;
+    }
+
+    /**
+     * 构建高赞评论行数据。
+     * getTopComments 与 refreshAnalysis 两处共用，避免字段不一致。
+     */
+    private static Map<String, Object> buildTopCommentItem(Comment c) {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("douyinId", c.getDouyinId() != null ? c.getDouyinId() : "");
+        item.put("nickname", c.getNickname());
+        item.put("content", c.getContent());
+        item.put("likes", c.getLikes());
+        item.put("region", c.getRegion());
+        item.put("publishTime", c.getPublishTime() != null ? c.getPublishTime().toString() : "");
+        return item;
     }
 
     @Override
@@ -257,7 +269,7 @@ public class AnalysisServiceImpl implements AnalysisService {
 
         List<Map<String, Object>> result = new ArrayList<>();
         try {
-            java.net.URL url = new java.net.URL("http://127.0.0.1:5000/wordcloud?video_id=" + videoId
+            java.net.URL url = new java.net.URL(appProperties.getFlaskBaseUrl() + "/wordcloud?video_id=" + videoId
                     + "&user_id=" + (RequestContext.getUserId() != null && (RequestContext.getRole() == null || RequestContext.getRole() != 1) ? RequestContext.getUserId() : ""));
             java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
             conn.setConnectTimeout(5000); conn.setReadTimeout(30000);
@@ -336,7 +348,7 @@ public class AnalysisServiceImpl implements AnalysisService {
     @SuppressWarnings("unchecked")
     private String callTopicAgent(Map<String, Object> dims) {
         try {
-            java.net.URL url = new java.net.URL("http://127.0.0.1:5000/analyze_topic");
+            java.net.URL url = new java.net.URL(appProperties.getFlaskBaseUrl() + "/analyze_topic");
             java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
@@ -726,15 +738,8 @@ public class AnalysisServiceImpl implements AnalysisService {
 
         List<Map<String, Object>> topList = all.stream()
                 .sorted(Comparator.comparingInt(Comment::getLikes).reversed()).limit(20)
-                .map(c -> {
-                    Map<String, Object> item = new LinkedHashMap<>();
-                    item.put("nickname", c.getNickname());
-                    item.put("content", c.getContent());
-                    item.put("likes", c.getLikes());
-                    item.put("region", c.getRegion());
-                    item.put("publishTime", c.getPublishTime() != null ? c.getPublishTime().toString() : "");
-                    return item;
-                }).collect(Collectors.toList());
+                .map(c -> buildTopCommentItem(c))
+                .collect(Collectors.toList());
 
         LambdaQueryWrapper<AnalysisResult> arWrapper = new LambdaQueryWrapper<>();
         arWrapper.eq(AnalysisResult::getVideoId, videoId);

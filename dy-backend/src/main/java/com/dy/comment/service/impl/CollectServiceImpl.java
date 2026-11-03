@@ -1,7 +1,9 @@
 package com.dy.comment.service.impl;
 
+import com.dy.comment.config.AppProperties;
 import com.dy.comment.service.CollectService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
@@ -15,21 +17,34 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class CollectServiceImpl implements CollectService {
 
-    private static final String PROJECT_ROOT = System.getProperty("user.dir") + "/..";
-    private static final String PYTHON_EXE = PROJECT_ROOT + "/.venv/Scripts/python.exe";
-    private static final String PYTHON_DIR = PROJECT_ROOT + "/Py_Data";
     private static final Map<String, String> STATUS_MAP = new ConcurrentHashMap<>();
+
+    @Autowired
+    private AppProperties appProperties;
 
     @Override
     public void startCollect(String videoId, int maxComments) {
+        startCollect(videoId, maxComments, "online");
+    }
+
+    @Override
+    public void startCollect(String videoId, int maxComments, String collectMode) {
         STATUS_MAP.put(videoId, "RUNNING");
 
         new Thread(() -> {
             try {
-                ProcessBuilder pb = new ProcessBuilder(
-                        PYTHON_EXE, "douyin_comment.py", videoId, String.valueOf(maxComments)
-                );
-                pb.directory(new File(PYTHON_DIR));
+                // 组装命令：python douyin_comment.py <videoId> <max> [--use-login]
+                java.util.List<String> cmd = new java.util.ArrayList<>();
+                cmd.add(appProperties.getPythonExe());
+                cmd.add("douyin_comment.py");
+                cmd.add(videoId);
+                cmd.add(String.valueOf(maxComments));
+                if ("online-login".equals(collectMode)) {
+                    cmd.add("--use-login");
+                }
+
+                ProcessBuilder pb = new ProcessBuilder(cmd);
+                pb.directory(new File(appProperties.getPythonDataDir()));
                 pb.redirectErrorStream(true);
                 pb.environment().put("PYTHONIOENCODING", "utf-8");
                 Process process = pb.start();

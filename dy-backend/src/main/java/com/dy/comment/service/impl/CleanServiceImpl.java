@@ -1,5 +1,6 @@
 package com.dy.comment.service.impl;
 
+import com.dy.comment.config.AppProperties;
 import com.dy.comment.interceptor.RequestContext;
 import com.dy.comment.service.CleanService;
 import com.dy.comment.utils.MemoryCache;
@@ -15,10 +16,8 @@ import java.util.zip.ZipOutputStream;
 @Service
 public class CleanServiceImpl implements CleanService {
 
-    private static final String PROJECT_ROOT = System.getProperty("user.dir") + "/..";
-    private static final String PYTHON_EXE = PROJECT_ROOT + "/.venv/Scripts/python.exe";
-    private static final String PYTHON_DIR = PROJECT_ROOT + "/Py_Data/clean";
-    private static final String DATAS_DIR = PROJECT_ROOT + "/Py_Data/Datas";
+    @Autowired
+    private AppProperties appProperties;
 
     @Autowired
     private MemoryCache cache;
@@ -26,7 +25,7 @@ public class CleanServiceImpl implements CleanService {
     @Override
     public List<Map<String, String>> getPendingFiles() {
         List<Map<String, String>> files = new ArrayList<>();
-        File dir = new File(DATAS_DIR);
+        File dir = new File(appProperties.getDatasDir());
         if (!dir.exists()) return files;
         File[] csvFiles = dir.listFiles((d, name) -> name.endsWith(".csv"));
         if (csvFiles != null) {
@@ -45,11 +44,11 @@ public class CleanServiceImpl implements CleanService {
         Map<String, Object> result = new LinkedHashMap<>();
         try {
             List<String> cmd = new ArrayList<>();
-            cmd.add(PYTHON_EXE);
+            cmd.add(appProperties.getPythonExe());
             cmd.add("clean_main.py");
             cmd.addAll(fileNames);
             ProcessBuilder pb = new ProcessBuilder(cmd);
-            pb.directory(new File(PYTHON_DIR));
+            pb.directory(new File(appProperties.getPythonCleanDir()));
             pb.redirectErrorStream(true);
             pb.environment().put("PYTHONIOENCODING", "utf-8");
             Long uid = RequestContext.getUserId();
@@ -77,7 +76,7 @@ public class CleanServiceImpl implements CleanService {
         if (fileNames == null || fileNames.isEmpty()) return new byte[0];
         try {
             if (fileNames.size() == 1) {
-                File f = new File(DATAS_DIR, fileNames.get(0));
+                File f = new File(appProperties.getDatasDir(), fileNames.get(0));
                 if (!f.exists()) throw new RuntimeException("文件不存在");
                 return Files.readAllBytes(f.toPath());
             }
@@ -85,7 +84,7 @@ public class CleanServiceImpl implements CleanService {
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             try (ZipOutputStream zos = new ZipOutputStream(bos)) {
                 for (String name : fileNames) {
-                    File f = new File(DATAS_DIR, name);
+                    File f = new File(appProperties.getDatasDir(), name);
                     if (f.exists()) {
                         zos.putNextEntry(new ZipEntry(name));
                         Files.copy(f.toPath(), zos);

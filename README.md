@@ -2,6 +2,14 @@
 
 > 一站式抖音评论数据采集、清洗、分析与可视化平台。支持多视频管理、AI 核心话题分析、多维度数据可视化大屏。
 
+> ⚠️ **部署前必读（安全）**
+> 仓库内的数据库密码、JWT 密钥均为**本地开发默认值**，仅供开箱即用，**不可用于生产环境**。
+> 部署前请复制 `.env.example` 为 `.env`，并至少替换：
+> - `DB_PASSWORD`（默认 `root`）
+> - `JWT_SECRET`（默认值已公开，可伪造登录态，务必改为随机串，如 `openssl rand -hex 32`）
+>
+> 建库脚本中的管理员账号为占位凭据，首次部署后请立即登录修改密码。
+
 ---
 
 ## 📖 项目简介
@@ -16,6 +24,8 @@ DY-Comment 是一个面向抖音创作者和运营人员的评论数据分析工
 - 通过 DrissionPage 自动化浏览器采集抖音视频评论
 - 支持批量多视频同时采集
 - 原始数据保存为 CSV 文件，可预览和管理
+- **采集用户标识**：抖音号(unique_id)、抖音 UID、安全 UID(sec_uid)、IP 归属地
+  - 注：抖音出于隐私保护**不返回用户真实 IP**，只能拿到 IP 归属地标签（如"辽宁""广东"）
 
 ### 数据清洗（Clean）
 - 自动去重、过滤无效评论
@@ -48,8 +58,7 @@ DY-Comment 是一个面向抖音创作者和运营人员的评论数据分析工
 | 层 | 技术 |
 |----|------|
 | 数据采集 | Python 3.12 + DrissionPage 4.x |
-| 数据清洗 | Python 3.12 + jieba + 自定义情感词典 |
-| AI Agent | DeepSeek API (`deepseek-chat`) + OpenAI SDK |
+| 数据清洗 | Python 3.12 + jieba + 自定义情感词典 || AI Agent | DeepSeek API (`deepseek-chat`) + OpenAI SDK |
 | 分词服务 | Flask 3.x + jieba（常驻服务，50ms 级响应） |
 | 后端 | Spring Boot 2.7 + MyBatis-Plus 3.5 + MySQL 8.0 |
 | API 文档 | springdoc-openapi (Swagger UI) |
@@ -141,6 +150,15 @@ DY-Comment/
 │           └── SankeyChart                # 桑基图
 │
 ├── dy_comment.sql                          # 建库建表 SQL（直接执行）
+├── docker-compose.yml                     # Docker 一键部署编排
+├── .env.example                           # 环境变量示例（复制为 .env 后使用）
+├── docker/                                # 容器化配置
+│   ├── backend.Dockerfile                 # 后端镜像（JDK8 + Python + Chrome）
+│   ├── flask.Dockerfile                   # 分词/AI 服务镜像
+│   ├── frontend.Dockerfile                # 前端镜像（Node 构建 + Nginx 托管）
+│   ├── nginx.conf                         # 前端托管与 API 反代配置
+│   ├── maven-settings.xml                 # 容器内 Maven 国内镜像配置
+│   └── DOCKER部署指南.md                  # Docker 部署详解
 ├── 需求设计（抖音多视频评论分析与可视化平台）.md    # 完整需求设计文档
 ├── 抖音爬虫维护笔记.md                       # 爬虫故障排查指南
 ├── 简洁版使用指南.txt                        # 极简快速上手指南
@@ -200,11 +218,31 @@ Java 后端计算 5 维度数据 ────┼─ 话题共现            │�
 
 ## 🚀 快速启动
 
-### 1. 环境要求
+### 方式一：Docker 一键启动（推荐）
+
+```bash
+cp .env.example .env          # 可选：按需修改端口/密码
+docker compose up -d --build
+```
+
+启动后访问：
+
+| 服务 | 地址 |
+|------|------|
+| 前端页面 | http://localhost:5173 |
+| 后端 API | http://localhost:8080/api |
+| Swagger 文档 | http://localhost:8080/swagger-ui.html |
+
+> 本机 3306 / 3000 端口已被占用，故 MySQL 映射至 3307、前端映射至 5173。
+> 完整说明见 **[Docker 部署指南](docker/DOCKER部署指南.md)**。
+
+### 方式二：本地开发
+
+#### 1. 环境要求
 
 - JDK 8+
 - Node.js 18+
-- Python 3.12+
+- Python 3.10+
 - MySQL 8.0
 
 ### 2. 数据库
@@ -224,7 +262,7 @@ use dy_comment;
 插入管理员（可选）：
 ```sql
 INSERT INTO dy_comment.user (username, phone, password, role, created_at)
-VALUES ('管理员', '13800000001', MD5('admin123'), 1, NOW());
+VALUES ('管理员', '13800000000', MD5('123456'), 1, NOW());
 ```
 
 ### 3. 配置 DeepSeek API Key（AI 话题分析）
@@ -266,6 +304,9 @@ npm run dev
 | Swagger 文档 | `http://localhost:8080/swagger-ui.html` |
 | Flask 分词服务 | `http://127.0.0.1:5000`（内部分调用，无需直接访问） |
 
+> **提示**：所有路径与外部地址均已支持环境变量覆盖，本地开发无需任何额外配置。
+> 常用变量清单见 [Docker 部署指南 · 关键设计说明](docker/DOCKER部署指南.md)。
+
 ---
 
 ## 🧩 已实现的优化（v2.0+）
@@ -300,5 +341,6 @@ npm run dev
 ## 📄 相关文档
 
 - [需求设计文档](需求设计（抖音多视频评论分析与可视化平台）.md) — 完整的需求分析、功能设计、数据表设计
+- [Docker 部署指南](docker/DOCKER部署指南.md) — 一键容器化启动、架构说明、常见问题
 - [爬虫维护笔记](抖音爬虫维护笔记.md) — 爬虫故障排查指南
 - [简洁版使用指南](简洁版使用指南.txt) — 快速上手指南

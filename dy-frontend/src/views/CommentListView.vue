@@ -51,10 +51,19 @@
       </div>
 
       <el-table :data="tableData" v-loading="loading" stripe :row-class-name="() => 'el-table__row--striped'" border style="width:100%;">
-        <el-table-column prop="nickname" label="昵称" width="150" />
-        <el-table-column prop="region" label="地区" width="90" />
+        <el-table-column label="昵称 / 抖音号" width="200">
+          <template #default="{ row }">
+            <div style="line-height:1.5;">
+              <div>{{ row.nickname }}</div>
+              <div v-if="row.douyinId" style="font-size:12px;color:var(--text-tertiary);font-family:var(--font-mono);">
+                @{{ row.douyinId }}
+              </div>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="region" label="IP归属地" width="100" />
         <el-table-column prop="publishTime" label="发布时间" width="170" />
-        <el-table-column prop="content" label="评论内容" min-width="300" show-overflow-tooltip />
+        <el-table-column prop="content" label="评论内容" min-width="260" show-overflow-tooltip />
         <el-table-column prop="likes" label="点赞" width="80" align="center" />
         <el-table-column label="情感" width="90" align="center">
           <template #default="{ row }">
@@ -88,6 +97,10 @@ async function loadVideoList() {
   try {
     const res = await analysisApi.videoList()
     videoList.value = res.data || []
+    // 自动选中第一个视频，否则 currentVideo 为空导致列表无数据
+    if (!appStore.currentVideo && videoList.value.length > 0) {
+      appStore.currentVideo = videoList.value[0].videoId
+    }
   } catch (e) { /* */ }
 }
 
@@ -106,5 +119,8 @@ async function loadData() {
   } finally { loading.value = false }
 }
 
-onMounted(async () => { await loadVideoList(); if (appStore.currentVideo) loadData() })
+onMounted(async () => {
+  await loadVideoList()
+  if (appStore.currentVideo) loadData()
+})
 </script>

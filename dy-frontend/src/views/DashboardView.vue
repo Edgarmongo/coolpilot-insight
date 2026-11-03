@@ -2,14 +2,27 @@
   <div class="dashboard-page">
     <div class="video-selector">
       <span style="font-weight:600;color:var(--text-secondary);font-size:14px;">当前视频</span>
-      <el-select v-model="appStore.currentVideo" @change="onVideoChange" style="width:280px;" size="large">
-        <el-option v-for="v in videoList" :key="v.videoId" :label="v.videoId" :value="v.videoId" />
+      <el-select v-model="appStore.currentVideo" @change="onVideoChange" style="width:280px;" size="large"
+                 placeholder="请选择视频" :loading="videoLoading">
+        <el-option v-for="v in videoList" :key="v.videoId"
+                   :label="`${v.videoId}（${v.totalComments} 条）`" :value="v.videoId" />
       </el-select>
       <el-button v-if="userStore.token" type="primary" @click="refreshData" size="large">刷新分析</el-button>
     </div>
 
     <StatsCards :summary="summary" />
 
+    <!-- 没有任何视频数据时给出明确指引，避免页面显示一堆 0 让人困惑 -->
+    <div v-if="!videoLoading && videoList.length === 0" class="card"
+         style="text-align:center;padding:36px 20px;color:var(--text-secondary);">
+      <div style="font-size:15px;color:var(--text-primary);margin-bottom:8px;">暂无已入库的评论数据</div>
+      <div style="font-size:13px;line-height:1.9;">
+        请先前往「数据采集」页采集或导入 CSV，再到「数据清洗」页执行入库。<br />
+        入库完成后回到本页即可看到分析结果。
+      </div>
+    </div>
+
+    <template v-else>
     <div class="chart-row">
       <div class="chart-card"><div class="card-header"><h3>地区分布</h3></div><RegionMap :data="regionData" /></div>
       <div class="chart-card"><div class="card-header"><h3>情感分析</h3></div><SentimentPie :data="sentimentData" /></div>
@@ -41,6 +54,7 @@
       <div class="card-header"><h3>高赞评论排行 Top 20</h3></div>
       <TopComments :data="topComments" />
     </div>
+    </template>
   </div>
 </template>
 
@@ -59,14 +73,25 @@ import SankeyChart from '../components/SankeyChart.vue'
 const userStore = useUserStore()
 const appStore = useAppStore()
 const videoList = ref([])
+const videoLoading = ref(false)
 const summary = ref({}); const regionData = ref([]); const sentimentData = ref([])
 const trendData = ref([]); const topComments = ref([])
 const wordcloudData = ref([]); const sankeyData = ref({ nodes: [], links: [] }); const topicText = ref(''); const topicLoading = ref(false)
 
 async function loadVideoList() {
+  videoLoading.value = true
   try {
     const res = await analysisApi.videoList(); videoList.value = res.data || []
-  } catch (e) { /* */ }
+    // 自动选中第一个视频：否则 currentVideo 为空，loadAll 直接 return，
+    // 页面会停留在全 0 的空状态，需要用户手动选一次才能看到数据
+    if (!appStore.currentVideo && videoList.value.length > 0) {
+      appStore.currentVideo = videoList.value[0].videoId
+    }
+    // 当前选中的视频已不存在（数据被清理）时，回退到第一个
+    if (appStore.currentVideo && !videoList.value.some(v => v.videoId === appStore.currentVideo)) {
+      appStore.currentVideo = videoList.value.length > 0 ? videoList.value[0].videoId : ''
+    }
+  } catch (e) { /* */ } finally { videoLoading.value = false }
 }
 
 async function loadAll() {
@@ -89,5 +114,9 @@ async function loadAll() {
 function onVideoChange() { loadAll() }
 async function refreshData() { if (!appStore.currentVideo) return; await analysisApi.refresh(appStore.currentVideo); loadAll() }
 
-onMounted(async () => { await loadVideoList(); if (appStore.currentVideo) loadAll() })
+onMounted(async () => {
+  await loadVideoList()
+  // 无论当前是否有选中视频都尝试加载：loadVideoList 已在必要时自动选中第一个
+  if (appStore.currentVideo) loadAll()
+})
 </script>

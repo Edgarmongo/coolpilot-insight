@@ -19,7 +19,10 @@ CREATE TABLE `comment` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '评论ID',
   `video_id` VARCHAR(32) NOT NULL COMMENT '视频编号',
   `nickname` VARCHAR(100) NOT NULL COMMENT '评论用户昵称',
-  `region` VARCHAR(50) NOT NULL COMMENT '用户归属地区',
+  `douyin_id` VARCHAR(64) NULL COMMENT '评论者抖音号(unique_id)',
+  `douyin_uid` VARCHAR(32) NULL COMMENT '评论者抖音UID',
+  `sec_uid` VARCHAR(128) NULL COMMENT '评论者安全UID(主页链接用)',
+  `region` VARCHAR(50) NOT NULL COMMENT '用户IP归属地区',
   `publish_time` DATETIME NOT NULL COMMENT '评论发布时间',
   `content` TEXT NOT NULL COMMENT '评论内容',
   `likes` INT NOT NULL DEFAULT 0 COMMENT '点赞数',
@@ -29,7 +32,8 @@ CREATE TABLE `comment` (
   INDEX `idx_video_id` (`video_id`),
   INDEX `idx_video_region` (`video_id`, `region`),
   INDEX `idx_video_time` (`video_id`, `publish_time`),
-  INDEX `idx_video_likes` (`video_id`, `likes`)
+  INDEX `idx_video_likes` (`video_id`, `likes`),
+  INDEX `idx_douyin_id` (`douyin_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='评论数据表';
 
 -- 分析结果表
@@ -53,9 +57,11 @@ CREATE TABLE `analysis_result` (
 ALTER TABLE comment ADD COLUMN user_id BIGINT NULL COMMENT '用户ID' AFTER id;
 -- 为 analysis_result 表添加 user_id 字段（可选，用于后续扩展）
 ALTER TABLE analysis_result ADD COLUMN user_id BIGINT NULL COMMENT '用户ID' AFTER id;
-```
+
 -- 管理员
+-- ⚠️ 安全提示：以下为占位凭据，不可直接用于生产。
+--    首次部署后请立即登录并修改密码，或改用环境变量注入的初始化流程。
 INSERT INTO dy_comment.user (username, phone, password, role, created_at)
-VALUES ('管理员', '10000000000', MD5('123456'), 1, NOW());
+VALUES ('管理员', '00000000001', MD5('CHANGE_ME_BEFORE_DEPLOY'), 1, NOW());
 INSERT INTO dy_comment.user (username, phone, PASSWORD, role, created_at)
-VALUES ('管理员', '13800000000', MD5('123456'), 1, NOW());
+VALUES ('管理员', '00000000002', MD5('CHANGE_ME_BEFORE_DEPLOY'), 1, NOW());

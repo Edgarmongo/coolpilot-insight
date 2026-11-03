@@ -14,8 +14,12 @@ load_dotenv()
 app = Flask(__name__)
 
 DB_CONFIG = {
-    'host': 'localhost', 'port': 3306, 'user': 'root', 'password': 'root',
-    'database': 'dy_comment', 'charset': 'utf8mb4',
+    'host': os.environ.get('DB_HOST', 'localhost'),
+    'port': int(os.environ.get('DB_PORT', 3306)),
+    'user': os.environ.get('DB_USER', 'root'),
+    'password': os.environ.get('DB_PASSWORD', 'root'),
+    'database': os.environ.get('DB_NAME', 'dy_comment'),
+    'charset': 'utf8mb4',
 }
 
 # ---------- DeepSeek Agent ----------
@@ -201,4 +205,5 @@ def wordcloud():
 
 if __name__ == "__main__":
     port = int(os.environ.get("FLASK_PORT", 5000))
-    app.run(host="127.0.0.1", port=port, debug=False)
+    host = os.environ.get("FLASK_HOST", "127.0.0.1")
+    app.run(host=host, port=port, debug=False)

@@ -2,11 +2,15 @@ spring:
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/dy_comment?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
-    username: root
-    password: root
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:dy_comment}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:root}
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 100MB
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
 
 mybatis-plus:
   configuration:
@@ -17,8 +21,25 @@ mybatis-plus:
       id-type: auto
 
 jwt:
-  secret: dy_comment_jwt_secret_key_2026
-  expire: 86400000
+  secret: ${JWT_SECRET:dy_comment_jwt_secret_key_2026}
+  expire: ${JWT_EXPIRE:86400000}
+
+# ---- 运行期路径与服务地址（均可用环境变量覆盖，便于容器化部署）----
+app:
+  # 项目根目录；留空时取当前工作目录的上一级
+  project-root: ${APP_PROJECT_ROOT:}
+  # Python 解释器；留空时自动探测 .venv 或系统 python
+  python-exe: ${PYTHON_EXE:}
+  # Py_Data 目录（爬虫脚本所在目录）
+  python-data-dir: ${PY_DATA_DIR:}
+  # 清洗脚本目录（clean_main.py / wordcloud_service.py）
+  python-clean-dir: ${PY_CLEAN_DIR:}
+  # 采集 CSV 数据目录
+  datas-dir: ${PY_DATAS_DIR:}
+  # Flask 分词服务地址
+  flask-base-url: ${FLASK_BASE_URL:http://127.0.0.1:5000}
+  # 是否由本进程自动拉起 Flask（容器部署时设为 false，改用独立 flask 服务）
+  flask-autostart: ${FLASK_AUTOSTART:true}
 
 logging:
   level:

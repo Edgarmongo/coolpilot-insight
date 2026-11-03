@@ -1,3 +1,14 @@
-pymysql>=1.0.0
+# Web 服务与 AI Agent
+flask>=3.0.0
 openai>=1.0.0
 python-dotenv>=1.0.0
+
+# 数据库
+pymysql>=1.0.0
+
+# 中文分词与情感分析
+jieba>=0.42.1
+snownlp>=0.12.3
+
+# 抖音评论采集（浏览器自动化）
+DrissionPage>=4.1.0,<5.0.0

@@ -12,3 +12,10 @@ __pycache__/
 # 前端依赖
 node_modules/
 dist/
+
+# Java 编译产物
+target/
+*.class
+
+# Docker
+.env

@@ -1,0 +1,32 @@
+# 避免把无关内容送入构建上下文，加速构建并减小镜像体积
+
+# 版本控制与 IDE
+.git
+.gitignore
+.idea/
+.vscode/
+.claude/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# 前端
+node_modules/
+dist/
+
+# Java
+**/target/
+
+# 环境与密钥
+.env
+*.env.local
+
+# 采集到的数据（运行时由卷挂载提供）
+Py_Data/Datas/*.csv
+
+# 文档
+*.md
+!README.md

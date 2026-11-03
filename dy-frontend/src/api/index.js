@@ -11,6 +11,9 @@ export const userApi = {
 export const collectApi = {
   start: (data) => request.post('/collect/start', data),
   status: (videoId) => request.get('/collect/status', { params: { videoId } }),
+  upload: (formData) => request.post('/collect/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
 }
 
 export const cleanApi = {

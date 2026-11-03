@@ -16,14 +16,14 @@ sys.path.insert(0, os.path.dirname(__file__))
 from analysis_engine import get_analyzer
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATAS_DIR = os.path.join(BASE_DIR, 'Datas')
+DATAS_DIR = os.environ.get('PY_DATAS_DIR') or os.path.join(BASE_DIR, 'Datas')
 
 DB_CONFIG = {
-    'host': 'localhost',
-    'port': 3306,
-    'user': 'root',
-    'password': 'root',
-    'database': 'dy_comment',
+    'host': os.environ.get('DB_HOST', 'localhost'),
+    'port': int(os.environ.get('DB_PORT', 3306)),
+    'user': os.environ.get('DB_USER', 'root'),
+    'password': os.environ.get('DB_PASSWORD', 'root'),
+    'database': os.environ.get('DB_NAME', 'dy_comment'),
     'charset': 'utf8mb4',
 }
 
@@ -80,17 +80,28 @@ USER_ID = os.environ.get('CLEAN_USER_ID')
 
 
 def insert_to_db(video_id, rows):
-    """批量插入评论数据到 MySQL"""
+    """批量插入评论数据到 MySQL（跨批次去重，重复采集同一视频不会产生重复数据）"""
     analyzer = get_analyzer()
     conn = get_connection()
     cursor = conn.cursor()
 
-    sql = """INSERT INTO comment (user_id, video_id, nickname, region, publish_time, content, likes, sentiment, created_at)
-             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"""
+    # 先查该视频已入库的 (昵称, 内容) 组合，用于跨批次去重
+    cursor.execute(
+        "SELECT nickname, content FROM comment WHERE video_id = %s",
+        (video_id,),
+    )
+    existing = set(cursor.fetchall())
+    if existing:
+        print(f"  该视频已有 {len(existing)} 条入库记录，将跳过重复")
+
+    sql = """INSERT INTO comment (user_id, video_id, nickname, douyin_id, douyin_uid, sec_uid,
+                                region, publish_time, content, likes, sentiment, created_at)
+             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"""
 
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     batch = []
     success = 0
+    skipped = 0
 
     for row in rows:
         nickname = row.get('昵称', '').strip()
@@ -99,9 +110,20 @@ def insert_to_db(video_id, rows):
         content = row.get('内容', '').strip()
         likes_str = row.get('点赞', '0').strip()
         likes = int(likes_str) if likes_str.isdigit() else 0
-        sentiment = analyzer.analyze(content)
+        # 用户标识字段（旧版 CSV 无这些列时为空）
+        douyin_id = row.get('抖音号', '').strip()
+        douyin_uid = row.get('UID', '').strip()
+        sec_uid = row.get('SEC_UID', '').strip()
 
-        batch.append((USER_ID, video_id, nickname, region, publish_time, content, likes, sentiment, now))
+        # 跨批次去重：该 (昵称, 内容) 已入库则跳过
+        if (nickname, content) in existing:
+            skipped += 1
+            continue
+        existing.add((nickname, content))
+
+        sentiment = analyzer.analyze(content)
+        batch.append((USER_ID, video_id, nickname, douyin_id, douyin_uid, sec_uid,
+                      region, publish_time, content, likes, sentiment, now))
 
         if len(batch) >= BATCH_SIZE:
             cursor.executemany(sql, batch)
@@ -116,7 +138,7 @@ def insert_to_db(video_id, rows):
 
     cursor.close()
     conn.close()
-    print(f"  入库成功: {success} 条")
+    print(f"  入库成功: {success} 条" + (f"，跳过重复 {skipped} 条" if skipped else ""))
     return success
 
 

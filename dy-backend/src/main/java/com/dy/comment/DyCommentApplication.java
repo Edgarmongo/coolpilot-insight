@@ -3,6 +3,7 @@ package com.dy.comment;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.ConfigurableApplicationContext;
 
 import java.io.File;
 
@@ -10,20 +11,37 @@ import java.io.File;
 @MapperScan("com.dy.comment.mapper")
 public class DyCommentApplication {
     public static void main(String[] args) {
-        // 自动启动 Flask 分词服务
+        ConfigurableApplicationContext context = SpringApplication.run(DyCommentApplication.class, args);
+
+        // 本地开发：自动拉起 Flask 分词服务；容器部署：由独立 flask 服务承担
+        if (!"false".equalsIgnoreCase(context.getEnvironment().getProperty("app.flask-autostart", "true"))) {
+            startFlaskService(context);
+        }
+
+        System.out.println("==============================================");
+        System.out.println("        启动成功！http://localhost:8080");
+        System.out.println("        Swagger: http://localhost:8080/swagger-ui.html");
+        System.out.println("==============================================");
+    }
+
+    /**
+     * 启动 Flask 分词服务（词云 + AI 话题分析）。
+     * Python 解释器与脚本目录均来自配置，兼容 Windows 本地与 Linux 容器。
+     */
+    private static void startFlaskService(ConfigurableApplicationContext context) {
         Process flaskProcess = null;
         try {
-            File baseDir = new File(System.getProperty("user.dir"));
-            String pythonExe = new File(baseDir, "../.venv/Scripts/python.exe").getCanonicalPath();
-            File scriptDir = new File(baseDir, "../Py_Data/clean");
+            String pythonExe = context.getEnvironment().getProperty("app.python-exe", "python");
+            String scriptDir = context.getEnvironment().getProperty("app.python-clean-dir", "../Py_Data/clean");
             ProcessBuilder pb = new ProcessBuilder(pythonExe, "wordcloud_service.py");
-            pb.directory(scriptDir);
+            pb.directory(new File(scriptDir));
             pb.redirectErrorStream(true);
             pb.environment().put("PYTHONIOENCODING", "utf-8");
             flaskProcess = pb.start();
             System.out.println("[Flask] 分词服务已启动");
         } catch (Exception e) {
             System.out.println("[Flask] 分词服务启动失败，词云将不可用: " + e.getMessage());
+            return;
         }
 
         final Process fp = flaskProcess;
@@ -33,11 +51,5 @@ public class DyCommentApplication {
                 System.out.println("[Flask] 分词服务已关闭");
             }
         }));
-
-        SpringApplication.run(DyCommentApplication.class, args);
-        System.out.println("==============================================");
-        System.out.println("        启动成功！http://localhost:8080");
-        System.out.println("        Swagger: http://localhost:8080/swagger-ui.html");
-        System.out.println("==============================================");
     }
 }
