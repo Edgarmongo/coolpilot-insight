@@ -36,5 +36,20 @@ Docker Compose 四服务：`mysql` / `flask` / `backend`(内置 Python+Chrome) /
 L1 视频基础信息公开；L2 评论需 管理员 / 任务发起人 / `video_grant`；L3 分析结果跟随 L2。
 唯一判定入口 `GovernanceService`，Python 侧不再自行做 user_id 过滤。
 
+## AI 全链路（2026-11-04 已实测通过）
+DeepSeek Key 有效。评论级 19/19 成功；视频级洞察落 26 条证据；报告 PDF(3页)/XLSX(8 Sheet) 正常。
+**登录接口字段是 `phone` 不是 `username`**，填错会报「账号或密码错误」。
+`analysis_task` 的 token/成本必须按 usage_record 分项聚合，早期用 `tokens/2` 对半拆是错的。
+
+## 迁移与表结构
+Flyway 是唯一入口，当前 `V1~V8`。V8 给 `analysis_evidence` 补 `source_level`
+（实体有、V4 建表漏），缺它会让评论级分析整批 FAILED。
+改表前后跑 `tools/check_schema_drift.py`（实体字段转 snake_case vs information_schema）。
+
+## 快速改后端（免重建镜像）
+`mvn -s docker/maven-settings.xml -DskipTests compile` → zipfile 替换 `/app/app.jar` 里对应
+`.class`（迁移文件放 `BOOT-INF/classes/db/migration/`）→ `docker restart cpi-backend`。
+重建后用 `zipfile.testzip()` 校验，正常应有 65 个 `BOOT-INF/lib/` 条目。
+
 ## 待验证
-`douyin_search.py` 真实关键词搜索（风控未知）；AI 全链路需配置 Key 实测；`file_asset` 未接入上传落库。
+`douyin_search.py` 真实关键词搜索（风控未知）；`file_asset` 未接入上传落库。

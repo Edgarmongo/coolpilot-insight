@@ -34,7 +34,7 @@
         <div v-if="topicLoading" style="padding:20px;text-align:center;color:#999;font-size:14px;">
           🤔 AI 正在分析评论数据中，请稍候...
         </div>
-        <pre v-else style="font-size:14px;line-height:2;color:var(--text-primary);white-space:pre-wrap;font-family:inherit;margin:0;">{{ topicText }}</pre>
+        <div v-else class="topic-md" v-html="topicHtml"></div>
       </div>
     </div>
 
@@ -59,7 +59,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useUserStore, useAppStore } from '../stores/user'
 import { analysisApi } from '../api'
 import StatsCards from '../components/StatsCards.vue'
@@ -69,6 +69,7 @@ import TrendLine from '../components/TrendLine.vue'
 import TopComments from '../components/TopComments.vue'
 import WordCloud from '../components/WordCloud.vue'
 import SankeyChart from '../components/SankeyChart.vue'
+import { renderMarkdown } from '../utils/renderMarkdown'
 
 const userStore = useUserStore()
 const appStore = useAppStore()
@@ -77,6 +78,8 @@ const videoLoading = ref(false)
 const summary = ref({}); const regionData = ref([]); const sentimentData = ref([])
 const trendData = ref([]); const topComments = ref([])
 const wordcloudData = ref([]); const sankeyData = ref({ nodes: [], links: [] }); const topicText = ref(''); const topicLoading = ref(false)
+// 后端「核心话题」返回 Markdown，直接插值会把 ** 之类的标记原样显示
+const topicHtml = computed(() => renderMarkdown(topicText.value))
 
 async function loadVideoList() {
   videoLoading.value = true
@@ -120,3 +123,22 @@ onMounted(async () => {
   if (appStore.currentVideo) loadAll()
 })
 </script>
+
+<style scoped>
+/* 核心话题 Markdown 渲染样式（v-html 内容需 :deep） */
+.topic-md { font-size: 14px; line-height: 2; color: var(--text-primary); }
+.topic-md :deep(h2) { font-size: 16px; margin: 0 0 10px; font-weight: 700; }
+.topic-md :deep(h3) { font-size: 15px; margin: 14px 0 8px; font-weight: 600; }
+.topic-md :deep(p) { margin: 6px 0; }
+.topic-md :deep(ul), .topic-md :deep(ol) { margin: 6px 0; padding-left: 22px; }
+.topic-md :deep(li) { margin: 4px 0; }
+.topic-md :deep(blockquote) {
+  margin: 8px 0; padding: 8px 12px; border-left: 3px solid #14B8A6;
+  background: #ECFDF5; color: #475569; border-radius: 0 6px 6px 0;
+}
+.topic-md :deep(hr) { border: none; border-top: 1px solid #E2E8F0; margin: 14px 0; }
+.topic-md :deep(code) {
+  background: #E2E8F0; padding: 1px 5px; border-radius: 4px;
+  font-size: 12px; font-family: Consolas, Monaco, monospace;
+}
+</style>

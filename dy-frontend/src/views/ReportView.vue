@@ -16,7 +16,7 @@
         <el-table-column prop="reportType" label="类型" width="100" align="center" />
         <el-table-column label="状态" width="100" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.status === 'PUBLISHED' ? 'success' : 'info'" size="small">{{ row.status }}</el-tag>
+            <el-tag :type="row.status === 'PUBLISHED' ? 'success' : 'info'" size="small">{{ row.status === 'PUBLISHED' ? '已发布' : '草稿' }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="currentVersion" label="版本" width="80" align="center" />
@@ -40,23 +40,35 @@
           <el-descriptions-item label="版本">v{{ detail.versionNo }}</el-descriptions-item>
           <el-descriptions-item label="证据引用">{{ detail.evidenceCount }} 条</el-descriptions-item>
           <el-descriptions-item label="生成时间">{{ detail.generatedAt }}</el-descriptions-item>
-          <el-descriptions-item label="数据范围" :span="2">{{ JSON.stringify(detail.scope) }}</el-descriptions-item>
+          <el-descriptions-item label="数据范围" :span="2">{{ scopeText }}</el-descriptions-item>
         </el-descriptions>
-        <div class="md-box">{{ detail.contentMd || '（无内容）' }}</div>
+        <div class="md-box" v-html="contentHtml"></div>
       </template>
     </el-drawer>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { reportApi } from '../api'
+import { renderMarkdown } from '../utils/renderMarkdown'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const reports = ref([])
 const loading = ref(false)
 const drawer = ref(false)
 const detail = ref(null)
+// contentMd 是 Markdown，直接插值会显示 ** 等原始标记
+const contentHtml = computed(() => renderMarkdown(detail.value?.contentMd || '（无内容）'))
+// scope 是 JSON，直接 stringify 会把整段原始 JSON 摊在界面上
+const scopeText = computed(() => {
+  const sc = detail.value?.scope || {}
+  const parts = []
+  if (sc.videoId) parts.push(`视频 ${sc.videoId}`)
+  if (sc.sampleCount != null) parts.push(`样本 ${sc.sampleCount} 条`)
+  if (Array.isArray(sc.videoIds) && sc.videoIds.length) parts.push(`共 ${sc.videoIds.length} 个视频`)
+  return parts.length ? parts.join(' ｜ ') : '—'
+})
 const downloading = ref('')
 
 async function load() {
@@ -132,12 +144,27 @@ onMounted(load)
 
 <style scoped>
 .md-box {
-  white-space: pre-wrap;
   line-height: 1.9;
   font-size: 13px;
   color: var(--text-primary);
   background: #F8FAFC;
   border-radius: 10px;
-  padding: 18px;
+  padding: 18px 22px;
+}
+/* v-html 渲染的 Markdown 内容需要 :deep 才能命中 */
+.md-box :deep(h2) { font-size: 17px; margin: 18px 0 10px; font-weight: 700; }
+.md-box :deep(h3) { font-size: 15px; margin: 16px 0 8px; font-weight: 600; }
+.md-box :deep(h2:first-child), .md-box :deep(h3:first-child) { margin-top: 0; }
+.md-box :deep(p) { margin: 8px 0; }
+.md-box :deep(ul), .md-box :deep(ol) { margin: 8px 0; padding-left: 22px; }
+.md-box :deep(li) { margin: 4px 0; }
+.md-box :deep(blockquote) {
+  margin: 10px 0; padding: 8px 12px; border-left: 3px solid #14B8A6;
+  background: #ECFDF5; color: #475569; border-radius: 0 6px 6px 0;
+}
+.md-box :deep(hr) { border: none; border-top: 1px solid #E2E8F0; margin: 16px 0; }
+.md-box :deep(code) {
+  background: #E2E8F0; padding: 1px 5px; border-radius: 4px;
+  font-size: 12px; font-family: Consolas, Monaco, monospace;
 }
 </style>

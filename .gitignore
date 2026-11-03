@@ -19,3 +19,6 @@ target/
 
 # Docker
 .env
+
+# E2E 截图与临时脚本（体积大且每次重跑都会变，不入库）
+.workbuddy/e2e/

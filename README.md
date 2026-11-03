@@ -135,8 +135,13 @@ CoolPilot Insight 是一个面向抖音创作者和运营人员的评论数据�
 3. **活动任务唯一**：`collection_task_item.uk_video_active (video_id, active_flag)`，
    终态把 `active_flag` 置 NULL（MySQL 唯一索引对 NULL 不生效）。
 
-**迁移机制**：容器启动时 Flyway 自动执行 `V1~V6`，禁止 `baselineOnMigrate`。
+**迁移机制**：容器启动时 Flyway 自动执行 `V1~V8`，禁止 `baselineOnMigrate`。
 MySQL 的 DDL 隐式提交意味着**迁移失败无法回滚**，失败后需按备份或全量重建恢复。
+
+> `V8` 为 `analysis_evidence` 补 `source_level` 列（`INSIGHT` / `COMMENT_ANALYSIS`）。
+> 该列在实体里早已存在但建表时遗漏，导致评论级分析写证据时报
+> `Unknown column 'source_level'`，整批评论被判 FAILED。Flyway 是唯一迁移入口，
+> 补列请继续新增 `V9+`，不要手工改表。
 
 ### 新增环境变量
 
@@ -401,6 +406,31 @@ npm run dev
 6. **Flask 常驻分词服务** — jieba 预加载，响应从 2s 降到 50ms
 7. **3 层容错降级** — AI Agent 不可用时自动回退，页面永不崩溃
 8. **Markdown 格式化报告** — 标准 Markdown 渲染，支持 Emoji 层级、加粗、列表
+
+---
+
+## ✅ AI 全链路验证记录（2026-11-04）
+
+配置真实 `DEEPSEEK_API_KEY` 后，端到端跑通并留下可复核的基线数据：
+
+| 环节 | 结果 |
+|------|------|
+| 评论级结构化分析 | 19/19 成功，输入 659 / 输出 1503 tokens，成本 ¥0.0133 |
+| 视频级洞察 | 1 条 OVERVIEW，26 条证据落库（`source_level=INSIGHT`） |
+| 报告生成 | 基于洞察归档，0 次额外 AI 调用 |
+| PDF 导出 | 3 页，`STSong-Light` 中文字体，6.7 KB |
+| XLSX 导出 | 8 个 Sheet（概览/需求/痛点/机会/亮点/情感/地区/趋势） |
+| 页面冒烟 | 8 个页面 0 控制台报错（登录→看板→概览→洞察→报告→评论→复核→任务） |
+
+**同轮修复的三个缺陷**：
+
+1. `analysis_task` 的 token/成本汇总用 `tokensByTask/2` 对半分，导致 `input==output` 且
+   `cost_amount` 恒为 0 —— 改为分别按 `usage_record` 聚合输入/输出/成本。
+2. 洞察证据写入用 `catch (Exception ignore)` 静默吞异常，缺列时证据全部丢失且无日志 ——
+   改为 `log.warn` 记录，并让评论级证据重跑时先清理旧行，避免证据表无限堆积。
+3. 前端头部导航 9 项挤压右侧用户区（「管理员」换行、手机号被裁切）；
+   `contentMd` / 核心话题直接插值导致 Markdown 标记原样显示 —— 已压缩导航留白、
+   固定用户区宽度，并新增零依赖 `renderMarkdown`（默认转义 HTML）渲染。
 
 ---
 

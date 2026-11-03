@@ -275,9 +275,10 @@ public class AiAnalysisService {
         up.setSuccessItems(success);
         up.setFailedItems(failed);
         up.setFinishedAt(LocalDateTime.now());
-        long tokens = usageMapper.tokensByTask(taskId);
-        up.setInputTokens(tokens / 2);
-        up.setOutputTokens(tokens / 2);
+        // 输入/输出/成本分别按 usage_record 汇总（此前用 tokens/2 对半拆，成本恒为 0）
+        up.setInputTokens(usageMapper.inputTokensByTask(taskId));
+        up.setOutputTokens(usageMapper.outputTokensByTask(taskId));
+        up.setCostAmount(usageMapper.costByTask(taskId));
         taskMapper.updateById(up);
     }
 
@@ -315,6 +316,10 @@ public class AiAnalysisService {
 
         // 评论级证据：让每条结构化结论都能回到原文
         if (ca.getId() != null) {
+            // 重跑同一条评论时先清理旧证据，避免证据表无限堆积
+            evidenceMapper.delete(new LambdaQueryWrapper<AnalysisEvidence>()
+                    .eq(AnalysisEvidence::getCommentAnalysisId, ca.getId())
+                    .eq(AnalysisEvidence::getSourceLevel, "COMMENT_ANALYSIS"));
             AnalysisEvidence ev = new AnalysisEvidence();
             ev.setCommentAnalysisId(ca.getId());
             ev.setCommentId(commentId);
@@ -496,8 +501,10 @@ public class AiAnalysisService {
                     try {
                         evidenceMapper.insert(ev);
                         count++;
-                    } catch (Exception ignore) {
-                        // 评论可能已被删除，跳过该条证据
+                    } catch (Exception e) {
+                        // 不再静默吞掉：历史上因缺列导致证据全部丢失却无任何日志
+                        log.warn("[ai] 洞察证据写入失败 insight={} comment={}: {}",
+                                insightId, cid, e.getMessage());
                     }
                 }
             }

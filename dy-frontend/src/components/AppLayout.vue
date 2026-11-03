@@ -86,21 +86,23 @@ async function doLogout() {
   background: linear-gradient(90deg, #0D9488 0%, #14B8A6 70%, #5EEAD4 100%);
   display: flex; align-items: center; padding: 0 20px; gap: 8px;
 }
-.navbar-logo { font-size: 16px; font-weight: 700; color: #fff; letter-spacing: 1px; white-space: nowrap; }
-.navbar-links { display: flex; align-items: center; flex: 1; justify-content: space-evenly; padding: 0 60px; }
+.navbar-logo { font-size: 16px; font-weight: 700; color: #fff; letter-spacing: 1px; white-space: nowrap; flex-shrink: 0; }
+/* 导航项较多（9 个），左右留白过大时会把右侧用户区挤到换行，故压缩留白并允许横向分配 */
+.navbar-links { display: flex; align-items: center; flex: 1; justify-content: space-evenly; padding: 0 16px; gap: 2px; min-width: 0; }
 .nav-item {
-  display: flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px;
+  display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px;
   color: rgba(255,255,255,0.8); text-decoration: none; font-size: 14px; transition: all .15s ease; white-space: nowrap;
 }
 .nav-item:hover { background: rgba(255,255,255,0.12); color: #fff; }
 .nav-item.active { background: rgba(255,255,255,0.2); color: #fff; font-weight: 600; }
 .nav-item .el-icon { font-size: 17px; }
-.navbar-right { display: flex; align-items: center; gap: 12px; margin-left: auto; }
-.role-tag { padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+/* 用户信息区不允许被压缩：此前会被挤压成「管理/员」「000****0001」被裁切 */
+.navbar-right { display: flex; align-items: center; gap: 12px; margin-left: auto; flex-shrink: 0; }
+.role-tag { padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; white-space: nowrap; }
 .role-tag.user { background: rgba(255,255,255,0.25); color: #fff; }
 .role-tag.admin { background: #FEE2E2; color: #991B1B; }
-.phone-text { font-size: 13px; color: rgba(255,255,255,0.8); }
-.logout-btn, .login-link { background: none; border: none; font-size: 13px; color: rgba(255,255,255,0.7); cursor: pointer; text-decoration: none; }
+.phone-text { font-size: 13px; color: rgba(255,255,255,0.8); white-space: nowrap; }
+.logout-btn, .login-link { background: none; border: none; font-size: 13px; color: rgba(255,255,255,0.7); cursor: pointer; text-decoration: none; white-space: nowrap; }
 .logout-btn:hover, .login-link:hover { color: #fff; }
 .content { flex: 1; overflow: hidden; background: var(--page-bg); }
 </style>
