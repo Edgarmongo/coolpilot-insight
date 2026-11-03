@@ -25,8 +25,10 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        // 仅登录/注册放行。此前 /api/analysis/summary 被额外排除，
+        // 导致该接口既可被未登录访问，又拿不到请求上下文（越权判定的 user/role 为 null）。
         registry.addInterceptor(jwtInterceptor)
                 .addPathPatterns("/api/**")
-                .excludePathPatterns("/api/user/register", "/api/user/login", "/api/analysis/summary");
+                .excludePathPatterns("/api/user/register", "/api/user/login");
     }
 }

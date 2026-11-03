@@ -12,11 +12,23 @@
         <router-link to="/collect" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/collect' }">
           <el-icon><Download /></el-icon><span>采集</span>
         </router-link>
+        <router-link to="/tasks" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/tasks' }">
+          <el-icon><List /></el-icon><span>任务</span>
+        </router-link>
         <router-link to="/clean" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/clean' }">
           <el-icon><Operation /></el-icon><span>清洗</span>
         </router-link>
+        <router-link to="/keywords" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/keywords' }">
+          <el-icon><Search /></el-icon><span>关键词</span>
+        </router-link>
+        <router-link to="/insight" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/insight' }">
+          <el-icon><Opportunity /></el-icon><span>洞察</span>
+        </router-link>
+        <router-link to="/reports" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/reports' }">
+          <el-icon><Document /></el-icon><span>报告</span>
+        </router-link>
         <a :href="dypUrl" target="_blank" rel="noopener" class="nav-item" v-if="userStore.token"
-           title="打开 DouYin Intelligence Platform（AI 洞察 / 报告导出）">
+           title="打开 DouYin Intelligence Platform（评论树 / 热榜 / PDF 报告）">
           <el-icon><TrendCharts /></el-icon><span>深度分析</span>
         </a>
         <router-link to="/profile" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/profile' }">

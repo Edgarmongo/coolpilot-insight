@@ -9,6 +9,15 @@ spring:
     multipart:
       max-file-size: 20MB
       max-request-size: 100MB
+  # Flyway：唯一数据库结构变更入口（ADR-001）
+  # 禁止 baseline-on-migrate —— 只允许在空库上从 V1 建起
+  flyway:
+    enabled: ${FLYWAY_ENABLED:true}
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+    validate-on-migrate: true
+    out-of-order: false
+    encoding: UTF-8
 server:
   port: ${SERVER_PORT:8080}
 
@@ -40,6 +49,8 @@ app:
   flask-base-url: ${FLASK_BASE_URL:http://127.0.0.1:5000}
   # 是否由本进程自动拉起 Flask（容器部署时设为 false，改用独立 flask 服务）
   flask-autostart: ${FLASK_AUTOSTART:true}
+  # 首次启动把哨兵管理员置为可用密码；留空则账号保持不可登录
+  admin-init-password: ${ADMIN_INIT_PASSWORD:}
 
 logging:
   level:

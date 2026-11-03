@@ -2,13 +2,15 @@ package com.coolskyai.coolpilot.insight.controller;
 
 import com.coolskyai.coolpilot.insight.annotation.RequireRole;
 import com.coolskyai.coolpilot.insight.dto.Result;
-import com.coolskyai.coolpilot.insight.entity.AnalysisResult;
 import com.coolskyai.coolpilot.insight.service.AnalysisService;
+import com.coolskyai.coolpilot.insight.service.CompareService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/analysis")
@@ -16,6 +18,18 @@ public class AnalysisController {
 
     @Autowired
     private AnalysisService analysisService;
+
+    @Autowired
+    private CompareService compareService;
+
+    /** 多视频联合分析：并排对比需求/痛点/情感 */
+    @RequireRole
+    @GetMapping("/compare")
+    public Result<Map<String, Object>> compare(@RequestParam String videoIds) {
+        List<String> ids = Arrays.stream(videoIds.split(","))
+                .map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList());
+        return Result.ok(compareService.compare(ids));
+    }
 
     @RequireRole
     @GetMapping("/summary")
@@ -73,7 +87,7 @@ public class AnalysisController {
 
     @RequireRole
     @PostMapping("/refresh")
-    public Result<AnalysisResult> refresh(@RequestParam String videoId) {
+    public Result<Map<String, Object>> refresh(@RequestParam String videoId) {
         return Result.ok(analysisService.refreshAnalysis(videoId));
     }
 }

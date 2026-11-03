@@ -1,6 +1,19 @@
+"""抖音评论采集器（流式落盘版）。
+
+关键改动（相对旧版）：
+1. 采集 cid / parent_cid / root_cid / 回复数 / 是否回复 —— 建立评论唯一标识
+2. 每页立即追加落盘 —— 中断不再丢已采数据
+3. 启动时读取已有 CSV 的 cid 集合 —— 重复运行不产生重复行
+4. 顺带抓取视频元数据到 <aweme_id>.meta.json —— 供 video 表补全
+5. 进度文件 <aweme_id>.progress.json —— 记录页数与最后一条 cid
+
+命令行：
+    python douyin_comment.py <视频ID或链接> [采集上限] [--use-login]
+"""
 from DrissionPage import ChromiumPage
 from datetime import datetime
 import csv
+import json
 import os
 import re
 import sys
@@ -16,32 +29,21 @@ if sys.stdout.encoding and sys.stdout.encoding.upper() != 'UTF-8':
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 # ====================== 配置 ======================
-# 数据保存目录：优先取环境变量，否则用脚本同级的 Datas 目录（容器内外一致）
 SAVE_DIR = os.environ.get('PY_DATAS_DIR') or os.path.join(
     os.path.dirname(os.path.abspath(__file__)), 'Datas')
 LISTEN_API = "aweme/v1/web/comment/list"
+CSV_FIELDS = ["昵称", "抖音号", "UID", "SEC_UID", "地区", "日期",
+              "内容", "点赞", "CID", "PARENT_CID", "ROOT_CID", "回复数", "是否回复"]
 # ===================================================
 
 
 def extract_video_id(raw):
-    """从各种抖音输入中提取纯数字视频 ID。
-
-    兼容场景：
-      1. 纯数字 ID                       -> 7613237683142223214
-      2. 视频页链接 /video/<id>          -> https://www.douyin.com/video/7613...
-      3. 图文链接 /note/<id>
-      4. 分享短链打开后跳转的最终地址
-      5. 搜索结果页 /jingxuan/search/xxx?modal_id=<id>  ← 从"搜索点开的视频"复制来的链接
-    """
+    """从各种抖音输入中提取纯数字视频 ID。"""
     if not raw:
         return None
     raw = raw.strip()
-
-    # 1. 纯数字
     if raw.isdigit():
         return raw
-
-    # 2. 查询参数 modal_id（搜索结果页点开视频后地址栏的样子）
     try:
         query = parse_qs(urlparse(raw).query)
         modal_id = query.get('modal_id', [None])[0]
@@ -49,48 +51,28 @@ def extract_video_id(raw):
             return modal_id
     except Exception:
         pass
-
-    # 3. 路径中的 /video/<id>、/note/<id>、/share/video/<id>
     m = re.search(r'/(?:video|note|share/video)/(\d+)', raw)
     if m:
         return m.group(1)
-
     return None
 
 
-# 视频编号：优先从命令行参数读取，否则使用默认值
-raw_input = sys.argv[1] if len(sys.argv) > 1 else "7613237683142223214"
+raw_input = sys.argv[1] if len(sys.argv) > 1 else ""
+MAX_COMMENTS = int(sys.argv[2]) if len(sys.argv) > 2 and sys.argv[2].isdigit() else 300
 
-# 采集数量：从命令行参数读取，否则 300
-if len(sys.argv) > 2:
-    MAX_COMMENTS = int(sys.argv[2])
-else:
-    MAX_COMMENTS = 300
-
-# 是否使用登录态（--use-login / --use-login=1）
-# 开启时：使用 CHROME_USER_DATA_DIR 指向的登录态目录，并关闭 headless，
-# 以便复用容器内已登录的抖音会话，绕过匿名态的评论限流。
-USE_LOGIN = False
-for arg in sys.argv[3:]:
-    if arg in ("--use-login", "--use-login=1", "--use-login=true"):
-        USE_LOGIN = True
-        break
+USE_LOGIN = any(a in ("--use-login", "--use-login=1", "--use-login=true") for a in sys.argv[3:])
 
 VIDEO_ID = extract_video_id(raw_input)
 if VIDEO_ID:
-    # 无论用户贴的是哪种形式，统一跳到视频详情页。
-    # 搜索页 /jingxuan/search/... 的评论区结构与视频页不同，直接打开会抓不到评论包。
     TARGET_URL = f"https://www.douyin.com/video/{VIDEO_ID}"
 else:
-    # 提取失败时保留原样打开（可能是 v.douyin.com 短链，打开后从地址栏再取一次）
     VIDEO_ID = raw_input
     TARGET_URL = raw_input if raw_input.startswith("http") or "douyin.com" in raw_input \
         else f"https://www.douyin.com/video/{raw_input}"
-    print(f"w(ﾟДﾟ)w 未能从输入中解析出视频ID，将尝试直接打开并从最终地址识别")
+    print("w(ﾟДﾟ)w 未能从输入中解析出视频ID，将尝试直接打开并从最终地址识别")
     print(f"   输入内容: {raw_input[:80]}")
 
 os.makedirs(SAVE_DIR, exist_ok=True)
-# ======================================================
 
 CONTAINER_JS = 'document.querySelector(".parent-route-container") || document.querySelector("#douyin-right-container>div:nth-child(2)")'
 SCROLL_CONTAINER_JS = """
@@ -101,28 +83,122 @@ return c ? {found:true, cls:(c.className||'').slice(0,60), sh:c.scrollHeight, ch
 
 
 def scroll_comment_panel(dp):
-    """翻页：向下滚动内部滚动容器，触发加载更多评论"""
     dp.run_js(f'var c={CONTAINER_JS}; if(c) c.scrollBy(0, 800);')
     time.sleep(2)
 
 
 def preflight_check(dp):
-    """采集前体检：确认评论区滚动容器存在，页面结构变了立刻报错而不闷头跑。"""
     info = dp.run_js(SCROLL_CONTAINER_JS)
     if not info or not info.get('found'):
         print("w(ﾟДﾟ)w 滚动容器不存在，抖音页面结构可能已改版！")
-        print("   请参考《抖音爬虫维护笔记.md》第四节重新定位滚动容器。")
         return False
     print(f"✅ 评论区滚动容器正常 (scrollHeight={info.get('sh')}, clientHeight={info.get('ch')})")
     return True
 
 
-data_list = []
-csv_path = os.path.join(SAVE_DIR, f"{VIDEO_ID}.csv")
+def load_existing_cids(csv_path):
+    """读取已有 CSV 的 cid 与内容指纹，用于跨次运行去重。"""
+    cids, fingerprints = set(), set()
+    if not os.path.exists(csv_path):
+        return cids, fingerprints
+    try:
+        with open(csv_path, encoding='utf-8-sig', newline='') as f:
+            for row in csv.DictReader(f):
+                cid = (row.get('CID') or '').strip()
+                if cid:
+                    cids.add(cid)
+                fingerprints.add(fingerprint(row.get('昵称'), row.get('日期'), row.get('内容')))
+    except Exception as e:
+        print(f"   ⚠️ 读取历史 CSV 失败（将按新文件处理）: {e}")
+    return cids, fingerprints
 
+
+def fingerprint(nickname, dt, content):
+    import hashlib
+    raw = f"{nickname or ''}|{dt or ''}|{(content or '')[:120]}"
+    return hashlib.sha256(raw.encode('utf-8')).hexdigest()[:40]
+
+
+def ensure_header(csv_path):
+    if os.path.exists(csv_path) and os.path.getsize(csv_path) > 0:
+        return
+    with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
+        csv.DictWriter(f, fieldnames=CSV_FIELDS).writeheader()
+
+
+def append_rows(csv_path, rows):
+    """每页追加落盘：中断时已采数据不会丢。"""
+    if not rows:
+        return
+    with open(csv_path, 'a', encoding='utf-8-sig', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=CSV_FIELDS)
+        writer.writerows(rows)
+
+
+def save_progress(progress_path, page, count, last_cid, done=False):
+    try:
+        with open(progress_path, 'w', encoding='utf-8') as f:
+            json.dump({
+                "page": page,
+                "collected": count,
+                "lastCid": last_cid,
+                "finished": done,
+                "updatedAt": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+def capture_video_meta(dp, video_id):
+    """尽力抓取视频元数据；失败不影响评论采集。"""
+    js = """
+    var pick = function(sels){ for (var i=0;i<sels.length;i++){ var e=document.querySelector(sels[i]); if(e && e.innerText) return e.innerText.trim(); } return ''; };
+    var desc = pick(['[data-e2e="video-desc"]','h1']);
+    var author = pick(['[data-e2e="video-author-name"]','.author-name']);
+    var likeText = pick(['[data-e2e="video-player-digg"]','[data-e2e="like-count"]']);
+    return {desc: desc, author: author, likeText: likeText, title: document.title};
+    """
+    try:
+        meta = dp.run_js(js) or {}
+        meta['videoId'] = video_id
+        meta['capturedAt'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        path = os.path.join(SAVE_DIR, f"{video_id}.meta.json")
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(meta, f, ensure_ascii=False, indent=2)
+        print(f"  视频元数据已保存: {meta.get('desc','')[:40]}")
+    except Exception as e:
+        print(f"  视频元数据抓取失败（不影响评论采集）: {e}")
+
+
+def to_row(c, parent_cid=None, is_reply=0):
+    user = c.get("user") or {}
+    dt = datetime.fromtimestamp(c["create_time"]).strftime("%Y-%m-%d %H:%M:%S")
+    reply_total = c.get("reply_comment_total") or 0
+    if not reply_total:
+        nested = c.get("reply_comment") or {}
+        if isinstance(nested, dict):
+            reply_total = nested.get("reply_comment_total") or 0
+    cid = str(c.get("cid") or c.get("comment_id") or "")
+    return {
+        "昵称": user.get("nickname", ""),
+        "抖音号": user.get("unique_id", "") or user.get("short_id", ""),
+        "UID": str(user.get("uid", "") or ""),
+        "SEC_UID": user.get("sec_uid", "") or "",
+        "地区": c.get("ip_label", "未知") or "未知",
+        "日期": dt,
+        "内容": c.get("text", ""),
+        "点赞": c.get("digg_count", 0),
+        "CID": cid,
+        "PARENT_CID": parent_cid or "",
+        "ROOT_CID": c.get("root_comment_id") or (parent_cid or cid),
+        "回复数": reply_total,
+        "是否回复": is_reply,
+    }
+
+
+data_count = 0
 dp = None
 try:
-    # 登录态采集：使用登录态目录 + 非 headless（无头模式易触发风控且登录态可能失效）
     if USE_LOGIN:
         os.environ.setdefault("CHROME_USER_DATA_DIR", "/app/chrome-data")
         os.environ["CHROME_HEADLESS"] = "0"
@@ -135,23 +211,30 @@ try:
     print("( ‵▽′)ψ 抖音页面已打开，请等待评论加载...")
     time.sleep(5)
 
-    # 从最终地址栏提取真实视频 ID（覆盖短链跳转、以及上面解析失败的情况）
     m = re.search(r'/video/(\d+)', dp.url) or re.search(r'modal_id=(\d+)', dp.url)
     if m:
         VIDEO_ID = m.group(1)
     csv_path = os.path.join(SAVE_DIR, f"{VIDEO_ID}.csv")
+    progress_path = os.path.join(SAVE_DIR, f"{VIDEO_ID}.progress.json")
     print(f"  视频ID: {VIDEO_ID}")
 
     if not preflight_check(dp):
         sys.exit(1)
 
-    # 滚动内部容器以触发评论区加载
+    capture_video_meta(dp, VIDEO_ID)
+
+    seen_cids, seen_fps = load_existing_cids(csv_path)
+    if seen_cids or seen_fps:
+        print(f"  检测到历史数据：{len(seen_cids)} 个 cid / {len(seen_fps)} 条指纹，本次将自动跳过重复")
+    ensure_header(csv_path)
+
     dp.run_js(f'var c={CONTAINER_JS}; if(c) c.scrollTop = 600;')
     time.sleep(3)
     print("(●ˇ∀ˇ●) 已滚动到评论区")
 
     page = 0
-    while len(data_list) < MAX_COMMENTS:
+    last_cid = ""
+    while data_count < MAX_COMMENTS:
         page += 1
         print(f"\n ( •̀ ω •́ )y 正在采集第 {page} 页")
 
@@ -165,57 +248,62 @@ try:
             print("w(ﾟДﾟ)w 无更多评论数据，结束采集")
             break
 
-        page_count = len(json_data["comments"])
+        rows = []
         for c in json_data["comments"]:
-            if len(data_list) >= MAX_COMMENTS:
+            if data_count + len(rows) >= MAX_COMMENTS:
                 break
             try:
-                dt = datetime.fromtimestamp(c["create_time"]).strftime("%Y-%m-%d %H:%M:%S")
-                user = c.get("user") or {}
-                data_list.append({
-                    "昵称": user.get("nickname", ""),
-                    # 用户标识：抖音号(unique_id) / 内部UID / 安全UID(主页链接用)
-                    "抖音号": user.get("unique_id", "") or user.get("short_id", ""),
-                    "UID": user.get("uid", "") or "",
-                    "SEC_UID": user.get("sec_uid", "") or "",
-                    # IP 归属地：抖音出于隐私保护只返回归属地标签，不返回真实 IP
-                    "地区": c.get("ip_label", "未知") or "未知",
-                    "日期": dt,
-                    "内容": c["text"],
-                    "点赞": c["digg_count"]
-                })
-                print(f"  {user.get('nickname','')}｜{user.get('unique_id','')}｜{c.get('ip_label','未知')}｜{dt}｜点赞{c['digg_count']}｜{c['text'][:24]}...")
+                row = to_row(c)
+                cid = row["CID"]
+                fp = fingerprint(row["昵称"], row["日期"], row["内容"])
+                if cid and cid in seen_cids:
+                    continue
+                if not cid and fp in seen_fps:
+                    continue
+                rows.append(row)
+                if cid:
+                    seen_cids.add(cid)
+                seen_fps.add(fp)
+                last_cid = cid or last_cid
+                print(f"  {row['昵称'][:12]}｜{row['抖音号']}｜{row['地区']}｜赞{row['点赞']}｜cid={cid[:12]}｜{row['内容'][:20]}...")
+                # 楼中楼：接口返回的嵌套回复一并入库
+                for rc in (c.get("reply_comment") or []):
+                    if data_count + len(rows) >= MAX_COMMENTS:
+                        break
+                    rrow = to_row(rc, parent_cid=cid, is_reply=1)
+                    if rrow["CID"] and rrow["CID"] in seen_cids:
+                        continue
+                    rows.append(rrow)
+                    if rrow["CID"]:
+                        seen_cids.add(rrow["CID"])
             except Exception as e:
                 print(f"w(ﾟДﾟ)w 解析单条评论失败：{e}")
                 continue
 
-        print(f"（￣︶￣）↗ 本页 {page_count} 条，累计 {len(data_list)} 条")
+        append_rows(csv_path, rows)
+        data_count += len(rows)
+        save_progress(progress_path, page, data_count, last_cid)
+        print(f"（￣︶￣）↗ 本页新增 {len(rows)} 条，本次累计 {data_count} 条（已落盘）")
 
-        if len(data_list) >= MAX_COMMENTS:
+        if data_count >= MAX_COMMENTS:
             print(f"( •̀ ω •́ )✧ 已达到 {MAX_COMMENTS} 条上限，结束采集")
             break
-
-        has_more = json_data.get("has_more", 0)
-        if not has_more:
+        if not json_data.get("has_more", 0):
             print("(○´･д･)ﾉ 已是最后一页，结束采集")
             break
         scroll_comment_panel(dp)
 
-    if data_list:
-        with open(csv_path, "w", encoding="utf-8-sig", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=["昵称", "抖音号", "UID", "SEC_UID", "地区", "日期", "内容", "点赞"])
-            writer.writeheader()
-            writer.writerows(data_list)
-        print(f"\n φ(゜▽゜*)♪ 采集成功！共 {len(data_list)} 条评论，已保存到：{csv_path}")
+    save_progress(progress_path, page, data_count, last_cid, done=True)
+    if data_count:
+        print(f"\n φ(゜▽゜*)♪ 采集完成：本次新增 {data_count} 条，文件 {csv_path}")
     else:
-        print("\n =.= 未采集到任何数据，不生成文件")
+        print("\n =.= 本次没有新增评论（可能已全部采过，或被风控限流）")
 
 except Exception as e:
     print(f"\n =.= 采集失败：{e}")
-    print("本次不生成新CSV文件，下次运行仍沿用当前序号")
+    print("已落盘的数据保留在 CSV 中，下次运行会自动跳过重复")
 
 finally:
-    # 必须关闭浏览器：否则进程残留会锁住用户数据目录，导致下次采集失败
     if dp is not None:
         try:
             dp.quit()

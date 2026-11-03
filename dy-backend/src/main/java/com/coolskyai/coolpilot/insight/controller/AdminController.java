@@ -32,7 +32,8 @@ public class AdminController {
             if (phone != null && phone.length() == 11) {
                 u.setPhone(phone.substring(0, 3) + "****" + phone.substring(7));
             }
-            u.setPassword(null);
+            // 密码哈希永不外泄
+            u.setPasswordHash(null);
         });
         return Result.ok(userPage);
     }

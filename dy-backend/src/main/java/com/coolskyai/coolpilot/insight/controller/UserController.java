@@ -30,8 +30,22 @@ public class UserController {
 
     @RequireRole
     @GetMapping("/info")
-    public Result<User> info() {
-        return Result.ok(userService.getCurrentUser());
+    public Result<Map<String, Object>> info() {
+        User u = userService.getCurrentUser();
+        Map<String, Object> safe = new java.util.LinkedHashMap<>();
+        safe.put("id", u.getId());
+        safe.put("userId", u.getId());
+        safe.put("username", u.getUsername());
+        // 手机号脱敏，且绝不返回 passwordHash
+        String phone = u.getPhone();
+        safe.put("phone", phone != null && phone.length() == 11
+                ? phone.substring(0, 3) + "****" + phone.substring(7) : phone);
+        safe.put("role", u.getRole());
+        safe.put("status", u.getStatus());
+        safe.put("mustChangePwd", u.getMustChangePwd());
+        safe.put("lastLoginAt", u.getLastLoginAt());
+        safe.put("createdAt", u.getCreatedAt());
+        return Result.ok(safe);
     }
 
     @RequireRole

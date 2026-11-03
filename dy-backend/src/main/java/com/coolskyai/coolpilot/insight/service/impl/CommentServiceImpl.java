@@ -1,63 +1,102 @@
 package com.coolskyai.coolpilot.insight.service.impl;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.coolskyai.coolpilot.insight.entity.Comment;
-import com.coolskyai.coolpilot.insight.interceptor.RequestContext;
 import com.coolskyai.coolpilot.insight.mapper.CommentMapper;
 import com.coolskyai.coolpilot.insight.service.CommentService;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.coolskyai.coolpilot.insight.service.GovernanceService;
+import com.coolskyai.coolpilot.insight.service.VideoService;
 import org.springframework.stereotype.Service;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 @Service
 public class CommentServiceImpl implements CommentService {
 
-    @Autowired
-    private CommentMapper commentMapper;
+    private final CommentMapper commentMapper;
+    private final VideoService videoService;
+    private final GovernanceService governance;
 
-    private void applyUserFilter(LambdaQueryWrapper<Comment> wrapper) {
-        Long userId = RequestContext.getUserId();
-        Integer role = RequestContext.getRole();
-        if (userId != null && (role == null || role != 1)) {
-            wrapper.eq(Comment::getUserId, userId);
-        }
+    public CommentServiceImpl(CommentMapper commentMapper, VideoService videoService,
+                              GovernanceService governance) {
+        this.commentMapper = commentMapper;
+        this.videoService = videoService;
+        this.governance = governance;
     }
 
-    @Override
-    public Page<Comment> listByVideo(String videoId, int page, int size, String region, Integer sentiment, String sort) {
-        LambdaQueryWrapper<Comment> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Comment::getVideoId, videoId);
-        applyUserFilter(wrapper);
-
-        if (region != null && !region.isEmpty()) {
-            wrapper.eq(Comment::getRegion, region);
+    private static String sentimentText(Integer sentiment) {
+        if (sentiment == null) {
+            return null;
         }
-        if (sentiment != null) {
-            wrapper.eq(Comment::getSentiment, sentiment);
+        if (sentiment == 1) {
+            return "positive";
         }
+        if (sentiment == -1) {
+            return "negative";
+        }
+        return "neutral";
+    }
 
+    private static String orderBy(String sort) {
+        // 白名单排序，避免 ORDER BY 注入
         if ("likes_desc".equals(sort)) {
-            wrapper.orderByDesc(Comment::getLikes);
-        } else if ("likes_asc".equals(sort)) {
-            wrapper.orderByAsc(Comment::getLikes);
-        } else if ("time_asc".equals(sort)) {
-            wrapper.orderByAsc(Comment::getPublishTime);
-        } else {
-            wrapper.orderByDesc(Comment::getPublishTime);
+            return "c.likes DESC, c.id ASC";
         }
-
-        return commentMapper.selectPage(new Page<>(page, size), wrapper);
+        if ("likes_asc".equals(sort)) {
+            return "c.likes ASC, c.id ASC";
+        }
+        if ("time_asc".equals(sort)) {
+            return "c.publish_time ASC, c.id ASC";
+        }
+        return "c.publish_time DESC, c.id DESC";
     }
 
     @Override
-    public Page<Comment> search(String keyword, String videoId, int page, int size) {
-        LambdaQueryWrapper<Comment> wrapper = new LambdaQueryWrapper<>();
-        if (videoId != null && !videoId.isEmpty()) {
-            wrapper.eq(Comment::getVideoId, videoId);
+    public Map<String, Object> listByVideo(String videoId, int page, int size,
+                                           String region, Integer sentiment, String sort) {
+        Long vid = videoService.resolveInternalId(videoId);
+        if (vid == null) {
+            return emptyPage(page, size);
         }
-        applyUserFilter(wrapper);
-        wrapper.like(Comment::getContent, keyword);
-        wrapper.orderByDesc(Comment::getPublishTime);
-        return commentMapper.selectPage(new Page<>(page, size), wrapper);
+        governance.requireReadComments(vid);
+
+        int safeSize = Math.min(Math.max(size, 1), 200);
+        int safePage = Math.max(page, 1);
+        String sText = sentimentText(sentiment);
+
+        long total = commentMapper.countCommentViews(vid, region, sText);
+        List<Map<String, Object>> records = commentMapper.selectCommentViews(
+                vid, region, sText, orderBy(sort), (safePage - 1) * safeSize, safeSize);
+        return page(records, total, safePage, safeSize);
+    }
+
+    @Override
+    public Map<String, Object> search(String keyword, String videoId, int page, int size) {
+        Long vid = (videoId == null || videoId.isEmpty()) ? null : videoService.resolveInternalId(videoId);
+        if (vid != null) {
+            governance.requireReadComments(vid);
+        } else if (!governance.isAdmin()) {
+            // 全局搜索仅管理员可用，避免越权遍历他人数据
+            throw new SecurityException("全局评论搜索仅管理员可用");
+        }
+        int safeSize = Math.min(Math.max(size, 1), 200);
+        int safePage = Math.max(page, 1);
+        long total = commentMapper.countSearchViews(keyword, vid);
+        List<Map<String, Object>> records = commentMapper.searchCommentViews(
+                keyword, vid, (safePage - 1) * safeSize, safeSize);
+        return page(records, total, safePage, safeSize);
+    }
+
+    private static Map<String, Object> emptyPage(int page, int size) {
+        return page(java.util.Collections.emptyList(), 0, page, size);
+    }
+
+    private static Map<String, Object> page(List<Map<String, Object>> records, long total, int page, int size) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("records", records);
+        out.put("total", total);
+        out.put("page", page);
+        out.put("size", size);
+        return out;
     }
 }

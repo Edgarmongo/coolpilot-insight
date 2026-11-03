@@ -19,6 +19,27 @@ public class GlobalExceptionHandler {
         return Result.fail(400, "缺少必填参数: " + e.getParameterName());
     }
 
+    /**
+     * 越权访问：必须返回 403 且不泄露资源是否存在。
+     */
+    @ExceptionHandler(SecurityException.class)
+    public Result<String> handleSecurity(SecurityException e) {
+        log.warn("[越权访问] {}", e.getMessage());
+        return Result.fail(403, e.getMessage() == null ? "无权限" : e.getMessage());
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public Result<String> handleIllegalArgument(IllegalArgumentException e) {
+        log.warn("[参数非法] {}", e.getMessage());
+        return Result.fail(400, e.getMessage());
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public Result<String> handleIllegalState(IllegalStateException e) {
+        log.warn("[状态冲突] {}", e.getMessage());
+        return Result.fail(409, e.getMessage());
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public Result<String> handleRuntime(RuntimeException e) {
         log.warn("[业务异常] {}", e.getMessage());

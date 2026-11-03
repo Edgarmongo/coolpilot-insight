@@ -1,9 +1,12 @@
 package com.coolskyai.coolpilot.insight.service;
 
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.coolskyai.coolpilot.insight.entity.Comment;
+import java.util.Map;
 
 public interface CommentService {
-    Page<Comment> listByVideo(String videoId, int page, int size, String region, Integer sentiment, String sort);
-    Page<Comment> search(String keyword, String videoId, int page, int size);
+
+    /** 分页返回 {records, total, page, size} */
+    Map<String, Object> listByVideo(String videoId, int page, int size,
+                                    String region, Integer sentiment, String sort);
+
+    Map<String, Object> search(String keyword, String videoId, int page, int size);
 }

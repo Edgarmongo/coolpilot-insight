@@ -6,11 +6,22 @@
       <!-- ============ 方式一：在线采集 ============ -->
       <el-tab-pane label="在线采集" name="online">
         <div class="card">
-          <div style="max-width:640px;">
-            <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
-              <el-input v-model="videoId" placeholder="输入抖音视频链接或编号" size="large" style="flex:1;min-width:260px;" />
-              <el-input-number v-model="maxComments" :min="100" :max="1000" :step="100" size="large" style="width:130px;" />
+          <div style="max-width:720px;">
+            <div style="margin-bottom:12px;">
+              <el-input
+                v-model="videoInput"
+                type="textarea"
+                :rows="4"
+                size="large"
+                placeholder="输入视频链接或编号，支持多个：每行一个，或用逗号分隔"
+              />
+            </div>
+            <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+              <el-input-number v-model="maxComments" :min="10" :max="1000" :step="50" size="large" style="width:130px;" />
               <el-button type="primary" @click="startCollect" :loading="collecting" size="large">开始采集</el-button>
+              <span style="font-size:12px;color:var(--text-secondary)">
+                单个视频按排队串行执行，可在「任务」页看进度
+              </span>
             </div>
 
             <div style="margin-bottom:12px;">
@@ -81,37 +92,41 @@ import { ElMessage } from 'element-plus'
 const activeTab = ref('online')
 
 // ---- 在线采集 ----
-const videoId = ref('')
-const maxComments = ref(300)
+const videoInput = ref('')
+const maxComments = ref(100)
 const useLogin = ref(false)
 const collecting = ref(false)
 const statusMsg = ref('')
 const statusType = ref('info')
 
 async function startCollect() {
-  if (!videoId.value) { statusMsg.value = '请输入视频编号'; statusType.value = 'warning'; return }
+  const inputs = videoInput.value.split(/[\r\n,;]+/).map(s => s.trim()).filter(Boolean)
+  if (!inputs.length) { statusMsg.value = '请输入视频链接或编号'; statusType.value = 'warning'; return }
   collecting.value = true
-  statusMsg.value = useLogin.value ? '使用登录态采集中…' : '采集中…'
+  statusMsg.value = '任务已提交，正在后台串行执行…'
   statusType.value = 'info'
   try {
-    await collectApi.start({
-      videoId: videoId.value,
+    const res = await collectApi.start({
+      videoIds: inputs,
       maxComments: maxComments.value,
       collectMode: useLogin.value ? 'online-login' : 'online',
     })
-    pollStatus()
-  } catch (e) { collecting.value = false; statusMsg.value = '启动失败'; statusType.value = 'error' }
-}
-
-async function pollStatus() {
-  const timer = setInterval(async () => {
-    try {
-      const res = await collectApi.status(videoId.value)
-      const s = res.data.status
-      if (s === 'SUCCESS') { statusMsg.value = '采集完成！'; statusType.value = 'success'; collecting.value = false; clearInterval(timer) }
-      else if (s === 'FAILED' || s.startsWith('FAILED')) { statusMsg.value = '采集失败: ' + s; statusType.value = 'error'; collecting.value = false; clearInterval(timer) }
-    } catch (e) { clearInterval(timer); collecting.value = false }
-  }, 3000)
+    const d = res.data || {}
+    if (!d.taskId) {
+      statusMsg.value = d.message || '提交未创建任务'
+      statusType.value = 'warning'
+    } else {
+      statusMsg.value = `任务 ${d.taskNo} 已创建，共 ${d.totalItems} 个视频${
+        d.alreadyRunning?.length ? `；${d.alreadyRunning.length} 个视频已有任务在跑` : ''}`
+      statusType.value = 'success'
+      setTimeout(() => { window.location.href = '/tasks' }, 1200)
+    }
+  } catch (e) {
+    statusMsg.value = e?.response?.data?.message || '启动失败'
+    statusType.value = 'error'
+  } finally {
+    collecting.value = false
+  }
 }
 
 // ---- 本机导入 ----

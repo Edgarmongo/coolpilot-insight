@@ -59,6 +59,16 @@
             <artifactId>fastjson2</artifactId>
             <version>2.0.43</version>
         </dependency>
+        <!-- 数据库版本管理：Flyway 为唯一结构变更入口（ADR-001） -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <!-- Flyway 8.2+ 起 MySQL 支持拆分为独立模块，缺此依赖会报 Unsupported Database -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>

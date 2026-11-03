@@ -4,10 +4,12 @@ import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.io.File;
 
 @SpringBootApplication
+@EnableScheduling
 @MapperScan("com.coolskyai.coolpilot.insight.mapper")
 public class CoolPilotInsightApplication {
     public static void main(String[] args) {

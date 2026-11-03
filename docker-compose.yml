@@ -25,11 +25,11 @@ services:
       TZ: Asia/Shanghai
     command:
       - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_general_ci
+      - --collation-server=utf8mb4_0900_ai_ci
     volumes:
       - mysql-data:/var/lib/mysql
-      # 首次启动自动执行建库建表脚本
-      - ./coolpilot_insight.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      # 注意：不再挂载 initdb 建表脚本。
+      # 表结构由 Flyway 独占管理（ADR-001），MySQL 只负责创建空库。
     ports:
       # 本机 3306 已被占用，映射到 3307 避免冲突
       - "${MYSQL_HOST_PORT:-3307}:3306"
@@ -59,6 +59,8 @@ services:
       FLASK_PORT: 5000
       # 可选：DeepSeek API Key，未配置则 AI 分析自动降级为统计报告
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      # 服务间认证：Java 调用时必须带 X-Internal-Token，留空则不校验（仅本地开发）
+      FLASK_INTERNAL_TOKEN: ${FLASK_INTERNAL_TOKEN:-}
       TZ: Asia/Shanghai
     depends_on:
       mysql:
@@ -87,6 +89,10 @@ services:
       DB_NAME: ${DB_NAME:-coolpilot_insight}
       SERVER_PORT: 8080
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET 未配置，请在 .env 中设置随机字符串（openssl rand -hex 32）}
+      # 首次启动用于把哨兵管理员置为可用密码；留空则管理员保持禁用
+      ADMIN_INIT_PASSWORD: ${ADMIN_INIT_PASSWORD:-}
+      # 服务间调用令牌（Flask 拒绝无此头的请求）
+      FLASK_INTERNAL_TOKEN: ${FLASK_INTERNAL_TOKEN:-}
       # 容器内固定路径
       APP_PROJECT_ROOT: /app
       PYTHON_EXE: /opt/venv/bin/python

@@ -25,33 +25,59 @@ CoolPilot Insight 是一个面向抖音创作者和运营人员的评论数据�
 
 ### 数据采集（Collect）
 - 通过 DrissionPage 自动化浏览器采集抖音视频评论
-- 支持批量多视频同时采集
-- 原始数据保存为 CSV 文件，可预览和管理
+- **多视频批量采集**：一次提交多个链接，任务内串行执行（受 Chrome 单实例约束）
+- **流式落盘**：每页立即追加写入，中断不再丢失已采数据
+- **幂等去重**：`cid` + 本地指纹双唯一键，重复采集同一视频不产生重复行
 - **采集用户标识**：抖音号(unique_id)、抖音 UID、安全 UID(sec_uid)、IP 归属地
   - 注：抖音出于隐私保护**不返回用户真实 IP**，只能拿到 IP 归属地标签（如"辽宁""广东"）
+- **楼中楼回复**：接口返回的嵌套回复一并入库（`parent_cid` / `is_reply`）
+
+### 任务中心（Tasks）
+- 采集任务持久化：主任务 + 子任务 + 执行日志 + 断点，容器重启后仍可查询
+- 状态机：PENDING / RUNNING / SUCCESS / PARTIAL_SUCCESS / FAILED / CANCELLED
+- **并发防护**：同一视频不允许两个活动任务（`uk_video_active` + 条件更新领取）
+- 支持取消、失败重试、按状态筛选、实时日志查看
+
+### 关键词发现（Keywords）
+- 关键词 CRUD（按用户隔离，归一化后去重）
+- 关键词搜索 → 自动发现候选视频 → 落 `video` / `keyword_video` / `discovery_task_item`
+- 发现任务与采集任务解耦：发现不自动触发采集，避免无谓资源消耗
+
+### AI 需求洞察（Insight）
+- **评论级结构化分析**：情感 / 意图 / 主题 / 痛点 / 用户需求 / 购买意向 / 场景 / 竞品提及 / 置信度
+  - 强制 JSON Schema 输出，失败可重试；同一版本重复分析自动跳过与覆盖
+- **视频级洞察**：需求 / 痛点 / 产品机会 / 亮点 / 购买意向，每条结论附 `evidence_comment_ids`
+- **证据可追溯**：所有结论落 `analysis_evidence`，可定位到原始评论
+- **多视频对比**：并排对比多个视频的需求/痛点，自动识别共性痛点
+- **成本治理**：每次调用写 `usage_record`（唯一权威源），日 Token 预算护栏 + 并发上限
+
+### 报告中心（Reports）
+- 基于已有洞察归档为版本化报告，**不重复调用 AI，不产生额外费用**
+- 报告含数据范围、样本量、证据数、生成时间
+- 支持 Markdown 导出
 
 ### 数据清洗（Clean）
 - 自动去重、过滤无效评论
-- **情感分析引擎**：基于情感词典对每条评论进行积极/中性/消极判定
-- 清洗结果一键入库（MySQL）
+- **情感分析引擎**：SnowNLP + 529 词情感词典二次判定（灰区纠偏），阈值可配置
+- 清洗结果一键入库（MySQL，`ON DUPLICATE KEY UPDATE` 幂等）
 
 ### 总览大屏（Dashboard）
 - **统计卡片**：评论总数、参与用户数、总点赞数、平均点赞数
-- **地区分布**：基于用户归属地的 ECharts 地图可视化
+- **地区分布**：基于用户归属地的 ECharts 地图可视化（visualMap 渐变着色）
 - **情感分析**：积极/中性/消极占比饼图
 - **评论时间趋势**：日级别评论数量折线图
 - **词云**：基于 jieba 分词的评论高频词可视化
 - **桑基图**：地区 → 情感 → 话题 的评论流向分析
 - **核心话题**（AI 驱动）：
-  - DeepSeek AI 综合分析 5 维度数据（关键词、情感分布、话题共现、用户动机、句子结构）
-  - 自动生成结构化分析报告（数据概览 → 核心话题 → 总结与运营建议）
-  - 支持 3 层容错降级（正常 → 降级报告 → 空），保证页面不崩溃
-- **高赞评论排行**：Top 20 高赞评论列表
+  - DeepSeek AI 综合分析多维数据（关键词、情感分布、地区、高赞代表评论）
+  - 自动生成结构化分析报告
+  - AI 不可用时自动降级为统计报告，保证页面不崩溃
+- **高赞评论排行**：Top 20 高赞评论列表（含抖音号）
 
 ### 用户系统
-- 手机号注册/登录，BCrypt 密码加密
-- JWT Token 认证，前后端鉴权
-- 数据隔离：用户仅可见自己采集的数据
+- 手机号注册/登录，**密码统一 BCrypt**（不再产生 MD5）
+- JWT Token 认证；管理员账号由环境变量 `ADMIN_INIT_PASSWORD` 首次初始化，库内不存明文
+- 数据授权三层：视频基础信息（公开）/ 评论数据（管理员、任务发起人、显式授权）/ 分析结果（跟随评论）
 - 管理员后台：用户管理（管理员专用）
 
 ---
@@ -68,7 +94,45 @@ CoolPilot Insight 是一个面向抖音创作者和运营人员的评论数据�
 | 前端 | Vue 3.3 + Vite 5 + Element Plus 2.4 + ECharts 5.4 + Pinia |
 | 词云图 | echarts-wordcloud |
 | 认证 | JWT Token + 内存 TokenStore |
-| 缓存 | 内存 MemoryCache（TTL 30 分钟） |
+| 缓存 | 内存 MemoryCache（TTL 30 分钟 / 分析缓存 5 分钟） |
+| 数据库迁移 | **Flyway 8.5.13**（`db/migration` V1~V6，唯一结构变更入口） |
+
+---
+
+## 🗄️ 数据库设计（V1.1 冻结版）
+
+25 张业务表，按领域划分：
+
+| 领域 | 表 |
+|------|----|
+| 用户与治理 | `user`、`system_config`、`audit_log` |
+| 关键词与视频 | `keyword`、`video`、`keyword_video`、`discovery_task`、`discovery_task_item` |
+| 评论采集 | `comment`、`collection_task`、`collection_task_item`、`collection_checkpoint`、`collection_task_log` |
+| AI 分析 | `analysis_profile`、`analysis_task`、`analysis_task_batch`、`analysis_task_item`、`comment_analysis`、`video_insight`、`analysis_evidence` |
+| 授权/文件/报告 | `video_grant`、`file_asset`、`report`、`report_version`、`usage_record` |
+
+**三个关键设计**：
+
+1. **视频独立建模**：`video.id` 是内部主键，`aweme_id` 是平台标识；`comment.video_id` 指向内部 ID。
+2. **评论双唯一键**：`uk_platform_cid (platform, cid)` + `uk_platform_dedup (platform, dedup_key)`。
+   `cid` 允许 NULL（历史数据），`dedup_key` 恒非空（无 cid 时用本地指纹兜底）。
+   > 实测本平台评论接口 **确实返回 cid**，19/19 条命中，策略为 `CID`。
+3. **活动任务唯一**：`collection_task_item.uk_video_active (video_id, active_flag)`，
+   终态把 `active_flag` 置 NULL（MySQL 唯一索引对 NULL 不生效）。
+
+**迁移机制**：容器启动时 Flyway 自动执行 `V1~V6`，禁止 `baselineOnMigrate`。
+MySQL 的 DDL 隐式提交意味着**迁移失败无法回滚**，失败后需按备份或全量重建恢复。
+
+### 新增环境变量
+
+| 变量 | 说明 |
+|------|------|
+| `ADMIN_INIT_PASSWORD` | 首次启动把哨兵管理员置为可用密码；留空则账号保持不可登录 |
+| `FLASK_INTERNAL_TOKEN` | Java→Flask 服务间令牌；配置后 Flask 拒绝无令牌请求 |
+| `FLYWAY_ENABLED` | 默认 true；仅在调试时可临时关闭 |
+| `SENTIMENT_POS` / `SENTIMENT_NEG` | 情感判定阈值（默认 0.6 / 0.4） |
+| `AI_MAX_CONCURRENCY` | AI 调用并发上限（默认 3） |
+| `DEEPSEEK_API_KEY` | 未配置时 AI 洞察不可用，其余统计功能正常 |
 
 ---
 
