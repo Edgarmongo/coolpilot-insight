@@ -1,7 +1,7 @@
 <template>
   <div class="app-layout">
     <header class="navbar">
-      <span class="navbar-logo">DY Comment</span>
+      <span class="navbar-logo">CoolPilot Insight</span>
       <nav class="navbar-links">
         <router-link to="/dashboard" class="nav-item" :class="{ active: route.path === '/dashboard' }">
           <el-icon><DataAnalysis /></el-icon><span>总览</span>
@@ -15,6 +15,10 @@
         <router-link to="/clean" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/clean' }">
           <el-icon><Operation /></el-icon><span>清洗</span>
         </router-link>
+        <a :href="dypUrl" target="_blank" rel="noopener" class="nav-item" v-if="userStore.token"
+           title="打开 DouYin Intelligence Platform（AI 洞察 / 报告导出）">
+          <el-icon><TrendCharts /></el-icon><span>深度分析</span>
+        </a>
         <router-link to="/profile" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/profile' }">
           <el-icon><User /></el-icon><span>用户</span>
         </router-link>
@@ -53,6 +57,9 @@ import { userApi } from '../api'
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
+
+// 深度分析平台（DYP）地址，可通过构建变量 VITE_DYP_URL 覆盖
+const dypUrl = import.meta.env.VITE_DYP_URL || 'http://localhost:8088'
 
 async function doLogout() {
   try { await userApi.logout() } catch (e) { /* */ }
