@@ -31,6 +31,19 @@ export const cleanApi = {
 export const commentApi = {
   list: (params) => request.get('/comment/list', { params }),
   search: (params) => request.get('/comment/search', { params }),
+  tree: (params) => request.get('/comment/tree', { params }),
+}
+
+export const reviewApi = {
+  queue: (params) => request.get('/review/queue', { params }),
+  stats: (videoId) => request.get('/review/stats', { params: { videoId } }),
+  submit: (analysisId, data) => request.post(`/review/${analysisId}`, data),
+  history: (analysisId) => request.get(`/review/${analysisId}/history`),
+}
+
+export const overviewApi = {
+  get: () => request.get('/overview'),
+  videoOptions: () => request.get('/overview/video-options'),
 }
 
 export const analysisApi = {
@@ -73,6 +86,10 @@ export const reportApi = {
   detail: (id) => request.get(`/report/${id}`),
   versions: (id) => request.get(`/report/${id}/versions`),
   exportMd: (id) => request.get(`/report/${id}/export`),
+  file: (id, format) => request.get(`/report/${id}/file`, {
+    params: { format },
+    responseType: 'blob',
+  }),
   remove: (id) => request.delete(`/report/${id}`),
 }
 

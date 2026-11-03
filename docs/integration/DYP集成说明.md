@@ -3,6 +3,24 @@
 **集成日期**：2026-11-04
 **集成方式**：A+B（数据管道 + 统一入口），不做代码合并
 
+> **2026-11-04 更新：已改为原生移植，导航外链已移除**
+>
+> 原先「深度分析」是打开 `localhost:8088` 的新标签页，体验上是「跳走」而不是「集成」。
+> 现已把 DYP 的四项核心能力**用本工程的技术栈重新实现**，不再依赖跳转：
+>
+> | DYP 能力 | CoolPilot 落地方式 | 位置 |
+> |---|---|---|
+> | 评论树（`works/{id}/comments`） | `GET /api/comment/tree` + 评论页「回复树」弹窗 | Java + Vue |
+> | 人工复核（`ai_review`） | `analysis_review` 表 + `/api/review/*` + 「复核」页 | Java + Vue |
+> | PDF/Excel 报告（reportlab/openpyxl） | Flask `/render/report` + 报告页下载按钮 | Python + Vue |
+> | 全局概览（overview/stats/trend） | `GET /api/overview` + 「运营概览」页 | Java + Vue |
+>
+> 移植时保留了 DYP 的关键语义：复核的 before/after 留痕、低置信优先队列、
+> 结论可追溯到评论、报告不重复调用 AI。
+>
+> 本文余下内容仍然有效——数据管道（CSV 投递到 DYP）依然可用，
+> 只是不再是产品内的默认入口。
+
 ---
 
 ## 一、为什么这样集成

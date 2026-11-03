@@ -90,6 +90,14 @@ public interface CommentMapper extends BaseMapper<Comment> {
             + "FROM comment WHERE video_id = #{videoId}")
     Map<String, Object> summaryRow(@Param("videoId") Long videoId);
 
+    /** 评论树原始行：一次取够，Java 侧组树（避免 N+1 查询） */
+    @Select("SELECT c.id, c.cid, c.parent_cid AS parentCid, c.root_cid AS rootCid, "
+            + "c.nickname, c.douyin_id AS douyinId, c.ip_region AS region, c.content, c.likes, "
+            + "c.publish_time AS publishTime, c.is_reply AS isReply, c.reply_count AS replyCount "
+            + "FROM comment c WHERE c.video_id = #{videoId} "
+            + "ORDER BY c.likes DESC, c.id ASC LIMIT #{limit}")
+    List<Map<String, Object>> treeRows(@Param("videoId") Long videoId, @Param("limit") int limit);
+
     /** 评论 + 最新情感标签（供统计/图表/AI 编排使用） */
     @Select("SELECT c.id, c.content, c.likes, c.nickname, c.ip_region AS region, "
             + "c.publish_time AS publishTime, c.reply_count AS replyCount, c.is_reply AS isReply, "

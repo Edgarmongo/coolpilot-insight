@@ -27,6 +27,14 @@ public class CommentController {
     }
 
     @RequireRole
+    @GetMapping("/tree")
+    public Result<Map<String, Object>> tree(@RequestParam String videoId,
+                                            @RequestParam(defaultValue = "1000") int limit,
+                                            @RequestParam(defaultValue = "50") int rootLimit) {
+        return Result.ok(commentService.tree(videoId, limit, rootLimit));
+    }
+
+    @RequireRole
     @GetMapping("/search")
     public Result<Map<String, Object>> search(@RequestParam String keyword,
                                               @RequestParam(required = false) String videoId,

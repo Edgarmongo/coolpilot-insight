@@ -48,6 +48,7 @@
           <el-option label="点赞倒序" value="likes_desc" /><el-option label="点赞正序" value="likes_asc" />
         </el-select>
         <el-button type="primary" @click="loadData" size="large">查询</el-button>
+        <el-button @click="openTree" size="large">回复树</el-button>
       </div>
 
       <el-table :data="tableData" v-loading="loading" stripe :row-class-name="() => 'el-table__row--striped'" border style="width:100%;">
@@ -79,6 +80,30 @@
           layout="prev, pager, next, total" @current-change="loadData" />
       </div>
     </div>
+
+    <el-dialog v-model="treeDialog" title="评论回复树" width="820px" top="6vh">
+      <div v-if="treeData" class="tree-summary">
+        共 {{ treeData.totalComments }} 条评论 / {{ treeData.totalRoots }} 个主楼，
+        当前展示前 {{ treeData.shownRoots }} 个主楼
+      </div>
+      <div class="tree-box" v-loading="treeLoading">
+        <div v-for="root in treeData?.roots || []" :key="root.cid || root.id" class="tree-root">
+          <div class="tree-line">
+            <span class="tree-nick">{{ root.nickname }}</span>
+            <span class="tree-region">{{ root.region }}</span>
+            <span class="tree-likes">👍 {{ root.likes }}</span>
+          </div>
+          <div class="tree-content">{{ root.content }}</div>
+          <div v-for="rep in root.replies || []" :key="rep.cid || rep.id" class="tree-reply">
+            <span class="tree-nick">{{ rep.nickname }}</span>
+            <span class="tree-region">{{ rep.region }}</span>
+            <span class="tree-likes">👍 {{ rep.likes }}</span>
+            <span class="tree-content inline">{{ rep.content }}</span>
+          </div>
+        </div>
+        <el-empty v-if="!treeLoading && !(treeData?.roots || []).length" description="暂无评论" />
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -123,4 +148,38 @@ onMounted(async () => {
   await loadVideoList()
   if (appStore.currentVideo) loadData()
 })
+
+// ---- 回复树（移植自 DYP 的评论树视图）----
+const treeDialog = ref(false)
+const treeLoading = ref(false)
+const treeData = ref(null)
+
+async function openTree() {
+  if (!appStore.currentVideo) return
+  treeDialog.value = true
+  treeLoading.value = true
+  treeData.value = null
+  try {
+    const res = await commentApi.tree({ videoId: appStore.currentVideo, limit: 1000, rootLimit: 50 })
+    treeData.value = res.data
+  } finally {
+    treeLoading.value = false
+  }
+}
 </script>
+
+<style scoped>
+.tree-summary { font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; }
+.tree-box { max-height: 62vh; overflow: auto; padding-right: 6px; }
+.tree-root { border-bottom: 1px dashed #E2E8F0; padding: 10px 0; }
+.tree-line { display: flex; gap: 8px; align-items: center; font-size: 12px; }
+.tree-nick { font-weight: 600; color: var(--text-primary); }
+.tree-region { color: #94A3B8; }
+.tree-likes { color: #94A3B8; }
+.tree-content { font-size: 13px; line-height: 1.7; margin-top: 4px; }
+.tree-content.inline { display: inline; margin-top: 0; }
+.tree-reply {
+  margin: 8px 0 0 18px; padding-left: 10px; border-left: 2px solid #E2E8F0;
+  font-size: 12.5px; color: #334155; line-height: 1.7;
+}
+</style>

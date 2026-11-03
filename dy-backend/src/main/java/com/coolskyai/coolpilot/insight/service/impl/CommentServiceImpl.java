@@ -9,6 +9,8 @@ import org.springframework.stereotype.Service;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.Collections;
 
 @Service
 public class CommentServiceImpl implements CommentService {
@@ -85,6 +87,62 @@ public class CommentServiceImpl implements CommentService {
         List<Map<String, Object>> records = commentMapper.searchCommentViews(
                 keyword, vid, (safePage - 1) * safeSize, safeSize);
         return page(records, total, safePage, safeSize);
+    }
+
+    @Override
+    public Map<String, Object> tree(String videoId, int limit, int rootLimit) {
+        Long vid = videoService.resolveInternalId(videoId);
+        if (vid == null) {
+            return Collections.emptyMap();
+        }
+        governance.requireReadComments(vid);
+
+        int safeLimit = Math.min(Math.max(limit, 1), 2000);
+        List<Map<String, Object>> rows = commentMapper.treeRows(vid, safeLimit);
+
+        // cid → 节点；parent 缺失的视为一级
+        Map<String, Map<String, Object>> byCid = new LinkedHashMap<>();
+        List<Map<String, Object>> roots = new ArrayList<>();
+        for (Map<String, Object> r : rows) {
+            Map<String, Object> node = new LinkedHashMap<>(r);
+            node.put("replies", new ArrayList<Map<String, Object>>());
+            String cid = r.get("cid") == null ? "" : String.valueOf(r.get("cid"));
+            if (!cid.isEmpty()) {
+                byCid.put(cid, node);
+            }
+            String parent = r.get("parentCid") == null ? "" : String.valueOf(r.get("parentCid"));
+            boolean isRoot = parent.isEmpty() || "0".equals(parent);
+            if (isRoot) {
+                roots.add(node);
+            }
+        }
+        // 二级挂到父节点；找不到父节点的降级为一级，避免数据丢失
+        for (Map<String, Object> r : rows) {
+            String parent = r.get("parentCid") == null ? "" : String.valueOf(r.get("parentCid"));
+            String cid = r.get("cid") == null ? "" : String.valueOf(r.get("cid"));
+            if (parent.isEmpty() || "0".equals(parent) || cid.isEmpty()) {
+                continue;
+            }
+            Map<String, Object> p = byCid.get(parent);
+            Map<String, Object> self = byCid.get(cid);
+            if (p != null && self != null && p != self) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> children = (List<Map<String, Object>>) p.get("replies");
+                children.add(self);
+            } else if (self != null) {
+                roots.add(self);
+            }
+        }
+
+        int safeRoots = Math.min(Math.max(rootLimit, 1), 200);
+        List<Map<String, Object>> page = roots.size() > safeRoots ? roots.subList(0, safeRoots) : roots;
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("roots", new ArrayList<>(page));
+        out.put("totalComments", rows.size());
+        out.put("totalRoots", roots.size());
+        out.put("shownRoots", page.size());
+        return out;
     }
 
     private static Map<String, Object> emptyPage(int page, int size) {

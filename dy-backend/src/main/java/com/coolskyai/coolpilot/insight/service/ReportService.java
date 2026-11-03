@@ -3,6 +3,7 @@ package com.coolskyai.coolpilot.insight.service;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.coolskyai.coolpilot.insight.config.AppProperties;
 import com.coolskyai.coolpilot.insight.entity.Report;
 import com.coolskyai.coolpilot.insight.entity.ReportVersion;
 import com.coolskyai.coolpilot.insight.entity.VideoInsight;
@@ -22,20 +23,27 @@ import java.util.*;
 @Service
 public class ReportService {
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ReportService.class);
+
     private final ReportMapper reportMapper;
     private final ReportVersionMapper versionMapper;
     private final VideoInsightMapper insightMapper;
     private final VideoService videoService;
     private final GovernanceService governance;
+    private final AppProperties appProperties;
+    private final com.coolskyai.coolpilot.insight.mapper.CommentMapper commentMapper;
 
     public ReportService(ReportMapper reportMapper, ReportVersionMapper versionMapper,
                          VideoInsightMapper insightMapper, VideoService videoService,
-                         GovernanceService governance) {
+                         GovernanceService governance, AppProperties appProperties,
+                         com.coolskyai.coolpilot.insight.mapper.CommentMapper commentMapper) {
         this.reportMapper = reportMapper;
         this.versionMapper = versionMapper;
         this.insightMapper = insightMapper;
         this.videoService = videoService;
         this.governance = governance;
+        this.appProperties = appProperties;
+        this.commentMapper = commentMapper;
     }
 
     /** 用某视频最新洞察生成报告 */
@@ -164,6 +172,161 @@ public class ReportService {
         report.setDeletedAt(LocalDateTime.now());
         reportMapper.updateById(report);
         governance.audit("DELETE_REPORT", "REPORT", id, null);
+    }
+
+    // ================================================================ 文件导出
+
+    /**
+     * 用 Flask（reportlab / openpyxl）渲染 PDF 或 XLSX。
+     *
+     * <p>为什么不在 Java 里画：中文字体与表格排版在 Python 生态更成熟，
+     * 且 reportlab 内置 CID 字体无需额外字体文件；Java 侧只负责组装数据与鉴权。
+     */
+    public Map<String, Object> renderFile(Long id, String format) {
+        Report report = requireReport(id);
+        ReportVersion latest = versionMapper.selectOne(new LambdaQueryWrapper<ReportVersion>()
+                .eq(ReportVersion::getReportId, id)
+                .orderByDesc(ReportVersion::getVersionNo).last("LIMIT 1"));
+        if (latest == null) {
+            throw new IllegalStateException("报告没有内容");
+        }
+        String fmt = "xlsx".equalsIgnoreCase(format) ? "xlsx" : "pdf";
+
+        JSONObject payload = new JSONObject();
+        payload.put("format", fmt);
+        payload.put("title", report.getTitle());
+        payload.put("reportNo", report.getReportNo());
+        payload.put("generatedAt", LocalDateTime.now().toString());
+        payload.put("scope", JSON.parseObject(report.getScopeJson()));
+
+        JSONObject content = JSON.parseObject(latest.getContentJson());
+        payload.put("summary", content.getString("summary"));
+        payload.put("sections", buildSections(content));
+        payload.put("purchaseIntent", content.getJSONObject("purchase_intent"));
+        payload.put("stats", buildStats(report));
+
+        byte[] bytes = callRender(payload);
+        if (bytes == null || bytes.length == 0) {
+            throw new IllegalStateException("报告渲染失败：渲染服务不可用");
+        }
+        governance.audit("EXPORT_REPORT_FILE", "REPORT", id, fmt);
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("fileName", report.getReportNo() + "." + fmt);
+        out.put("contentType", "pdf".equals(fmt) ? "application/pdf"
+                : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        out.put("bytes", bytes);
+        return out;
+    }
+
+    private List<Map<String, Object>> buildSections(JSONObject content) {
+        List<Map<String, Object>> sections = new ArrayList<>();
+        String[][] mapping = {
+                {"needs", "用户需求"},
+                {"pain_points", "主要痛点"},
+                {"product_opportunities", "产品机会"},
+                {"highlights", "正面亮点"},
+        };
+        for (String[] pair : mapping) {
+            com.alibaba.fastjson2.JSONArray arr = content.getJSONArray(pair[0]);
+            List<Map<String, Object>> items = new ArrayList<>();
+            if (arr != null) {
+                for (int i = 0; i < arr.size(); i++) {
+                    JSONObject o = arr.getJSONObject(i);
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("title", o.getString("title"));
+                    m.put("description", o.getString("description"));
+                    m.put("confidence", o.get("confidence"));
+                    com.alibaba.fastjson2.JSONArray ids = o.getJSONArray("evidence_comment_ids");
+                    m.put("evidenceCount", ids == null ? 0 : ids.size());
+                    items.add(m);
+                }
+            }
+            Map<String, Object> sec = new LinkedHashMap<>();
+            sec.put("heading", pair[1]);
+            sec.put("items", items);
+            sections.add(sec);
+        }
+        return sections;
+    }
+
+    /** 报告的统计图表数据（情感/地区/趋势），从评论事实表现算 */
+    private Map<String, Object> buildStats(Report report) {
+        Map<String, Object> stats = new LinkedHashMap<>();
+        Long vid = null;
+        try {
+            JSONObject scope = JSON.parseObject(report.getScopeJson());
+            String ext = scope == null ? null : scope.getString("videoId");
+            vid = videoService.resolveInternalId(ext);
+        } catch (Exception ignored) {
+            // 范围解析失败时退化为无图表
+        }
+        if (vid == null) {
+            return stats;
+        }
+        List<Map<String, Object>> sentiment = commentMapper.sentimentStats(vid);
+        List<Map<String, Object>> sentOut = new ArrayList<>();
+        for (Map<String, Object> r : sentiment) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            String s = String.valueOf(r.get("sentiment"));
+            m.put("name", "positive".equals(s) ? "积极" : "negative".equals(s) ? "消极" : "中性");
+            m.put("value", ((Number) r.get("count")).longValue());
+            sentOut.add(m);
+        }
+        stats.put("sentiment", sentOut);
+
+        List<Map<String, Object>> region = new ArrayList<>();
+        for (Map<String, Object> r : commentMapper.regionStats(vid)) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("name", String.valueOf(r.get("region")));
+            m.put("value", ((Number) r.get("count")).longValue());
+            region.add(m);
+        }
+        stats.put("region", region.stream().limit(10).collect(java.util.stream.Collectors.toList()));
+
+        List<Map<String, Object>> trend = new ArrayList<>();
+        for (Map<String, Object> r : commentMapper.dailyStats(vid)) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("name", String.valueOf(r.get("date")));
+            m.put("value", ((Number) r.get("count")).longValue());
+            trend.add(m);
+        }
+        stats.put("trend", trend);
+        return stats;
+    }
+
+    private byte[] callRender(JSONObject payload) {
+        try {
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection)
+                    new java.net.URL(appProperties.getFlaskBaseUrl() + "/render/report").openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+            String token = System.getenv("FLASK_INTERNAL_TOKEN");
+            if (token != null && !token.isEmpty()) {
+                conn.setRequestProperty("X-Internal-Token", token);
+            }
+            conn.setConnectTimeout(5000);
+            conn.setReadTimeout(60000);
+            conn.setDoOutput(true);
+            try (java.io.OutputStream os = conn.getOutputStream()) {
+                os.write(payload.toJSONString().getBytes("UTF-8"));
+            }
+            if (conn.getResponseCode() != 200) {
+                return null;
+            }
+            try (java.io.InputStream in = conn.getInputStream();
+                 java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream()) {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) != -1) {
+                    bos.write(buf, 0, n);
+                }
+                return bos.toByteArray();
+            }
+        } catch (Exception e) {
+            log.error("[report] 渲染调用失败: {}", e.getMessage());
+            return null;
+        }
     }
 
     private Report requireReport(Long id) {

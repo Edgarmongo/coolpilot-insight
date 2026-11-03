@@ -21,10 +21,12 @@
         </el-table-column>
         <el-table-column prop="currentVersion" label="版本" width="80" align="center" />
         <el-table-column prop="createdAt" label="创建时间" width="180" />
-        <el-table-column label="操作" min-width="220">
+        <el-table-column label="操作" min-width="320">
           <template #default="{ row }">
             <el-button link type="primary" @click="open(row)">查看</el-button>
-            <el-button link @click="exportMd(row)">导出 Markdown</el-button>
+            <el-button link @click="downloadFile(row, 'pdf')" :loading="downloading === row.id + 'pdf'">PDF</el-button>
+            <el-button link @click="downloadFile(row, 'xlsx')" :loading="downloading === row.id + 'xlsx'">Excel</el-button>
+            <el-button link @click="exportMd(row)">Markdown</el-button>
             <el-button link type="danger" @click="remove(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -55,6 +57,7 @@ const reports = ref([])
 const loading = ref(false)
 const drawer = ref(false)
 const detail = ref(null)
+const downloading = ref('')
 
 async function load() {
   loading.value = true
@@ -79,8 +82,29 @@ async function open(row) {
   }
 }
 
-async function exportMd(row) {
+/** PDF / Excel 由 Flask 渲染，二进制流下载 */
+async function downloadFile(row, format) {
+  downloading.value = row.id + format
   try {
+    const res = await reportApi.file(row.id, format)
+    const type = format === 'pdf'
+      ? 'application/pdf'
+      : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    const blob = new Blob([res.data], { type })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${row.reportNo}.${format === 'pdf' ? 'pdf' : 'xlsx'}`
+    a.click()
+    window.URL.revokeObjectURL(url)
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.message || '导出失败，请检查 Flask 渲染服务')
+  } finally {
+    downloading.value = ''
+  }
+}
+
+async function exportMd(row) {  try {
     const res = await reportApi.exportMd(row.id)
     const blob = new Blob([res.data.content || ''], { type: 'text/markdown;charset=utf-8' })
     const url = window.URL.createObjectURL(blob)

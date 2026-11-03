@@ -31,5 +31,9 @@ public class CommentAnalysis {
     private String competitorMentionsJson;
     private BigDecimal confidence;
     private Integer isUncertain;
+    /** PENDING / APPROVED / REJECTED / CORRECTED */
+    private String reviewStatus;
+    private Long reviewedBy;
+    private LocalDateTime reviewedAt;
     private LocalDateTime createdAt;
 }

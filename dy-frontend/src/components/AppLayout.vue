@@ -6,6 +6,9 @@
         <router-link to="/dashboard" class="nav-item" :class="{ active: route.path === '/dashboard' }">
           <el-icon><DataAnalysis /></el-icon><span>总览</span>
         </router-link>
+        <router-link to="/overview" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/overview' }">
+          <el-icon><TrendCharts /></el-icon><span>运营概览</span>
+        </router-link>
         <router-link to="/comments" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/comments' }">
           <el-icon><ChatLineSquare /></el-icon><span>评论</span>
         </router-link>
@@ -24,13 +27,12 @@
         <router-link to="/insight" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/insight' }">
           <el-icon><Opportunity /></el-icon><span>洞察</span>
         </router-link>
+        <router-link to="/review" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/review' }">
+          <el-icon><Finished /></el-icon><span>复核</span>
+        </router-link>
         <router-link to="/reports" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/reports' }">
           <el-icon><Document /></el-icon><span>报告</span>
         </router-link>
-        <a :href="dypUrl" target="_blank" rel="noopener" class="nav-item" v-if="userStore.token"
-           title="打开 DouYin Intelligence Platform（评论树 / 热榜 / PDF 报告）">
-          <el-icon><TrendCharts /></el-icon><span>深度分析</span>
-        </a>
         <router-link to="/profile" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/profile' }">
           <el-icon><User /></el-icon><span>用户</span>
         </router-link>
@@ -69,9 +71,6 @@ import { userApi } from '../api'
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
-
-// 深度分析平台（DYP）地址，可通过构建变量 VITE_DYP_URL 覆盖
-const dypUrl = import.meta.env.VITE_DYP_URL || 'http://localhost:8088'
 
 async function doLogout() {
   try { await userApi.logout() } catch (e) { /* */ }

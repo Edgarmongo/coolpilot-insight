@@ -10,5 +10,9 @@ pymysql>=1.0.0
 jieba>=0.42.1
 snownlp>=0.12.3
 
+# 报告渲染（PDF 用 reportlab 内置 CID 中文字体，无需外部字体文件）
+reportlab>=4.2,<5
+openpyxl>=3.1,<4
+
 # 抖音评论采集（浏览器自动化）
 DrissionPage>=4.1.0,<5.0.0

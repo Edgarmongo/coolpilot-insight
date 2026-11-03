@@ -382,6 +382,218 @@ def analyze_insight():
         return jsonify({"code": 1, "msg": str(e)})
 
 
+# ---------------------------------------------------------------- 报告渲染
+
+def _pdf_bytes(payload):
+    """用 reportlab 生成中文 PDF。CID 字体无需外部字体文件。"""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    from reportlab.graphics.charts.barcharts import VerticalBarChart
+    from reportlab.graphics.shapes import Drawing
+    from reportlab.platypus import (Paragraph, SimpleDocTemplate, Spacer, Table,
+                                    TableStyle, PageBreak)
+    import io
+
+    pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
+    font = 'STSong-Light'
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle('t', parent=styles['Title'], fontName=font,
+                                 fontSize=20, leading=28, spaceAfter=10,
+                                 textColor=colors.HexColor('#0F766E'))
+    h2 = ParagraphStyle('h2', parent=styles['Heading2'], fontName=font,
+                        fontSize=13, leading=20, spaceBefore=12, spaceAfter=6,
+                        textColor=colors.HexColor('#0F172A'))
+    body = ParagraphStyle('b', parent=styles['BodyText'], fontName=font,
+                          fontSize=9.5, leading=16)
+    small = ParagraphStyle('s', parent=body, fontSize=8, textColor=colors.HexColor('#64748B'))
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            leftMargin=18 * mm, rightMargin=18 * mm,
+                            topMargin=16 * mm, bottomMargin=16 * mm)
+    flow = []
+    flow.append(Paragraph(payload.get('title') or '洞察报告', title_style))
+    scope = payload.get('scope') or {}
+    meta = [
+        ['报告编号', payload.get('reportNo') or '-'],
+        ['生成时间', (payload.get('generatedAt') or '')[:19].replace('T', ' ')],
+        ['数据范围', '视频 ' + str(scope.get('videoId') or '-')],
+        ['样本评论', str(scope.get('sampleCount') or '-')],
+    ]
+    t = Table(meta, colWidths=[28 * mm, 120 * mm])
+    t.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (-1, -1), font),
+        ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+        ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#64748B')),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('LINEBELOW', (0, 0), (-1, -2), 0.3, colors.HexColor('#E2E8F0')),
+    ]))
+    flow.append(t)
+    flow.append(Spacer(1, 8))
+
+    if payload.get('summary'):
+        flow.append(Paragraph('整体洞察', h2))
+        flow.append(Paragraph(str(payload['summary']).replace('\n', '<br/>'), body))
+
+    pi = payload.get('purchaseIntent') or {}
+    if pi:
+        flow.append(Paragraph('购买意向', h2))
+        flow.append(Paragraph(
+            '整体判断：<b>%s</b>　%s' % (pi.get('level') or '-', pi.get('reason') or ''), body))
+
+    # 情感分布柱状图
+    stats = payload.get('stats') or {}
+    sentiment = stats.get('sentiment') or []
+    if sentiment:
+        flow.append(Paragraph('情感分布', h2))
+        drawing = Drawing(400, 150)
+        chart = VerticalBarChart()
+        chart.x, chart.y, chart.width, chart.height = 40, 20, 340, 110
+        chart.data = [[float(x.get('value') or 0) for x in sentiment]]
+        chart.categoryAxis.categoryNames = [str(x.get('name')) for x in sentiment]
+        chart.categoryAxis.labels.fontName = font
+        chart.categoryAxis.labels.fontSize = 8
+        chart.valueAxis.labels.fontName = font
+        chart.valueAxis.labels.fontSize = 7
+        chart.bars[0].fillColor = colors.HexColor('#0D9488')
+        drawing.add(chart)
+        flow.append(drawing)
+
+    # 各维度结论表
+    for sec in payload.get('sections') or []:
+        items = sec.get('items') or []
+        if not items:
+            continue
+        flow.append(Paragraph(sec.get('heading') or '', h2))
+        rows = [['#', '结论', '说明', '证据']]
+        for i, it in enumerate(items, 1):
+            rows.append([str(i), str(it.get('title') or ''),
+                         str(it.get('description') or '')[:160],
+                         str(it.get('evidenceCount') or 0)])
+        t = Table(rows, colWidths=[8 * mm, 40 * mm, 110 * mm, 12 * mm], repeatRows=1)
+        t.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), font),
+            ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F1F5F9')),
+            ('GRID', (0, 0), (-1, -1), 0.3, colors.HexColor('#E2E8F0')),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        flow.append(t)
+        flow.append(Spacer(1, 6))
+
+    region = stats.get('region') or []
+    if region:
+        flow.append(Paragraph('地区分布 Top10', h2))
+        rows = [['地区', '评论数']] + [[str(x.get('name')), str(x.get('value'))] for x in region]
+        t = Table(rows, colWidths=[60 * mm, 40 * mm], repeatRows=1)
+        t.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), font),
+            ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+            ('GRID', (0, 0), (-1, -1), 0.3, colors.HexColor('#E2E8F0')),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F1F5F9')),
+        ]))
+        flow.append(t)
+
+    flow.append(Spacer(1, 10))
+    flow.append(Paragraph('本报告每条结论均可通过 analysis_evidence 追溯到原始评论。', small))
+
+    doc.build(flow)
+    return buf.getvalue()
+
+
+def _xlsx_bytes(payload):
+    """用 openpyxl 生成多 Sheet 工作簿。"""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    import io
+
+    wb = Workbook()
+    head_fill = PatternFill('solid', fgColor='0D9488')
+    head_font = Font(color='FFFFFF', bold=True)
+
+    def style_header(ws, ncols):
+        for c in range(1, ncols + 1):
+            cell = ws.cell(row=1, column=c)
+            cell.fill = head_fill
+            cell.font = head_font
+            cell.alignment = Alignment(horizontal='center')
+
+    ws = wb.active
+    ws.title = '概览'
+    scope = payload.get('scope') or {}
+    ws.append(['项目', '内容'])
+    for k, v in [
+        ('报告标题', payload.get('title')),
+        ('报告编号', payload.get('reportNo')),
+        ('生成时间', (payload.get('generatedAt') or '')[:19].replace('T', ' ')),
+        ('数据范围', '视频 ' + str(scope.get('videoId') or '-')),
+        ('样本评论', scope.get('sampleCount')),
+        ('整体摘要', payload.get('summary')),
+    ]:
+        ws.append([k, str(v if v is not None else '')])
+    style_header(ws, 2)
+    ws.column_dimensions['A'].width = 18
+    ws.column_dimensions['B'].width = 100
+    for row in ws.iter_rows(min_row=2):
+        row[1].alignment = Alignment(wrap_text=True, vertical='top')
+
+    for sec in payload.get('sections') or []:
+        items = sec.get('items') or []
+        if not items:
+            continue
+        sheet = wb.create_sheet((sec.get('heading') or '结论')[:28])
+        sheet.append(['序号', '结论', '说明', '置信度', '证据数'])
+        for i, it in enumerate(items, 1):
+            sheet.append([i, it.get('title'), it.get('description'),
+                          it.get('confidence'), it.get('evidenceCount')])
+        style_header(sheet, 5)
+        sheet.column_dimensions['B'].width = 32
+        sheet.column_dimensions['C'].width = 70
+        for row in sheet.iter_rows(min_row=2):
+            row[2].alignment = Alignment(wrap_text=True, vertical='top')
+
+    stats = payload.get('stats') or {}
+    for key, label in [('sentiment', '情感分布'), ('region', '地区分布'), ('trend', '评论趋势')]:
+        data = stats.get(key) or []
+        if not data:
+            continue
+        sheet = wb.create_sheet(label)
+        sheet.append(['名称', '数量'])
+        for x in data:
+            sheet.append([x.get('name'), x.get('value')])
+        style_header(sheet, 2)
+        sheet.column_dimensions['A'].width = 22
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+@app.route("/render/report", methods=["POST"])
+def render_report():
+    payload = request.get_json(silent=True) or {}
+    fmt = (payload.get("format") or "pdf").lower()
+    try:
+        data = _xlsx_bytes(payload) if fmt == "xlsx" else _pdf_bytes(payload)
+    except ImportError as e:
+        return jsonify({"code": 500, "msg": f"渲染依赖缺失: {e}"}), 500
+    except Exception as e:
+        print(f"[render] {fmt} 生成失败: {e}")
+        return jsonify({"code": 500, "msg": str(e)}), 500
+
+    mimetype = ('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                if fmt == "xlsx" else 'application/pdf')
+    return app.response_class(data, mimetype=mimetype)
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("FLASK_PORT", 5000))
     host = os.environ.get("FLASK_HOST", "127.0.0.1")
