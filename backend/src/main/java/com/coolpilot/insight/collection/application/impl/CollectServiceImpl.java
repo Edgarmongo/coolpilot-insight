@@ -145,7 +145,8 @@ public class CollectServiceImpl implements CollectService {
         CollectionTask task = new CollectionTask();
         task.setTaskNo(nextTaskNo("CT"));
         task.setTaskType("COLLECTION");
-        task.setStatus("PENDING");
+        // C-01：Task 只有 IDLE/RUNNING/PAUSED/DISABLED，PENDING 属于 Run
+        task.setStatus("IDLE");
         task.setOwnerUserId(ownerUserId);
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("maxComments", max);
