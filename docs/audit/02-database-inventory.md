@@ -1,5 +1,10 @@
 # 02 · 数据库清单
 
+> ⚠️ **本文档记录的是 2026-11-15 升级前的基线**（Spring Boot 2.7.18 / JDK 8 / MyBatis-Plus）。
+> 当日已完成迁移到 Spring Boot 4.1.2 + JDK 21 + 原生 MyBatis，
+> 变更详情与验证记录见 [`docs/migration/2026-11-15-boot4-jdk21-mybatis.md`](../migration/2026-11-15-boot4-jdk21-mybatis.md)。
+> 下文保留原样以作为前后对比依据；涉及技术栈与 ORM 的描述均以迁移文档为准。
+
 审计方式：静态解析 `dy-backend/src/main/resources/db/migration/`（未连接数据库、未执行 DDL）
 
 ## 1. 迁移文件

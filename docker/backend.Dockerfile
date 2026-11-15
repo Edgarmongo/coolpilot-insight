@@ -11,7 +11,7 @@
 # ============================================================
 
 # ---------- 构建阶段：编译打包 ----------
-FROM maven:3.9-eclipse-temurin-8 AS builder
+FROM maven:3.9-eclipse-temurin-21 AS builder
 
 WORKDIR /build
 
@@ -24,7 +24,7 @@ COPY dy-backend/src ./src
 RUN mvn -B -f pom.xml clean package -DskipTests
 
 # ---------- 运行阶段 ----------
-FROM eclipse-temurin:8-jre-jammy
+FROM eclipse-temurin:21-jre-jammy
 
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=Asia/Shanghai \

@@ -104,13 +104,13 @@ CoolPilot Insight 是一个面向抖音创作者和运营人员的评论数据�
 | 数据采集 | Python 3.12 + DrissionPage 4.x |
 | 数据清洗 | Python 3.12 + jieba + 自定义情感词典 || AI Agent | DeepSeek API (`deepseek-chat`) + OpenAI SDK |
 | 分词服务 | Flask 3.x + jieba（常驻服务，50ms 级响应） |
-| 后端 | Spring Boot 2.7 + MyBatis-Plus 3.5 + MySQL 8.0 |
-| API 文档 | springdoc-openapi (Swagger UI) |
+| 后端 | Spring Boot **4.1** + MyBatis 3.5 + HikariCP + MySQL 8.0（**JDK 21**） |
+| API 文档 | springdoc-openapi 3.x (Swagger UI) |
 | 前端 | Vue 3.3 + Vite 5 + Element Plus 2.4 + ECharts 5.4 + Pinia |
 | 词云图 | echarts-wordcloud |
 | 认证 | JWT Token + 内存 TokenStore |
 | 缓存 | 内存 MemoryCache（TTL 30 分钟 / 分析缓存 5 分钟） |
-| 数据库迁移 | **Flyway 8.5.13**（`db/migration` V1~V6，唯一结构变更入口） |
+| 数据库迁移 | **Flyway 11.x**（`db/migration` V1~V8，唯一结构变更入口） |
 
 ---
 
@@ -174,8 +174,8 @@ CoolPilot Insight/
 │   │   ├── .env                            # DeepSeek API Key 配置
 │   │   └── requirements.txt               # Python 依赖
 │
-├── dy-backend/                             # Spring Boot 后端
-│   ├── pom.xml                             # Maven 依赖（Spring Boot 2.7）
+├── dy-backend/                             # Spring Boot 4 后端
+│   ├── pom.xml                             # Maven 依赖（Spring Boot 4.1 / JDK 21）
 │   └── src/main/java/com/dy/comment/
 │       ├── DyCommentApplication.java       # 启动类（自动拉起 Flask 分词服务）
 │       ├── controller/                     # REST API 控制器
@@ -191,7 +191,7 @@ CoolPilot Insight/
 │       │   ├── CollectServiceImpl          # 采集任务调度
 │       │   ├── CommentServiceImpl          # 评论 CRUD
 │       │   └── UserServiceImpl             # 用户认证与鉴权
-│       ├── mapper/                         # MyBatis-Plus 数据映射
+│       ├── mapper/                         # MyBatis 接口（SQL 在 resources/mapper/*.xml）
 │       ├── entity/                         # 数据实体（User / Comment / AnalysisResult）
 │       ├── interceptor/                    # JWT 请求拦截器、上下文持有者
 │       ├── dto/                            # 数据传输对象（请求/响应）
@@ -240,7 +240,7 @@ CoolPilot Insight/
 ├── docker-compose.yml                     # Docker 一键部署编排
 ├── .env.example                           # 环境变量示例（复制为 .env 后使用）
 ├── docker/                                # 容器化配置
-│   ├── backend.Dockerfile                 # 后端镜像（JDK8 + Python + Chrome）
+│   ├── backend.Dockerfile                 # 后端镜像（JDK21 + Python + Chrome）
 │   ├── flask.Dockerfile                   # 分词/AI 服务镜像
 │   ├── frontend.Dockerfile                # 前端镜像（Node 构建 + Nginx 托管）
 │   ├── nginx.conf                         # 前端托管与 API 反代配置
@@ -327,7 +327,7 @@ docker compose up -d --build
 
 #### 1. 环境要求
 
-- JDK 8+
+- JDK 21+
 - Node.js 18+
 - Python 3.10+
 - MySQL 8.0
@@ -456,3 +456,5 @@ npm run dev
 - [Docker 部署指南](docker/DOCKER部署指南.md) — 一键容器化启动、架构说明、常见问题
 - [爬虫维护笔记](抖音爬虫维护笔记.md) — 爬虫故障排查指南
 - [简洁版使用指南](简洁版使用指南.txt) — 快速上手指南
+- [工程基线审计](docs/audit/01-project-baseline.md) — 升级前的技术栈、模块、API、采集能力与风险清单（6 篇）
+- [Boot 4 迁移记录](docs/migration/2026-11-15-boot4-jdk21-mybatis.md) — Spring Boot 4 + JDK 21 + 原生 MyBatis 的变更、语义陷阱与验证结果

@@ -1,5 +1,10 @@
 # 01 · 项目基线审计
 
+> ⚠️ **本文档记录的是 2026-11-15 升级前的基线**（Spring Boot 2.7.18 / JDK 8 / MyBatis-Plus）。
+> 当日已完成迁移到 Spring Boot 4.1.2 + JDK 21 + 原生 MyBatis，
+> 变更详情与验证记录见 [`docs/migration/2026-11-15-boot4-jdk21-mybatis.md`](../migration/2026-11-15-boot4-jdk21-mybatis.md)。
+> 下文保留原样以作为前后对比依据；涉及技术栈与 ORM 的描述均以迁移文档为准。
+
 审计时间：2026-11-15　审计对象：`coolpilot-platform/code/coolpilot-insight`
 审计方式：**只读**（未修改任何业务代码、未执行 DDL、未改动数据）
 
