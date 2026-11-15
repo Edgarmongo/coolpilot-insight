@@ -3,6 +3,7 @@ package com.coolpilot.insight.system.application.role;
 import com.coolpilot.insight.common.exception.BizException;
 import com.coolpilot.insight.common.exception.ErrorCode;
 import com.coolpilot.insight.system.application.AuditService;
+import com.coolpilot.insight.system.application.PermissionQueryService;
 import com.coolpilot.insight.system.domain.role.Role;
 import com.coolpilot.insight.system.dto.role.RoleView;
 import com.coolpilot.insight.system.infrastructure.role.RoleMapper;
@@ -20,12 +21,36 @@ public class RoleCommandService {
     private final RoleMapper roleMapper;
     private final RoleQueryService roleQueryService;
     private final AuditService auditService;
+    private final PermissionQueryService permissionQueryService;
 
     public RoleCommandService(RoleMapper roleMapper, RoleQueryService roleQueryService,
-                              AuditService auditService) {
+                              AuditService auditService,
+                              PermissionQueryService permissionQueryService) {
         this.roleMapper = roleMapper;
         this.roleQueryService = roleQueryService;
         this.auditService = auditService;
+        this.permissionQueryService = permissionQueryService;
+    }
+
+    /**
+     * 覆盖式保存角色的菜单授权。
+     *
+     * <p>先删后插而不是增量对比：菜单树整棵提交，增量对比容易漏删。
+     * 必须在同一事务内完成，否则中途失败会让角色暂时没有任何权限。
+     * 保存后立即失效权限缓存，避免 60 秒内仍按旧权限放行。
+     */
+    @org.springframework.transaction.annotation.Transactional
+    public void grantMenus(Long roleId, java.util.List<Long> menuIds) {
+        if (roleMapper.selectById(roleId) == null) {
+            throw new BizException(ErrorCode.NOT_FOUND, "角色不存在");
+        }
+        roleMapper.deleteRoleMenus(roleId);
+        if (menuIds != null) {
+            menuIds.stream().distinct().forEach(id -> roleMapper.insertRoleMenu(roleId, id));
+        }
+        permissionQueryService.invalidate();
+        auditService.audit("ROLE_MENU_GRANT", "SYS_ROLE", roleId,
+                "{\"count\":" + (menuIds == null ? 0 : menuIds.size()) + "}");
     }
 
     public RoleView create(String code, String name) {

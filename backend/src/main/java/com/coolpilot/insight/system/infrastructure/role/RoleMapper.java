@@ -45,4 +45,13 @@ public interface RoleMapper {
 
     @Delete("DELETE FROM sys_user_role WHERE user_id = #{userId} AND role_id = #{roleId}")
     int revoke(@Param("userId") Long userId, @Param("roleId") Long roleId);
+
+    @Select("SELECT menu_id FROM sys_role_menu WHERE role_id = #{roleId}")
+    List<Long> selectMenuIds(@Param("roleId") Long roleId);
+
+    @Delete("DELETE FROM sys_role_menu WHERE role_id = #{roleId}")
+    int deleteRoleMenus(@Param("roleId") Long roleId);
+
+    @Insert("INSERT IGNORE INTO sys_role_menu (role_id, menu_id) VALUES (#{roleId}, #{menuId})")
+    int insertRoleMenu(@Param("roleId") Long roleId, @Param("menuId") Long menuId);
 }

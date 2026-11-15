@@ -25,8 +25,9 @@
           <span class="perm-count">{{ row.permissionIds ? row.permissionIds.length : 0 }} 项</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="110" fixed="right">
+      <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
+          <el-button size="small" link type="primary" @click="openPerm(row)">分配权限</el-button>
           <el-button
             size="small"
             type="danger"
@@ -38,6 +39,30 @@
         </template>
       </el-table-column>
     </el-table>
+
+    <el-drawer v-model="permDrawer" :title="'分配权限 · ' + (permRole.name || '')" size="420px">
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        title="勾选即授权：菜单决定能否进入页面，按钮权限由后端接口独立校验。"
+        style="margin-bottom: 12px"
+      />
+      <el-tree
+        ref="treeRef"
+        :data="menuTree"
+        node-key="id"
+        show-checkbox
+        default-expand-all
+        :props="{ label: 'name', children: 'children' }"
+      />
+      <template #footer>
+        <div class="drawer-foot">
+          <el-button @click="permDrawer = false">取消</el-button>
+          <el-button type="primary" :loading="savingPerm" @click="savePerm">保存</el-button>
+        </div>
+      </template>
+    </el-drawer>
 
     <el-dialog v-model="dialog" title="新建角色" width="420px">
       <el-form :model="form" label-width="80px">
@@ -57,15 +82,48 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { nextTick, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { roleApi } from '../../api'
+import { roleApi, menuApi } from '../../api'
 
 const roles = ref([])
 const loading = ref(false)
 const dialog = ref(false)
 const saving = ref(false)
 const form = ref({ code: '', name: '' })
+
+const permDrawer = ref(false)
+const permRole = ref({})
+const menuTree = ref([])
+const treeRef = ref()
+const savingPerm = ref(false)
+
+async function openPerm(row) {
+  permRole.value = row
+  const [tree, granted] = await Promise.all([menuApi.tree(), roleApi.menuIds(row.id)])
+  menuTree.value = tree.data || []
+  permDrawer.value = true
+  // 等树渲染完再设勾选，否则 setCheckedKeys 找不到节点
+  await nextTick()
+  treeRef.value.setCheckedKeys(granted.data || [])
+}
+
+async function savePerm() {
+  savingPerm.value = true
+  try {
+    // 半选的父级也要存：否则子项授权后父级菜单不可见
+    const ids = [
+      ...treeRef.value.getCheckedKeys(),
+      ...treeRef.value.getHalfCheckedKeys(),
+    ]
+    await roleApi.grantMenus(permRole.value.id, ids)
+    ElMessage.success('已保存，权限立即生效')
+    permDrawer.value = false
+    await load()
+  } finally {
+    savingPerm.value = false
+  }
+}
 
 async function load() {
   loading.value = true
@@ -120,4 +178,5 @@ onMounted(load)
 .sub { margin: 0; color: var(--el-text-color-secondary); font-size: 13px; }
 .tbl { width: 100%; }
 .perm-count { color: var(--el-text-color-secondary); }
+.drawer-foot { display: flex; justify-content: flex-end; gap: 8px; }
 </style>

@@ -113,6 +113,8 @@ export const roleApi = {
   remove: (id) => request.delete('/v1/system/roles/' + id),
   assign: (roleId, userId) => request.post(`/v1/system/roles/${roleId}/users/${userId}`),
   revoke: (roleId, userId) => request.delete(`/v1/system/roles/${roleId}/users/${userId}`),
+  menuIds: (roleId) => request.get(`/v1/system/roles/${roleId}/menus`),
+  grantMenus: (roleId, menuIds) => request.put(`/v1/system/roles/${roleId}/menus`, { menuIds }),
 }
 
 export const dictApi = {

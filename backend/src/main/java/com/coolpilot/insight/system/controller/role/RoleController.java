@@ -5,12 +5,14 @@ import com.coolpilot.insight.common.security.RequireRole;
 import com.coolpilot.insight.common.web.Result;
 import com.coolpilot.insight.system.application.role.RoleCommandService;
 import com.coolpilot.insight.system.application.role.RoleQueryService;
+import com.coolpilot.insight.system.infrastructure.role.RoleMapper;
 import com.coolpilot.insight.system.dto.role.RoleView;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -30,10 +32,35 @@ public class RoleController {
 
     private final RoleQueryService roleQueryService;
     private final RoleCommandService roleCommandService;
+    private final RoleMapper roleMapper;
 
-    public RoleController(RoleQueryService roleQueryService, RoleCommandService roleCommandService) {
+    public RoleController(RoleQueryService roleQueryService, RoleCommandService roleCommandService,
+                          RoleMapper roleMapper) {
         this.roleQueryService = roleQueryService;
         this.roleCommandService = roleCommandService;
+        this.roleMapper = roleMapper;
+    }
+
+    /** 该角色已授权的菜单 id（用于回显勾选状态）。 */
+    @RequireRole(role = 0)
+    @RequirePermission("system:role:list")
+    @GetMapping("/{id}/menus")
+    public Result<List<Long>> listMenuIds(@PathVariable Long id) {
+        return Result.ok(roleMapper.selectMenuIds(id));
+    }
+
+    /** 覆盖式保存菜单授权。 */
+    @RequireRole(role = 0)
+    @RequirePermission("system:role:manage")
+    @PutMapping("/{id}/menus")
+    @SuppressWarnings("unchecked")
+    public Result<String> grantMenus(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        Object raw = body.get("menuIds");
+        List<Long> ids = raw instanceof List<?> list
+                ? list.stream().map(o -> Long.valueOf(String.valueOf(o))).toList()
+                : List.of();
+        roleCommandService.grantMenus(id, ids);
+        return Result.ok("已保存");
     }
 
     @RequireRole(role = 0)
