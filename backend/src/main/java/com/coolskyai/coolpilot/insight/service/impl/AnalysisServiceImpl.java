@@ -2,13 +2,13 @@ package com.coolskyai.coolpilot.insight.service.impl;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
-import com.coolskyai.coolpilot.insight.config.AppProperties;
+import com.coolskyai.coolpilot.insight.integration.config.AppProperties;
 import com.coolskyai.coolpilot.insight.mapper.CommentMapper;
 import com.coolskyai.coolpilot.insight.mapper.VideoMapper;
 import com.coolskyai.coolpilot.insight.service.AnalysisService;
 import com.coolskyai.coolpilot.insight.service.GovernanceService;
 import com.coolskyai.coolpilot.insight.service.VideoService;
-import com.coolskyai.coolpilot.insight.utils.MemoryCache;
+import com.coolskyai.coolpilot.insight.common.util.MemoryCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;

@@ -1,10 +1,10 @@
 package com.coolskyai.coolpilot.insight.service;
 
-import com.coolskyai.coolpilot.insight.entity.AuditLog;
-import com.coolskyai.coolpilot.insight.entity.SystemConfig;
-import com.coolskyai.coolpilot.insight.interceptor.RequestContext;
-import com.coolskyai.coolpilot.insight.mapper.AuditLogMapper;
-import com.coolskyai.coolpilot.insight.mapper.SystemConfigMapper;
+import com.coolskyai.coolpilot.insight.system.domain.AuditLog;
+import com.coolskyai.coolpilot.insight.system.domain.SystemConfig;
+import com.coolskyai.coolpilot.insight.common.security.RequestContext;
+import com.coolskyai.coolpilot.insight.system.infrastructure.persistence.AuditLogMapper;
+import com.coolskyai.coolpilot.insight.system.infrastructure.persistence.SystemConfigMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;

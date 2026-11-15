@@ -1,9 +1,9 @@
 package com.coolskyai.coolpilot.insight;
 
-import com.coolskyai.coolpilot.insight.dto.LoginResponse;
-import com.coolskyai.coolpilot.insight.entity.User;
-import com.coolskyai.coolpilot.insight.mapper.UserMapper;
-import com.coolskyai.coolpilot.insight.service.UserService;
+import com.coolskyai.coolpilot.insight.system.dto.LoginResponse;
+import com.coolskyai.coolpilot.insight.system.domain.User;
+import com.coolskyai.coolpilot.insight.system.infrastructure.persistence.UserMapper;
+import com.coolskyai.coolpilot.insight.system.application.UserService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

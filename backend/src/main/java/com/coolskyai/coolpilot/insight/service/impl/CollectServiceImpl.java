@@ -1,7 +1,7 @@
 package com.coolskyai.coolpilot.insight.service.impl;
 
 import com.alibaba.fastjson2.JSON;
-import com.coolskyai.coolpilot.insight.config.AppProperties;
+import com.coolskyai.coolpilot.insight.integration.config.AppProperties;
 import com.coolskyai.coolpilot.insight.entity.*;
 import com.coolskyai.coolpilot.insight.mapper.*;
 import com.coolskyai.coolpilot.insight.service.CleanService;
@@ -51,7 +51,7 @@ public class CollectServiceImpl implements CollectService {
     @Autowired
     private CommentMapper commentMapper;
     @Autowired
-    private com.coolskyai.coolpilot.insight.mapper.UserMapper userMapper;
+    private com.coolskyai.coolpilot.insight.system.infrastructure.persistence.UserMapper userMapper;
     @Autowired
     private VideoService videoService;
     @Autowired
@@ -326,13 +326,13 @@ public class CollectServiceImpl implements CollectService {
      */
     private Map<String, Object> runCleanAs(Long ownerUserId, String fileName) {
         try {
-            com.coolskyai.coolpilot.insight.interceptor.RequestContext.setUserId(ownerUserId);
-            com.coolskyai.coolpilot.insight.entity.User owner = ownerUserId == null ? null : userMapper.selectById(ownerUserId);
-            com.coolskyai.coolpilot.insight.interceptor.RequestContext.setRole(
+            com.coolskyai.coolpilot.insight.common.security.RequestContext.setUserId(ownerUserId);
+            com.coolskyai.coolpilot.insight.system.domain.User owner = ownerUserId == null ? null : userMapper.selectById(ownerUserId);
+            com.coolskyai.coolpilot.insight.common.security.RequestContext.setRole(
                     owner == null || owner.getRole() == null ? 0 : owner.getRole());
             return cleanService.runClean(Collections.singletonList(fileName), ownerUserId);
         } finally {
-            com.coolskyai.coolpilot.insight.interceptor.RequestContext.clear();
+            com.coolskyai.coolpilot.insight.common.security.RequestContext.clear();
         }
     }
 

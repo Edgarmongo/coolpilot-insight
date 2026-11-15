@@ -3,7 +3,7 @@ package com.coolskyai.coolpilot.insight.service;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
-import com.coolskyai.coolpilot.insight.config.AppProperties;
+import com.coolskyai.coolpilot.insight.integration.config.AppProperties;
 import com.coolskyai.coolpilot.insight.entity.*;
 import com.coolskyai.coolpilot.insight.mapper.*;
 import org.slf4j.Logger;

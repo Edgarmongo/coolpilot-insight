@@ -10,7 +10,10 @@ import java.io.File;
 
 @SpringBootApplication
 @EnableScheduling
-@MapperScan("com.coolskyai.coolpilot.insight.mapper")
+@MapperScan({
+        "com.coolskyai.coolpilot.insight.mapper",
+        "com.coolskyai.coolpilot.insight.system.infrastructure.persistence"
+})
 public class CoolPilotInsightApplication {
     public static void main(String[] args) {
         ConfigurableApplicationContext context = SpringApplication.run(CoolPilotInsightApplication.class, args);

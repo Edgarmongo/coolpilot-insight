@@ -23,7 +23,8 @@ server:
 # 原生 MyBatis（MyBatis-Plus 已移除：3.5.x 依赖 javax 版 mybatis-spring，与 Boot 4 不兼容）
 mybatis:
   mapper-locations: classpath:mapper/*.xml
-  type-aliases-package: com.coolskyai.coolpilot.insight.entity
+  type-aliases-package: com.coolskyai.coolpilot.insight.entity,
+    com.coolskyai.coolpilot.insight.system.domain
   configuration:
     map-underscore-to-camel-case: true
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl

@@ -2,7 +2,7 @@ package com.coolskyai.coolpilot.insight.service;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
-import com.coolskyai.coolpilot.insight.config.AppProperties;
+import com.coolskyai.coolpilot.insight.integration.config.AppProperties;
 import com.coolskyai.coolpilot.insight.entity.Report;
 import com.coolskyai.coolpilot.insight.entity.ReportVersion;
 import com.coolskyai.coolpilot.insight.entity.VideoInsight;

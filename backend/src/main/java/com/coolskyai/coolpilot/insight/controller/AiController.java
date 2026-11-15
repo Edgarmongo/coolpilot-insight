@@ -1,7 +1,7 @@
 package com.coolskyai.coolpilot.insight.controller;
 
-import com.coolskyai.coolpilot.insight.annotation.RequireRole;
-import com.coolskyai.coolpilot.insight.dto.Result;
+import com.coolskyai.coolpilot.insight.common.security.RequireRole;
+import com.coolskyai.coolpilot.insight.common.web.Result;
 import com.coolskyai.coolpilot.insight.mapper.UsageRecordMapper;
 import com.coolskyai.coolpilot.insight.service.AiAnalysisService;
 import com.coolskyai.coolpilot.insight.service.GovernanceService;

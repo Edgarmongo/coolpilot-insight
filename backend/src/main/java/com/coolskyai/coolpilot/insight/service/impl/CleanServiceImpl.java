@@ -1,11 +1,11 @@
 package com.coolskyai.coolpilot.insight.service.impl;
 
-import com.coolskyai.coolpilot.insight.config.AppProperties;
-import com.coolskyai.coolpilot.insight.interceptor.RequestContext;
+import com.coolskyai.coolpilot.insight.integration.config.AppProperties;
+import com.coolskyai.coolpilot.insight.common.security.RequestContext;
 import com.coolskyai.coolpilot.insight.service.CleanService;
 import com.coolskyai.coolpilot.insight.service.GovernanceService;
 import com.coolskyai.coolpilot.insight.service.VideoService;
-import com.coolskyai.coolpilot.insight.utils.MemoryCache;
+import com.coolskyai.coolpilot.insight.common.util.MemoryCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
