@@ -71,12 +71,24 @@ public class PermissionQueryService {
         List<String> roles = jdbc.queryForList(
                 "SELECT r.code FROM sys_role r JOIN sys_user_role ur ON ur.role_id = r.id "
                         + "WHERE ur.user_id = ? AND r.status = 'ENABLED'", String.class, userId);
+        // 权限来源合一：菜单授权（role_menu → menu.permission_code）
+        //                 ∪ 非菜单权限（role_permission → permission.code）
+        // 两条路径合并后去重，调用方只看到一份权限码集合，不关心来源。
         List<String> perms = jdbc.queryForList(
-                "SELECT DISTINCT p.code FROM sys_permission p "
-                        + "JOIN sys_role_permission rp ON rp.permission_id = p.id "
-                        + "JOIN sys_user_role ur ON ur.role_id = rp.role_id "
-                        + "JOIN sys_role r ON r.id = rp.role_id "
-                        + "WHERE ur.user_id = ? AND r.status = 'ENABLED'", String.class, userId);
+                "SELECT code FROM ("
+                        + "  SELECT m.permission_code AS code FROM sys_menu m "
+                        + "    JOIN sys_role_menu rm ON rm.menu_id = m.id "
+                        + "    JOIN sys_user_role ur ON ur.role_id = rm.role_id "
+                        + "    JOIN sys_role r ON r.id = rm.role_id "
+                        + "   WHERE ur.user_id = ? AND r.status = 'ENABLED' "
+                        + "     AND m.permission_code IS NOT NULL AND m.permission_code <> '' "
+                        + "  UNION "
+                        + "  SELECT p.code FROM sys_permission p "
+                        + "    JOIN sys_role_permission rp ON rp.permission_id = p.id "
+                        + "    JOIN sys_user_role ur ON ur.role_id = rp.role_id "
+                        + "    JOIN sys_role r ON r.id = rp.role_id "
+                        + "   WHERE ur.user_id = ? AND r.status = 'ENABLED'"
+                        + ") t", String.class, userId, userId);
         Cached fresh = new Cached(new HashSet<>(roles), new HashSet<>(perms), now);
         cache.put(userId, fresh);
         return fresh;
