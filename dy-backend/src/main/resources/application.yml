@@ -28,6 +28,27 @@ mybatis:
     map-underscore-to-camel-case: true
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
+# 可观测性：/actuator/health、/actuator/metrics（含 hikaricp.connections.*）
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: coolpilot-insight
+
+# p6spy：打印带耗时的 SQL，便于排查慢查询。生产环境请保持关闭（有性能开销）
+decorator:
+  datasource:
+    p6spy:
+      enable: ${P6SPY_ENABLED:false}
+      logging: slf4j
+      log-format: "\n### SQL %(executionTime) ms | %(category) | %(sql)"
+
 jwt:
   secret: ${JWT_SECRET:}
   expire: ${JWT_EXPIRE:86400000}

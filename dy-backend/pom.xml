@@ -26,6 +26,17 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+        <!-- 可观测性：暴露 HikariCP 连接池、JVM、HTTP 指标（替代 Druid 监控面板） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <!-- 开发期 SQL 打印：默认关闭，仅在 P6SPY_ENABLED=true 时生效 -->
+        <dependency>
+            <groupId>com.github.gavlyukovskiy</groupId>
+            <artifactId>p6spy-spring-boot-starter</artifactId>
+            <version>2.1.0</version>
+        </dependency>
         <!-- 原生 MyBatis（Boot 4 对应 4.x 系列） -->
         <dependency>
             <groupId>org.mybatis.spring.boot</groupId>

@@ -102,7 +102,17 @@ Boot 4 把自动配置拆成模块，`DataSourceProperties` 已迁至独立 arti
 改用 Boot 原生 HikariCP。
 
 **代价**：失去 Druid 的监控面板、SQL 防火墙与慢 SQL 统计。
-若这些能力必须保留，需要在 HikariCP 之上另接（如 p6spy + Prometheus），属于后续工作。
+
+### 5.1 已做的补偿
+
+| 原 Druid 能力 | 替代方案 | 状态 |
+|---|---|---|
+| 连接池监控面板 | `spring-boot-starter-actuator` + Micrometer，`/actuator/metrics/hikaricp.connections.*` | 已接入 |
+| 慢 SQL 查看 | p6spy（`P6SPY_ENABLED=true` 开启，默认关闭） | 已接入 |
+| SQL 防火墙（WallFilter） | 未替代 —— 原项目从未启用，且会误杀动态 SQL | 不需要 |
+
+**安全提醒**：`/actuator/health` 当前 `show-details: always`，会暴露数据库类型与磁盘信息。
+若将来把服务暴露到公网，务必改为 `never`，或用 `management.server.port` + 回环绑定隔离。
 
 ## 6. 验证记录
 
@@ -113,6 +123,7 @@ Boot 4 把自动配置拆成模块，`DataSourceProperties` 已迁至独立 arti
 | 应用启动 | 成功（Boot 4.1.2 + JDK 21 + MySQL 8），无 Mapper 绑定异常 |
 | 读接口回归 | 登录、总览、评论树、地区统计、AI 任务、报告、复核统计、用户分页 —— 均 200，数据与升级前一致（3 视频 / 19 评论 / 14 用户） |
 | 写路径 | 新建报告返回自增 id（`useGeneratedKeys` 生效），删除成功 |
+| 可观测性 | `/actuator/health` 返回 db UP；`/actuator/metrics/hikaricp.connections.active` 正常；p6spy 开启后输出带耗时 SQL |
 
 **未覆盖**：定时采集调度、AI 分析调用（Flask 链路）、报告 PDF/XLSX 渲染、关键词发现、前端联调。
 项目仍**无单元测试**，本次为人工接口回归。
@@ -132,4 +143,4 @@ git checkout main
 - [ ] 补冒烟测试：评论入库幂等、AI 结果落库、报告导出（把本次人工回归固化）
 - [ ] 验证容器镜像构建（`docker/backend.Dockerfile` 已改 JDK 21，未实际 build）
 - [ ] 仓库缺 `.env`，`docker compose` 因 `JWT_SECRET` 必填而无法执行
-- [ ] 评估是否用 p6spy 补回 Druid 的慢 SQL 能力
+- [x] 评估是否用 p6spy 补回 Druid 的慢 SQL 能力 —— 已接入 actuator + p6spy（见 §5.1）

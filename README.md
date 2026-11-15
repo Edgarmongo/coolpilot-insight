@@ -111,6 +111,7 @@ CoolPilot Insight 是一个面向抖音创作者和运营人员的评论数据�
 | 认证 | JWT Token + 内存 TokenStore |
 | 缓存 | 内存 MemoryCache（TTL 30 分钟 / 分析缓存 5 分钟） |
 | 数据库迁移 | **Flyway 11.x**（`db/migration` V1~V8，唯一结构变更入口） |
+| 可观测性 | Actuator + Micrometer（HikariCP 池指标）+ p6spy（可选 SQL 打印） |
 
 ---
 
