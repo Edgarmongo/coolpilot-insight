@@ -90,7 +90,7 @@ import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { collectApi } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
-const statuses = ['PENDING', 'RUNNING', 'RETRY_WAIT', 'SUCCESS', 'PARTIAL_SUCCESS', 'FAILED', 'CANCEL_REQUESTED', 'CANCELLED']
+const statuses = ['IDLE', 'PAUSED', 'DISABLED', 'PENDING', 'RUNNING', 'RETRY_WAIT', 'SUCCESS', 'PARTIAL_SUCCESS', 'FAILED', 'CANCEL_REQUESTED', 'CANCELLED']
 const tasks = ref([])
 const loading = ref(false)
 const statusFilter = ref('')
@@ -101,6 +101,10 @@ const logs = ref([])
 let timer = null
 
 const STATUS_MAP = {
+  // C-01：Task 聚合态（结果在 Run 里，不再有 SUCCESS/FAILED）
+  IDLE: ['空闲', 'info'],
+  PAUSED: ['已暂停', 'warning'],
+  DISABLED: ['已禁用', 'info'],
   PENDING: ['等待中', 'info'],
   RUNNING: ['执行中', 'warning'],
   RETRY_WAIT: ['等待重试', 'warning'],
