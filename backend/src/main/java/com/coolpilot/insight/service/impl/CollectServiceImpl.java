@@ -1,6 +1,8 @@
 package com.coolpilot.insight.service.impl;
 
 import com.alibaba.fastjson2.JSON;
+import com.coolpilot.insight.integration.collection.CollectionClient;
+import com.coolpilot.insight.integration.common.CommandResult;
 import com.coolpilot.insight.integration.config.AppProperties;
 import com.coolpilot.insight.entity.*;
 import com.coolpilot.insight.mapper.*;
@@ -65,6 +67,8 @@ public class CollectServiceImpl implements CollectService {
     private PermissionService permission;
     @Autowired
     private AppProperties appProperties;
+    @Autowired
+    private CollectionClient collectionClient;
 
     /** 同一时刻只允许一个采集批次在跑（Chrome 单实例限制） */
     private final AtomicBoolean busy = new AtomicBoolean(false);
@@ -369,37 +373,11 @@ public class CollectServiceImpl implements CollectService {
     }
 
     private boolean invokeCollector(String awemeId, int maxComments, String mode,
-                                    Long taskId, Long itemId) throws Exception {
-        List<String> cmd = new ArrayList<>();
-        cmd.add(appProperties.getPythonExe());
-        cmd.add("comment.py");
-        cmd.add(awemeId);
-        cmd.add(String.valueOf(maxComments));
-        if ("online-login".equals(mode)) {
-            cmd.add("--use-login");
-        }
-        ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.directory(new File(appProperties.getPythonDataDir()));
-        pb.redirectErrorStream(true);
-        pb.environment().put("PYTHONIOENCODING", "utf-8");
-        pb.environment().put("COLLECT_TASK_ID", String.valueOf(taskId));
-        pb.environment().put("COLLECT_ITEM_ID", String.valueOf(itemId));
-        Process process = pb.start();
-
-        StringBuilder out = new StringBuilder();
-        try (BufferedReader r = new BufferedReader(new InputStreamReader(process.getInputStream(), "UTF-8"))) {
-            String line;
-            while ((line = r.readLine()) != null) {
-                out.append(line).append("\n");
-            }
-        }
-        int exit = process.waitFor();
-        if (exit != 0) {
-            log.warn("[collect] {} 退出码 {}，输出尾部: {}", awemeId, exit,
-                    out.length() > 500 ? out.substring(out.length() - 500) : out);
-            return false;
-        }
-        return true;
+                                    Long taskId, Long itemId) {
+        // 子进程调用已抽到 integration 层：本方法只关心"成功与否"这一业务结论
+        CommandResult result = collectionClient.collectComments(
+                awemeId, maxComments, "online-login".equals(mode), taskId, itemId);
+        return result.success();
     }
 
     private void finishWithError(Long taskId, String message) {

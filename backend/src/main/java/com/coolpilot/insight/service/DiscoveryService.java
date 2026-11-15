@@ -3,6 +3,8 @@ package com.coolpilot.insight.service;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
+import com.coolpilot.insight.integration.collection.CollectionClient;
+import com.coolpilot.insight.integration.common.CommandResult;
 import com.coolpilot.insight.integration.config.AppProperties;
 import com.coolpilot.insight.entity.*;
 import com.coolpilot.insight.mapper.*;
@@ -43,11 +45,13 @@ public class DiscoveryService {
     private final AuditService auditService;
     private final PermissionService permission;
     private final AppProperties appProperties;
+    private final CollectionClient collectionClient;
 
     public DiscoveryService(KeywordMapper keywordMapper, DiscoveryTaskMapper taskMapper,
                             DiscoveryTaskItemMapper itemMapper, VideoMapper videoMapper,
                             KeywordVideoMapper keywordVideoMapper, VideoService videoService,
-                            AuditService auditService, PermissionService permission, AppProperties appProperties) {
+                            AuditService auditService, PermissionService permission,
+                            AppProperties appProperties, CollectionClient collectionClient) {
         this.keywordMapper = keywordMapper;
         this.taskMapper = taskMapper;
         this.itemMapper = itemMapper;
@@ -57,6 +61,7 @@ public class DiscoveryService {
         this.auditService = auditService;
         this.permission = permission;
         this.appProperties = appProperties;
+        this.collectionClient = collectionClient;
     }
 
     // ---------------------------------------------------------- 关键词 CRUD
@@ -244,22 +249,13 @@ public class DiscoveryService {
      * {@code VIDEO|<aweme_id>|<title>|<author>|<likes>|<url>}
      */
     private List<VideoHit> invokeSearch(String keyword, int max) throws Exception {
-        List<String> cmd = new ArrayList<>();
-        cmd.add(appProperties.getPythonExe());
-        cmd.add("search.py");
-        cmd.add(keyword);
-        cmd.add(String.valueOf(max));
-        ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.directory(new java.io.File(appProperties.getPythonDataDir()));
-        pb.redirectErrorStream(true);
-        pb.environment().put("PYTHONIOENCODING", "utf-8");
-        Process process = pb.start();
+        CommandResult result = collectionClient.searchByKeyword(keyword, max);
+        String output = result.output() == null ? "" : result.output();
 
         List<VideoHit> hits = new ArrayList<>();
         StringBuilder tail = new StringBuilder();
-        try (BufferedReader r = new BufferedReader(new InputStreamReader(process.getInputStream(), "UTF-8"))) {
-            String line;
-            while ((line = r.readLine()) != null) {
+        {
+            for (String line : output.split("\n")) {
                 if (line.startsWith("VIDEO|")) {
                     Matcher m = VIDEO_LINE.matcher(line);
                     if (m.matches()) {
@@ -284,8 +280,7 @@ public class DiscoveryService {
                 }
             }
         }
-        int exit = process.waitFor();
-        if (exit != 0 && hits.isEmpty()) {
+        if (!result.success() && hits.isEmpty()) {
             throw new BizException(ErrorCode.UPSTREAM_ERROR, "搜索脚本执行失败: " + tail.toString().trim());
         }
         return hits;

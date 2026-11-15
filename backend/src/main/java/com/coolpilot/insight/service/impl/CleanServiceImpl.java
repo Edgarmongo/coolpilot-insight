@@ -1,5 +1,7 @@
 package com.coolpilot.insight.service.impl;
 
+import com.coolpilot.insight.integration.ai.AiClient;
+import com.coolpilot.insight.integration.common.CommandResult;
 import com.coolpilot.insight.integration.config.AppProperties;
 import com.coolpilot.insight.common.security.RequestContext;
 import com.coolpilot.insight.service.CleanService;
@@ -33,6 +35,8 @@ public class CleanServiceImpl implements CleanService {
 
     @Autowired
     private AppProperties appProperties;
+    @Autowired
+    private AiClient aiClient;
 
     @Autowired
     private MemoryCache cache;
@@ -99,30 +103,10 @@ public class CleanServiceImpl implements CleanService {
         }
 
         try {
-            List<String> cmd = new ArrayList<>();
-            cmd.add(appProperties.getPythonExe());
-            cmd.add("clean.py");
-            cmd.addAll(safeNames);
-            ProcessBuilder pb = new ProcessBuilder(cmd);
-            pb.directory(new File(appProperties.getPythonCleanDir()));
-            pb.redirectErrorStream(true);
-            pb.environment().put("PYTHONIOENCODING", "utf-8");
-            if (operatorUserId != null) {
-                pb.environment().put("CLEAN_USER_ID", operatorUserId.toString());
-            }
-            Process process = pb.start();
-
-            StringBuilder output = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), "UTF-8"))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
-                }
-            }
-            int exitCode = process.waitFor();
-            result.put("success", exitCode == 0);
-            result.put("output", output.toString());
+            // 子进程细节收进 integration.ai.AiClient，这里只判断成败
+            CommandResult cmdResult = aiClient.cleanFiles(safeNames, operatorUserId);
+            result.put("success", cmdResult.success());
+            result.put("output", cmdResult.output());
             cache.deleteByPrefix("analysis:");
 
             // 清洗成功后标记视频最近采集时间
