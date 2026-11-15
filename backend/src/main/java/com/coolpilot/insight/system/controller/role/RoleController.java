@@ -2,7 +2,8 @@ package com.coolpilot.insight.system.controller.role;
 
 import com.coolpilot.insight.common.security.RequireRole;
 import com.coolpilot.insight.common.web.Result;
-import com.coolpilot.insight.system.application.role.RoleService;
+import com.coolpilot.insight.system.application.role.RoleCommandService;
+import com.coolpilot.insight.system.application.role.RoleQueryService;
 import com.coolpilot.insight.system.dto.role.RoleView;
 import jakarta.validation.constraints.NotBlank;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -26,42 +27,44 @@ import java.util.Map;
 @RequestMapping("/api/v1/system/roles")
 public class RoleController {
 
-    private final RoleService roleService;
+    private final RoleQueryService roleQueryService;
+    private final RoleCommandService roleCommandService;
 
-    public RoleController(RoleService roleService) {
-        this.roleService = roleService;
+    public RoleController(RoleQueryService roleQueryService, RoleCommandService roleCommandService) {
+        this.roleQueryService = roleQueryService;
+        this.roleCommandService = roleCommandService;
     }
 
     @RequireRole(role = 1)
     @GetMapping
     public Result<List<RoleView>> list() {
-        return Result.ok(roleService.list());
+        return Result.ok(roleQueryService.list());
     }
 
     @RequireRole(role = 1)
     @PostMapping
     public Result<RoleView> create(@RequestBody Map<String, String> body) {
-        return Result.ok(roleService.create(body.get("code"), body.get("name")));
+        return Result.ok(roleCommandService.create(body.get("code"), body.get("name")));
     }
 
     @RequireRole(role = 1)
     @DeleteMapping("/{id}")
     public Result<String> delete(@PathVariable Long id) {
-        roleService.delete(id);
+        roleCommandService.delete(id);
         return Result.ok("已删除");
     }
 
     @RequireRole(role = 1)
     @PostMapping("/{id}/users/{userId}")
     public Result<String> assign(@PathVariable Long id, @PathVariable Long userId) {
-        roleService.assignRole(userId, id);
+        roleCommandService.assignRole(userId, id);
         return Result.ok("已分配");
     }
 
     @RequireRole(role = 1)
     @DeleteMapping("/{id}/users/{userId}")
     public Result<String> revoke(@PathVariable Long id, @PathVariable Long userId) {
-        roleService.revokeRole(userId, id);
+        roleCommandService.revokeRole(userId, id);
         return Result.ok("已解除");
     }
 }

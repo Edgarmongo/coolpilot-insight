@@ -8,28 +8,24 @@ import com.coolpilot.insight.system.dto.role.RoleView;
 import com.coolpilot.insight.system.infrastructure.role.RoleMapper;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-
 /**
- * 角色管理（RBAC 的骨架）。
+ * 角色写操作。
  *
- * <p>两条硬规则：
- * 1. **内置角色不可删除**（builtin=1），否则可能把 ADMIN 删掉导致无人可管理系统；
- * 2. 角色仍有用户关联时不可删除，否则这些用户会静默失去全部权限。
+ * <p>两条硬规则：内置角色不可删除；仍有用户关联时不可删除
+ * （否则这些用户会静默失去全部权限，且不报错）。
  */
 @Service
-public class RoleService {
+public class RoleCommandService {
 
     private final RoleMapper roleMapper;
+    private final RoleQueryService roleQueryService;
     private final AuditService auditService;
 
-    public RoleService(RoleMapper roleMapper, AuditService auditService) {
+    public RoleCommandService(RoleMapper roleMapper, RoleQueryService roleQueryService,
+                              AuditService auditService) {
         this.roleMapper = roleMapper;
+        this.roleQueryService = roleQueryService;
         this.auditService = auditService;
-    }
-
-    public List<RoleView> list() {
-        return roleMapper.selectAll().stream().map(this::toView).toList();
     }
 
     public RoleView create(String code, String name) {
@@ -50,7 +46,7 @@ public class RoleService {
         r.setName(n);
         roleMapper.insert(r);
         auditService.audit("ROLE_CREATE", "SYS_ROLE", r.getId(), "{\"code\":\"" + c + "\"}");
-        return toView(roleMapper.selectById(r.getId()));
+        return roleQueryService.toView(roleMapper.selectById(r.getId()));
     }
 
     public void delete(Long id) {
@@ -81,21 +77,5 @@ public class RoleService {
     public void revokeRole(Long userId, Long roleId) {
         roleMapper.revoke(userId, roleId);
         auditService.audit("ROLE_REVOKE", "SYS_USER", userId, "{\"roleId\":" + roleId + "}");
-    }
-
-    public List<String> rolesOf(Long userId) {
-        return roleMapper.selectByUserId(userId).stream().map(Role::getCode).toList();
-    }
-
-    private RoleView toView(Role r) {
-        RoleView v = new RoleView();
-        v.setId(r.getId());
-        v.setCode(r.getCode());
-        v.setName(r.getName());
-        v.setBuiltin(r.getBuiltin() != null && r.getBuiltin() == 1);
-        v.setStatus(r.getStatus());
-        v.setUserCount(roleMapper.countUsers(r.getId()));
-        v.setPermissionIds(roleMapper.selectPermissionIds(r.getId()));
-        return v;
     }
 }
