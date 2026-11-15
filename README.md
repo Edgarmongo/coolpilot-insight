@@ -499,6 +499,9 @@ cd backend && mvn -s ../deploy/docker/maven-settings.xml test
 - [Docker 部署指南](deploy/docker/DOCKER部署指南.md) — 一键容器化启动、架构说明、常见问题
 - [爬虫维护笔记](抖音爬虫维护笔记.md) — 爬虫故障排查指南
 - [简洁版使用指南](简洁版使用指南.txt) — 快速上手指南
+> ⚠️ **架构重构进行中**：common/system/source/collection 已模块化，content/analysis/lead/conversion/analytics 尚未迁移，
+> 数据库仍为旧结构（新基线已就绪未切换）。进度与交接见 [重构状态](docs/architecture/refactor/STATUS-handover.md)。
+
 - [产品定位与能力矩阵](docs/product/01-positioning.md) — 目标形态、八大中心、路线图与产品边界
 - [工程基线审计](docs/audit/01-project-baseline.md) — 升级前的技术栈、模块、API、采集能力与风险清单（6 篇）
 - [仓库结构说明](docs/architecture/01-repo-structure.md) — 目录职责、依赖方向、compose include 的原因与未完成项
