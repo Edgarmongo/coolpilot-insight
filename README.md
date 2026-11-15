@@ -101,8 +101,8 @@ CoolPilot Insight 是一个面向抖音创作者和运营人员的评论数据�
 
 | 层 | 技术 |
 |----|------|
-| 数据采集 | Python 3.12 + DrissionPage 4.x |
-| 数据清洗 | Python 3.12 + jieba + 自定义情感词典 || AI Agent | DeepSeek API (`deepseek-chat`) + OpenAI SDK |
+| 数据采集 | Python 3.10+（容器内 3.10.12）+ DrissionPage 4.x |
+| 数据清洗 | Python 3.10+ + jieba + 自定义情感词典 || AI Agent | DeepSeek API (`deepseek-chat`) + OpenAI SDK |
 | 分词服务 | Flask 3.x + jieba（常驻服务，50ms 级响应） |
 | 后端 | Spring Boot **4.1** + MyBatis 3.5 + HikariCP + MySQL 8.0（**JDK 21**） |
 | API 文档 | springdoc-openapi 3.x (Swagger UI) |

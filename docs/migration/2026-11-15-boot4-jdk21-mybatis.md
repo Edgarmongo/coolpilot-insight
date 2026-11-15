@@ -128,6 +128,25 @@ Boot 4 把自动配置拆成模块，`DataSourceProperties` 已迁至独立 arti
 **未覆盖**：定时采集调度、AI 分析调用（Flask 链路）、报告 PDF/XLSX 渲染、关键词发现、前端联调。
 项目仍**无单元测试**，本次为人工接口回归。
 
+### 6.1 容器部署验证
+
+`docker/backend.Dockerfile` 基镜像 JDK 8 → 21 后，实际构建并运行整套容器：
+
+| 项 | 结果 |
+|---|---|
+| `docker compose build backend` | 成功，耗时约 5 分钟，镜像 1.92 GB |
+| 容器内 JDK | `openjdk 21.0.13 LTS (Temurin)` |
+| 容器内 Chrome | `157.0.8103.78`（DrissionPage 依赖） |
+| 容器内 Python | `3.10.12` |
+| 四个容器状态 | mysql / flask / backend 均 healthy，frontend Up |
+| `/api/health` | `{"status":"UP","db":"UP"}` |
+| `/actuator/health` | db UP，磁盘信息正常 |
+| 业务回归 | 登录 200；`/api/overview` 返回 3 视频 / 19 评论 / 14 用户，与升级前一致 |
+| 前端 | 5173 HTTP 200 |
+
+> 注意：容器内 Python 为 **3.10.12**（Ubuntu 22.04 自带），而非 README 早期写的 3.12。
+> 采集脚本目前在 3.10 下运行正常，README 已同步更正。
+
 ## 7. 回滚方式
 
 分支未合入 `main`，直接切回即可：
@@ -141,6 +160,6 @@ git checkout main
 ## 8. 遗留待办
 
 - [ ] 补冒烟测试：评论入库幂等、AI 结果落库、报告导出（把本次人工回归固化）
-- [ ] 验证容器镜像构建（`docker/backend.Dockerfile` 已改 JDK 21，未实际 build）
+- [x] 验证容器镜像构建与运行 —— 已实际 build 并启动整套容器（见 §6.1）
 - [ ] 仓库缺 `.env`，`docker compose` 因 `JWT_SECRET` 必填而无法执行
 - [x] 评估是否用 p6spy 补回 Druid 的慢 SQL 能力 —— 已接入 actuator + p6spy（见 §5.1）
