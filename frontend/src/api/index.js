@@ -102,3 +102,16 @@ export const menuApi = {
   /** 当前用户可见菜单（后端按权限过滤） */
   current: () => request.get('/v1/system/menus/current'),
 }
+
+export const roleApi = {
+  list: () => request.get('/v1/system/roles'),
+  create: (data) => request.post('/v1/system/roles', data),
+  remove: (id) => request.delete('/v1/system/roles/' + id),
+  assign: (roleId, userId) => request.post(`/v1/system/roles/${roleId}/users/${userId}`),
+  revoke: (roleId, userId) => request.delete(`/v1/system/roles/${roleId}/users/${userId}`),
+}
+
+export const dictApi = {
+  types: () => request.get('/v1/system/dicts'),
+  items: (code) => request.get(`/v1/system/dicts/${code}/items`),
+}
