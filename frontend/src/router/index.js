@@ -25,6 +25,7 @@ const routes = [
       { path: 'system/dicts', name: 'SystemDicts', component: () => import('../views/admin/DictManageView.vue'), meta: { role: 1 } },
       { path: 'system/audits', name: 'SystemAudits', component: () => import('../views/admin/AuditLogView.vue'), meta: { role: 1 } },
       { path: 'system/configs', name: 'SystemConfigs', component: () => import('../views/admin/ConfigManageView.vue'), meta: { role: 1 } },
+      { path: 'system/menus', name: 'SystemMenus', component: () => import('../views/admin/MenuManageView.vue'), meta: { role: 1 } },
     ]
   },
 ]

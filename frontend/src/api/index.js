@@ -101,6 +101,10 @@ export const adminApi = {
 export const menuApi = {
   /** 当前用户可见菜单（后端按权限过滤） */
   current: () => request.get('/v1/system/menus/current'),
+  /** 全量树（需 system:menu:list） */
+  tree: () => request.get('/v1/system/menus/tree'),
+  create: (data) => request.post('/v1/system/menus', data),
+  remove: (id) => request.delete('/v1/system/menus/' + id),
 }
 
 export const roleApi = {
