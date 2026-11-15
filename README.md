@@ -214,98 +214,75 @@ MySQL 的 DDL 隐式提交意味着**迁移失败无法回滚**，失败后需�
 ## 📁 项目结构
 
 ```
-CoolPilot Insight/
+coolpilot-insight/
 │
-├── Py_Data/                                # Python 数据层
-│   ├── douyin_comment.py                   # 抖音评论采集（DrissionPage 自动化浏览器）
-│   ├── config_browser.py                   # Chrome 浏览器启动配置
-│   ├── Datas/                              # 采集原始 CSV 数据目录
-│   ├── clean/                              # 数据清洗与服务模块
-│   │   ├── clean_main.py                   # 数据清洗入库入口（去重 + 情感标注）
-│   │   ├── analysis_engine.py              # 情感分析引擎（基于词典的 NLP 分析）
-│   │   ├── sentiment_dict/                 # 情感词典（积极/消极/程度/否定词库）
-│   │   ├── wordcloud_gen.py                # 词云数据生成（单次脚本）
-│   │   ├── wordcloud_service.py            # Flask 常驻服务（分词接口 + AI 话题分析端点）
-│   │   ├── .env                            # DeepSeek API Key 配置
-│   │   └── requirements.txt               # Python 依赖
+├── frontend/                        # Vue 3 前端
+│   ├── src/
+│   │   ├── api/                     # Axios 封装与接口定义
+│   │   ├── components/              # 布局与图表组件（AppLayout 等）
+│   │   ├── config/menu.js           # 侧边栏信息架构（单一数据源）
+│   │   ├── router/                  # 路由与登录守卫
+│   │   ├── stores/                  # Pinia 状态
+│   │   ├── utils/                   # ECharts 组合式函数等
+│   │   └── views/                   # 页面（登录、驾驶舱、采集、评论、洞察、复核、报告、管理）
+│   └── package.json
 │
-├── dy-backend/                             # Spring Boot 4 后端
-│   ├── pom.xml                             # Maven 依赖（Spring Boot 4.1 / JDK 21）
-│   └── src/main/java/com/dy/comment/
-│       ├── DyCommentApplication.java       # 启动类（自动拉起 Flask 分词服务）
-│       ├── controller/                     # REST API 控制器
-│       │   ├── UserController              # 注册/登录/用户信息
-│       │   ├── CollectController           # 采集任务管理
-│       │   ├── CleanController             # 数据清洗管理
-│       │   ├── CommentController           # 评论查询/删除/情感重判
-│       │   ├── AnalysisController          # 总览分析（6 大维度 API）
-│       │   └── AdminController             # 管理员用户管理
-│       ├── service/impl/                   # 业务逻辑实现
-│       │   ├── AnalysisServiceImpl         # 核心分析（含 5 维计算 + AI Agent 调用）
-│       │   ├── CleanServiceImpl            # 清洗入库逻辑
-│       │   ├── CollectServiceImpl          # 采集任务调度
-│       │   ├── CommentServiceImpl          # 评论 CRUD
-│       │   └── UserServiceImpl             # 用户认证与鉴权
-│       ├── mapper/                         # MyBatis 接口（SQL 在 resources/mapper/*.xml）
-│       ├── entity/                         # 数据实体（User / Comment / AnalysisResult）
-│       ├── interceptor/                    # JWT 请求拦截器、上下文持有者
-│       ├── dto/                            # 数据传输对象（请求/响应）
-│       ├── utils/                          # 工具类
-│       │   ├── JwtUtil                     # JWT 令牌签发与验证
-│       │   ├── TokenStore                  # 内存 Token 存储
-│       │   ├── MemoryCache                 # 30 分钟 TTL 本地缓存
-│       │   └── CollectUtils               # 抖音链接解析
-│       └── config/                         # 配置
-│           ├── GlobalExceptionHandler      # 全局异常处理
-│           ├── WebMvcConfig                # CORS / 拦截器注册
-│           └── OpenApiConfig               # Swagger / OpenAPI 配置
-│
-├── dy-frontend/                            # Vue 3 前端
-│   ├── index.html                          # HTML 入口
-│   ├── vite.config.js                      # Vite 构建配置（代理到后端 8080）
-│   ├── package.json                        # 前端依赖
+├── backend/                         # Spring Boot 4.1 / JDK 21
+│   ├── pom.xml
 │   └── src/
-│       ├── main.js                         # Vue 应用入口（挂载 Element Plus / Pinia / Router）
-│       ├── App.vue                          # 根组件
-│       ├── api/                            # Axios 封装
-│       │   ├── request.js                  # HTTP 拦截器（Token 注入 / 错误处理）
-│       │   └── index.js                    # API 方法定义
-│       ├── router/index.js                 # 路由配置（6 个页面 + 1 个管理页面）
-│       ├── stores/user.js                  # Pinia 状态管理（用户信息 / 当前视频）
-│       ├── utils/useECharts.js             # ECharts 组合式函数（消除 90% 重复代码）
-│       ├── views/                          # 页面组件
-│       │   ├── LoginView / RegisterView    # 登录 / 注册
-│       │   ├── DashboardView               # 总览分析大屏（核心页面）
-│       │   ├── CollectView                 # 数据采集管理
-│       │   ├── CleanView                   # 数据清洗管理
-│       │   ├── CommentListView             # 评论明细列表
-│       │   ├── ProfileView                 # 个人中心
-│       │   └── admin/UserManageView        # 用户管理（管理员）
-│       └── components/                     # 可复用图表组件
-│           ├── AppLayout                   # 全局布局（侧边栏 + 顶栏 + 内容区）
-│           ├── StatsCards                  # 统计卡片组
-│           ├── RegionMap                   # 地区分布地图
-│           ├── SentimentPie               # 情感占比饼图
-│           ├── TrendLine                   # 时间趋势折线图
-│           ├── TopComments                 # 高赞评论 Top 20
-│           ├── WordCloud                   # 词云图
-│           └── SankeyChart                # 桑基图
+│       ├── main/java/com/coolskyai/coolpilot/insight/
+│       │   ├── controller/           # 12 个 REST 控制器
+│       │   ├── service/              # 业务逻辑（采集调度、清洗、AI 分析、报告、鉴权）
+│       │   ├── mapper/               # MyBatis 接口（SQL 在 resources/mapper/*.xml）
+│       │   ├── entity/               # 25 张表对应的实体
+│       │   ├── config/               # 配置、拦截器、全局异常、启动引导
+│       │   └── utils/                # JWT、TokenStore、内存缓存、链接解析
+│       ├── main/resources/
+│       │   ├── application.yml
+│       │   ├── db/migration/         # Flyway V1~V8（唯一结构变更入口）
+│       │   └── mapper/               # 25 个 Mapper XML
+│       └── test/java/                # 17 个集成测试（Testcontainers MySQL）
 │
-├── coolpilot_insight.sql                          # 建库建表 SQL（直接执行）
-├── docker-compose.yml                     # Docker 一键部署编排
-├── .env.example                           # 环境变量示例（复制为 .env 后使用）
-├── docker/                                # 容器化配置
-│   ├── backend.Dockerfile                 # 后端镜像（JDK21 + Python + Chrome）
-│   ├── flask.Dockerfile                   # 分词/AI 服务镜像
-│   ├── frontend.Dockerfile                # 前端镜像（Node 构建 + Nginx 托管）
-│   ├── nginx.conf                         # 前端托管与 API 反代配置
-│   ├── maven-settings.xml                 # 容器内 Maven 国内镜像配置
-│   └── DOCKER部署指南.md                  # Docker 部署详解
-├── 需求设计（抖音多视频评论分析与可视化平台）.md    # 完整需求设计文档
-├── 抖音爬虫维护笔记.md                       # 爬虫故障排查指南
-├── 简洁版使用指南.txt                        # 极简快速上手指南
-└── README.md                               # 本文件
+├── collection-service/              # 采集侧（Python）
+│   ├── app/adapters/
+│   │   ├── base.py                  # 平台适配器契约（目标：discover/collect/normalize）
+│   │   └── douyin/
+│   │       ├── comment.py           # 抖音评论采集（DrissionPage）
+│   │       ├── search.py            # 抖音搜索（能力待验证）
+│   │       └── browser.py           # Chrome 启动配置
+│   ├── datas/                       # 采集原始 CSV（容器挂载）
+│   └── tests/                       # 工具脚本
+│
+├── ai-service/                      # 清洗与 AI 侧（Python / Flask）
+│   ├── app/
+│   │   ├── server.py                # Flask 常驻服务（分词、话题分析、报告渲染）
+│   │   ├── clean.py                 # 清洗入库（去重 + 情感标注）
+│   │   ├── analysis_engine.py       # 词典情感分析引擎
+│   │   ├── wordcloud_gen.py         # 词云数据生成
+│   │   └── sentiment_dict/          # 情感词典
+│   └── requirements.txt
+│
+├── deploy/
+│   ├── compose/docker-compose.yml   # 编排定义（根目录 compose.yaml 通过 include 引用）
+│   ├── docker/                      # 三个 Dockerfile + nginx.conf + maven-settings.xml
+│   └── ...（部署指南见 docs）
+│
+├── docs/
+│   ├── product/                     # 产品定位、能力矩阵、界面截图
+│   ├── audit/                       # 工程基线审计（六篇 + 历史快照）
+│   ├── migration/                   # 技术栈升级记录（Boot 4 / JDK 21 / MyBatis）
+│   └── integration/                 # 外部系统集成说明
+│
+├── tools/                           # 迁移与校验脚本（代码生成、表结构漂移检查）
+├── compose.yaml                     # 统一入口：include deploy/compose/docker-compose.yml
+├── .env.example                     # 环境变量模板（复制为 .env）
+├── coolpilot_insight.sql            # 建库建表 SQL（历史方案，正式以 Flyway 为准）
+└── README.md
 ```
+
+> `frontend/` `backend/` `collection-service/` `ai-service/` 是**目标组织方式**，
+> 当前 Java 包名仍为 `com.coolskyai.coolpilot.insight`，尚未按 `source/collection/content/analysis/lead/...`
+> 拆分模块——那属于 P1 阶段工作，见 `docs/audit/06-migration-recommendations.md`。
 
 ---
 
@@ -376,7 +353,7 @@ docker compose up -d --build
 | Swagger 文档 | http://localhost:8080/swagger-ui.html |
 
 > 本机 3306 / 3000 端口已被占用，故 MySQL 映射至 3307、前端映射至 5173。
-> 完整说明见 **[Docker 部署指南](docker/DOCKER部署指南.md)**。
+> 完整说明见 **[Docker 部署指南](deploy/docker/DOCKER部署指南.md)**。
 
 ### 方式二：本地开发
 
@@ -410,7 +387,7 @@ VALUES ('管理员', '13800000000', MD5('123456'), 1, NOW());
 ### 3. 配置 DeepSeek API Key（AI 话题分析）
 
 ```bash
-# 方式一：编辑 Py_Data/clean/.env 文件
+# 方式一：编辑 ai-service/.env 文件
 # 已创建，填入你的 API Key 即可
 DEEPSEEK_API_KEY=sk-your-key-here
 
@@ -423,16 +400,16 @@ DEEPSEEK_API_KEY=sk-your-key-here
 ### 4. 安装依赖 & 启动服务
 
 ```bash
-# 终端1: Python 依赖
-cd Py_Data/clean
+# 终端1: AI 服务依赖（清洗 / 分词 / 话题分析）
+cd ai-service
 python -m pip install -r requirements.txt
 
-# 终端2: 后端（自动拉 Flask 分词服务 + 启动 Spring Boot）
-cd dy-backend
-mvn spring-boot:run
+# 终端2: 后端（自动拉起 Flask 服务 + 启动 Spring Boot）
+cd backend
+mvn -s ../deploy/docker/maven-settings.xml spring-boot:run
 
 # 终端3: 前端
-cd dy-frontend
+cd frontend
 npm install
 npm run dev
 ```
@@ -447,7 +424,7 @@ npm run dev
 | Flask 分词服务 | `http://127.0.0.1:5000`（内部分调用，无需直接访问） |
 
 > **提示**：所有路径与外部地址均已支持环境变量覆盖，本地开发无需任何额外配置。
-> 常用变量清单见 [Docker 部署指南 · 关键设计说明](docker/DOCKER部署指南.md)。
+> 常用变量清单见 [Docker 部署指南 · 关键设计说明](deploy/docker/DOCKER部署指南.md)。
 
 ---
 
@@ -508,7 +485,7 @@ npm run dev
 ## 🧪 测试
 
 ```bash
-cd dy-backend && mvn -s ../docker/maven-settings.xml test
+cd backend && mvn -s ../deploy/docker/maven-settings.xml test
 ```
 
 集成测试用 Testcontainers 起真实 MySQL（需本机 Docker），首个测试类启动约 20 秒。
@@ -519,9 +496,10 @@ cd dy-backend && mvn -s ../docker/maven-settings.xml test
 ## 📄 相关文档
 
 - [需求设计文档](需求设计（抖音多视频评论分析与可视化平台）.md) — 完整的需求分析、功能设计、数据表设计
-- [Docker 部署指南](docker/DOCKER部署指南.md) — 一键容器化启动、架构说明、常见问题
+- [Docker 部署指南](deploy/docker/DOCKER部署指南.md) — 一键容器化启动、架构说明、常见问题
 - [爬虫维护笔记](抖音爬虫维护笔记.md) — 爬虫故障排查指南
 - [简洁版使用指南](简洁版使用指南.txt) — 快速上手指南
 - [产品定位与能力矩阵](docs/product/01-positioning.md) — 目标形态、八大中心、路线图与产品边界
 - [工程基线审计](docs/audit/01-project-baseline.md) — 升级前的技术栈、模块、API、采集能力与风险清单（6 篇）
+- [仓库结构说明](docs/architecture/01-repo-structure.md) — 目录职责、依赖方向、compose include 的原因与未完成项
 - [Boot 4 迁移记录](docs/migration/2026-11-15-boot4-jdk21-mybatis.md) — Spring Boot 4 + JDK 21 + 原生 MyBatis 的变更、语义陷阱与验证结果

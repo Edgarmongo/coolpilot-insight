@@ -19,7 +19,7 @@ import os
 import re
 import sys
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "dy-backend"))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "backend"))
 ENTITY_DIR = os.path.join(ROOT, "src/main/java/com/coolskyai/coolpilot/insight/entity")
 MAPPER_DIR = os.path.join(ROOT, "src/main/java/com/coolskyai/coolpilot/insight/mapper")
 XML_DIR = os.path.join(ROOT, "src/main/resources/mapper")

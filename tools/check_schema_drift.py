@@ -6,7 +6,7 @@ import re
 import subprocess
 import sys
 
-ENTITY_DIR = os.path.join("dy-backend", "src", "main", "java",
+ENTITY_DIR = os.path.join("backend", "src", "main", "java",
                           "com", "coolskyai", "coolpilot", "insight", "entity")
 
 
