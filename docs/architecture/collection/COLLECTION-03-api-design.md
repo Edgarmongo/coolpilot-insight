@@ -2,6 +2,20 @@
 
 版本：v2　仅设计，未实现。统一前缀 `/api/v1`，统一 `Result`/`PageResult`/错误码，权限用 `@RequirePermission`。
 
+
+## 裁决记录（DECISION-02，2026-11-16）
+
+| # | 事项 | 裁决 |
+|---|---|---|
+| 1 | `task_item` 唯一键 | 保留 `UK(task_id,video_id)` + `UK(video_id,active_flag)`，**不加 run_id**；唯一性跨 Run 生效 |
+| 2 | Task↔Source | 首期一任务一源，保留 `collection_task.source_id`，**不建 `col_task_target`**；跨平台编排留待未来上层 Collection Plan |
+| 3 | `failure_type` | 七类固定：AUTHENTICATION / AUTHORIZATION / RATE_LIMIT / NETWORK / PLATFORM / DATA / SYSTEM；细节走 `error_code`；用户取消不算 failure |
+| 4 | checkpoint | 不加字段；`last_cid/page_no/cursor_value` 保留；首期仅 CID_SET；修复 Java `saveCheckpoint` 写 `last_cid`/`page_no` |
+
+**实测修正**：`collection_task_item` 真实唯一键为 `uk_task_video(task_id,video_id)` +
+`uk_video_active(video_id,active_flag)`；历史 4 个任务为 2 FAILED + 2 SUCCESS，**无 PENDING**。
+
+
 ## 1. 数据源（改造现有 `/api/v1/source/sources`）
 
 | 方法 | 路径 | 权限 | 现状 |
