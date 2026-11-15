@@ -11,6 +11,8 @@ import com.coolpilot.insight.mapper.CollectionTaskItemMapper;
 import com.coolpilot.insight.mapper.CollectionTaskMapper;
 import com.coolpilot.insight.mapper.VideoGrantMapper;
 import com.coolpilot.insight.mapper.VideoMapper;
+import com.coolpilot.insight.common.exception.BizException;
+import com.coolpilot.insight.common.exception.ErrorCode;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -166,7 +168,9 @@ class ContentAccessServiceTest extends AbstractIntegrationTest {
         assertThat(accessService.canRead(v.getId())).isFalse();
         assertThat(accessService.readableContentIds()).doesNotContain(v.getId());
         assertThatThrownBy(() -> accessService.requireRead(v.getId()))
-                .isInstanceOf(SecurityException.class);
+                .isInstanceOf(BizException.class)
+                .extracting(e -> ((BizException) e).getErrorCode())
+                .isEqualTo(ErrorCode.FORBIDDEN);
     }
 
     @Test

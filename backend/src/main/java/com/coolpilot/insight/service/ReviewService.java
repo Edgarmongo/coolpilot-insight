@@ -11,6 +11,8 @@ import com.coolpilot.insight.mapper.CommentMapper;
 import com.coolpilot.insight.system.application.AuditService;
 import com.coolpilot.insight.content.application.ContentAccessService;
 import com.coolpilot.insight.system.application.PermissionService;
+import com.coolpilot.insight.common.exception.BizException;
+import com.coolpilot.insight.common.exception.ErrorCode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -111,17 +113,17 @@ public class ReviewService {
                                       Map<String, Object> corrections) {
         CommentAnalysis ca = queueMapper.selectById(analysisId);
         if (ca == null) {
-            throw new IllegalArgumentException("分析结果不存在");
+            throw new BizException(ErrorCode.NOT_FOUND, "分析结果不存在");
         }
         Comment comment = commentMapper.selectById(ca.getCommentId());
         if (comment == null) {
-            throw new IllegalArgumentException("评论不存在");
+            throw new BizException(ErrorCode.NOT_FOUND, "评论不存在");
         }
         contentAccess.requireRead(comment.getVideoId());
 
         String st = status == null ? "" : status.trim().toUpperCase();
         if (!Arrays.asList("APPROVED", "REJECTED", "CORRECTED").contains(st)) {
-            throw new IllegalArgumentException("复核状态必须是 APPROVED / REJECTED / CORRECTED");
+            throw new BizException(ErrorCode.PARAM_INVALID, "复核状态必须是 APPROVED / REJECTED / CORRECTED");
         }
 
         JSONObject before = snapshot(ca);
@@ -130,7 +132,7 @@ public class ReviewService {
 
         if ("CORRECTED".equals(st)) {
             if (corrections == null || corrections.isEmpty()) {
-                throw new IllegalArgumentException("纠正必须至少提供一个字段");
+                throw new BizException(ErrorCode.PARAM_INVALID, "纠正必须至少提供一个字段");
             }
             applyCorrections(ca, corrections);
             after = snapshot(ca);
@@ -199,7 +201,7 @@ public class ReviewService {
         if (c.get("sentiment") != null) {
             String s = String.valueOf(c.get("sentiment"));
             if (!Arrays.asList("positive", "neutral", "negative", "unknown").contains(s)) {
-                throw new IllegalArgumentException("sentiment 取值非法");
+                throw new BizException(ErrorCode.PARAM_INVALID, "sentiment 取值非法");
             }
             ca.setSentiment(s);
         }
@@ -212,7 +214,7 @@ public class ReviewService {
         if (c.get("purchaseIntent") != null) {
             String p = String.valueOf(c.get("purchaseIntent"));
             if (!Arrays.asList("none", "low", "medium", "high").contains(p)) {
-                throw new IllegalArgumentException("purchaseIntent 取值非法");
+                throw new BizException(ErrorCode.PARAM_INVALID, "purchaseIntent 取值非法");
             }
             ca.setPurchaseIntent(p);
         }

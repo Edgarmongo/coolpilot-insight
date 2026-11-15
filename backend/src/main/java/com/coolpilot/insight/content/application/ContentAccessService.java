@@ -4,6 +4,8 @@ import com.coolpilot.insight.mapper.CollectionTaskItemMapper;
 import com.coolpilot.insight.mapper.CollectionTaskMapper;
 import com.coolpilot.insight.mapper.VideoGrantMapper;
 import com.coolpilot.insight.system.application.PermissionService;
+import com.coolpilot.insight.common.exception.BizException;
+import com.coolpilot.insight.common.exception.ErrorCode;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -68,7 +70,7 @@ public class ContentAccessService {
     /** 越权时抛出，由 GlobalExceptionHandler 转为 403。 */
     public void requireRead(Long contentId) {
         if (!canRead(contentId)) {
-            throw new SecurityException("无权访问该内容的评论数据");
+            throw new BizException(ErrorCode.FORBIDDEN, "无权访问该内容的评论数据");
         }
     }
 

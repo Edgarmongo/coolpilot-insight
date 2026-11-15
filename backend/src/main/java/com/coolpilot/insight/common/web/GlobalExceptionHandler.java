@@ -1,55 +1,81 @@
 package com.coolpilot.insight.common.web;
 
-import com.coolpilot.insight.common.web.Result;
+import com.coolpilot.insight.common.exception.BizException;
+import com.coolpilot.insight.common.exception.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+/**
+ * 全局异常处理。
+ *
+ * <p>统一把异常翻译成「HTTP 状态码 + 业务码 + 文案」三者一致：
+ * HTTP 状态供网关/监控聚合，业务码供前端精确判断，文案给人看。
+ *
+ * <p>R2-04 之前所有异常都返回 HTTP 200（仅响应体带 code），
+ * 导致监控看不出错误率、前端也拿不到 4xx 语义。
+ */
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    /**
-     * 缺少必填请求参数：属于客户端错误，返回 400 而非 500。
-     */
+    /** 业务异常：HTTP 状态与业务码都取自 ErrorCode。 */
+    @ExceptionHandler(BizException.class)
+    public ResponseEntity<Result<String>> handleBiz(BizException e) {
+        log.warn("[业务异常] code={} {}", e.getCode(), e.getMessage());
+        return ResponseEntity.status(e.getHttpStatus())
+                .body(Result.fail(e.getCode(), e.getMessage()));
+    }
+
+    /** 缺少必填请求参数。 */
     @ExceptionHandler(MissingServletRequestParameterException.class)
-    public Result<String> handleMissingParam(MissingServletRequestParameterException e) {
+    public ResponseEntity<Result<String>> handleMissingParam(MissingServletRequestParameterException e) {
         log.warn("[参数缺失] {}", e.getMessage());
-        return Result.fail(400, "缺少必填参数: " + e.getParameterName());
+        return ResponseEntity.status(400)
+                .body(Result.fail(ErrorCode.PARAM_INVALID.getCode(),
+                        "缺少必填参数: " + e.getParameterName()));
     }
 
     /**
-     * 越权访问：必须返回 403 且不泄露资源是否存在。
+     * 越权访问兜底。
+     *
+     * <p>业务代码已基本改用 {@link BizException}，但拦截器与少量底层代码仍会抛 SecurityException。
+     * 需区分"未登录"（401）与"已登录无权限"（403）——原实现一律返回 403，
+     * 会让前端在未登录时走"权限不足"分支而不是跳登录页。
      */
     @ExceptionHandler(SecurityException.class)
-    public Result<String> handleSecurity(SecurityException e) {
-        log.warn("[越权访问] {}", e.getMessage());
-        return Result.fail(403, e.getMessage() == null ? "无权限" : e.getMessage());
+    public ResponseEntity<Result<String>> handleSecurity(SecurityException e) {
+        String msg = e.getMessage() == null ? "权限不足" : e.getMessage();
+        boolean unauthenticated = msg.contains("未登录");
+        int status = unauthenticated ? 401 : 403;
+        int code = unauthenticated ? ErrorCode.UNAUTHORIZED.getCode() : ErrorCode.FORBIDDEN.getCode();
+        log.warn("[{}] {}", unauthenticated ? "未认证" : "越权访问", msg);
+        return ResponseEntity.status(status).body(Result.fail(code, msg));
     }
 
+    /** 遗留的 IllegalArgumentException：逐步被 BizException 取代，保留兜底。 */
     @ExceptionHandler(IllegalArgumentException.class)
-    public Result<String> handleIllegalArgument(IllegalArgumentException e) {
+    public ResponseEntity<Result<String>> handleIllegalArgument(IllegalArgumentException e) {
         log.warn("[参数非法] {}", e.getMessage());
-        return Result.fail(400, e.getMessage());
+        return ResponseEntity.status(400)
+                .body(Result.fail(ErrorCode.PARAM_INVALID.getCode(), e.getMessage()));
     }
 
+    /** 遗留的 IllegalStateException：逐步被 BizException 取代，保留兜底。 */
     @ExceptionHandler(IllegalStateException.class)
-    public Result<String> handleIllegalState(IllegalStateException e) {
+    public ResponseEntity<Result<String>> handleIllegalState(IllegalStateException e) {
         log.warn("[状态冲突] {}", e.getMessage());
-        return Result.fail(409, e.getMessage());
-    }
-
-    @ExceptionHandler(RuntimeException.class)
-    public Result<String> handleRuntime(RuntimeException e) {
-        log.warn("[业务异常] {}", e.getMessage());
-        return Result.fail(400, e.getMessage());
+        return ResponseEntity.status(409)
+                .body(Result.fail(ErrorCode.STATE_CONFLICT.getCode(), e.getMessage()));
     }
 
     @ExceptionHandler(Exception.class)
-    public Result<String> handleException(Exception e) {
-        // 记录完整堆栈，否则线上问题无法定位
+    public ResponseEntity<Result<String>> handleException(Exception e) {
+        // 记录完整堆栈，否则线上问题无法定位；对外只给通用文案，不泄露内部细节
         log.error("[系统异常]", e);
-        return Result.fail(500, "服务器内部错误");
+        return ResponseEntity.status(500)
+                .body(Result.fail(ErrorCode.INTERNAL.getCode(), "服务器内部错误"));
     }
 }

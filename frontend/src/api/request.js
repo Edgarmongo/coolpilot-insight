@@ -26,13 +26,24 @@ request.interceptors.response.use(
     return res
   },
   error => {
-    if (error.response?.status === 401) {
-      ElMessage.error('登录已过期，请重新登录')
+    // 后端已改为「HTTP 状态 + 业务码」：4xx 的响应体里带着可读文案，优先展示它
+    const status = error.response?.status
+    const body = error.response?.data
+
+    if (status === 401) {
+      ElMessage.error(body?.message || '登录已过期，请重新登录')
       const userStore = useUserStore()
       userStore.logout()
       window.location.href = '/login'
-    } else if (error.response?.status === 403) {
+      return Promise.reject(error)
+    }
+
+    if (body?.message) {
+      ElMessage.error(body.message)
+    } else if (status === 403) {
       ElMessage.error('权限不足')
+    } else if (status >= 500) {
+      ElMessage.error('服务器开小差了，请稍后再试')
     } else {
       ElMessage.error('网络错误')
     }

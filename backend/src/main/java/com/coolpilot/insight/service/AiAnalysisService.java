@@ -11,6 +11,8 @@ import org.slf4j.LoggerFactory;
 import com.coolpilot.insight.system.application.ConfigService;
 import com.coolpilot.insight.content.application.ContentAccessService;
 import com.coolpilot.insight.system.application.PermissionService;
+import com.coolpilot.insight.common.exception.BizException;
+import com.coolpilot.insight.common.exception.ErrorCode;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
@@ -95,7 +97,7 @@ public class AiAnalysisService {
     public Map<String, Object> submitCommentAnalysis(String videoId, int limit) {
         Long vid = videoService.resolveInternalId(videoId);
         if (vid == null) {
-            throw new IllegalArgumentException("视频不存在");
+            throw new BizException(ErrorCode.NOT_FOUND, "视频不存在");
         }
         contentAccess.requireRead(vid);
 
@@ -120,7 +122,7 @@ public class AiAnalysisService {
         long todayTokens = usageMapper.todayTokens();
         int dailyBudget = configService.getInt("ai.daily_token_budget", 2_000_000);
         if (todayTokens >= dailyBudget) {
-            throw new IllegalStateException("今日 AI Token 预算已用尽（" + todayTokens + "/" + dailyBudget + "），请明日再试");
+            throw new BizException(ErrorCode.QUOTA_EXCEEDED, "今日 AI Token 预算已用尽（" + todayTokens + "/" + dailyBudget + "），请明日再试");
         }
 
         AnalysisTask task = new AnalysisTask();
@@ -208,7 +210,7 @@ public class AiAnalysisService {
             try {
                 JSONObject resp = callFlask("/analyze/comments", buildCommentPayload(task, videoId, comments));
                 if (resp == null || resp.getIntValue("code") != 0) {
-                    throw new IllegalStateException("AI 服务返回异常");
+                    throw new BizException(ErrorCode.UPSTREAM_ERROR, "AI 服务返回异常");
                 }
                 JSONArray results = resp.getJSONObject("data").getJSONArray("results");
                 JSONObject usage = resp.getJSONObject("usage");
@@ -334,20 +336,20 @@ public class AiAnalysisService {
     public Map<String, Object> generateVideoInsight(String videoId) {
         Long vid = videoService.resolveInternalId(videoId);
         if (vid == null) {
-            throw new IllegalArgumentException("视频不存在");
+            throw new BizException(ErrorCode.NOT_FOUND, "视频不存在");
         }
         contentAccess.requireRead(vid);
         AnalysisProfile profile = defaultProfile();
 
         List<Map<String, Object>> rows = commentMapper.commentRowsWithSentiment(vid);
         if (rows.isEmpty()) {
-            throw new IllegalStateException("该视频还没有评论数据，无法生成洞察");
+            throw new BizException(ErrorCode.STATE_CONFLICT, "该视频还没有评论数据，无法生成洞察");
         }
 
         long todayTokens = usageMapper.todayTokens();
         int dailyBudget = configService.getInt("ai.daily_token_budget", 2_000_000);
         if (todayTokens >= dailyBudget) {
-            throw new IllegalStateException("今日 AI Token 预算已用尽，请明日再试");
+            throw new BizException(ErrorCode.QUOTA_EXCEEDED, "今日 AI Token 预算已用尽，请明日再试");
         }
 
         AnalysisTask task = new AnalysisTask();
@@ -391,7 +393,7 @@ public class AiAnalysisService {
             JSONObject resp = callFlask("/analyze/insight", payload);
             long latency = System.currentTimeMillis() - start;
             if (resp == null || resp.getIntValue("code") != 0) {
-                throw new IllegalStateException("AI 服务返回异常，视频洞察未生成");
+                throw new BizException(ErrorCode.UPSTREAM_ERROR, "AI 服务返回异常，视频洞察未生成");
             }
             JSONObject data = resp.getJSONObject("data");
             JSONObject usage = resp.getJSONObject("usage");
@@ -466,7 +468,7 @@ public class AiAnalysisService {
             tup.setErrorMessage(truncate(e.getMessage(), 2000));
             tup.setFinishedAt(LocalDateTime.now());
             taskMapper.updateById(tup);
-            throw new IllegalStateException("洞察生成失败：" + e.getMessage());
+            throw new BizException(ErrorCode.UPSTREAM_ERROR, "洞察生成失败：" + e.getMessage());
         }
     }
 
@@ -555,10 +557,10 @@ public class AiAnalysisService {
     public Map<String, Object> getTask(Long taskId) {
         AnalysisTask t = taskMapper.selectById(taskId);
         if (t == null) {
-            throw new IllegalArgumentException("分析任务不存在");
+            throw new BizException(ErrorCode.NOT_FOUND, "分析任务不存在");
         }
         if (!permission.isAdmin() && !Objects.equals(t.getOwnerUserId(), permission.currentUserId())) {
-            throw new SecurityException("无权查看该分析任务");
+            throw new BizException(ErrorCode.FORBIDDEN, "无权查看该分析任务");
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("id", t.getId());
@@ -699,7 +701,7 @@ public class AiAnalysisService {
     private AnalysisProfile defaultProfile() {
         AnalysisProfile p = profileMapper.selectByProfileKey("ap_default_v1");
         if (p == null) {
-            throw new IllegalStateException("默认分析档案缺失，请检查数据库迁移是否执行");
+            throw new BizException(ErrorCode.CONFIG_MISSING, "默认分析档案缺失，请检查数据库迁移是否执行");
         }
         return p;
     }

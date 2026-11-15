@@ -3,6 +3,8 @@ package com.coolpilot.insight.system.application;
 import com.coolpilot.insight.system.domain.SystemConfig;
 import com.coolpilot.insight.system.dto.ConfigItemView;
 import com.coolpilot.insight.system.infrastructure.persistence.SystemConfigMapper;
+import com.coolpilot.insight.common.exception.BizException;
+import com.coolpilot.insight.common.exception.ErrorCode;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,7 +48,7 @@ public class ConfigAdminService {
     public ConfigItemView update(String key, String value) {
         SystemConfig existing = configMapper.selectByKey(key);
         if (existing == null) {
-            throw new IllegalArgumentException("配置项不存在: " + key);
+            throw new BizException(ErrorCode.NOT_FOUND, "配置项不存在: " + key);
         }
         validateValue(existing.getValueType(), value);
 
@@ -61,7 +63,7 @@ public class ConfigAdminService {
 
     private void validateValue(String valueType, String value) {
         if (value == null || value.isBlank()) {
-            throw new IllegalArgumentException("配置值不能为空");
+            throw new BizException(ErrorCode.PARAM_INVALID, "配置值不能为空");
         }
         String type = valueType == null ? "STRING" : valueType.toUpperCase();
         try {
@@ -71,13 +73,13 @@ public class ConfigAdminService {
                 case "BOOLEAN" -> {
                     String v = value.trim().toLowerCase();
                     if (!v.equals("true") && !v.equals("false")) {
-                        throw new IllegalArgumentException("布尔配置只接受 true/false");
+                        throw new BizException(ErrorCode.PARAM_INVALID, "布尔配置只接受 true/false");
                     }
                 }
                 default -> { /* STRING 不校验 */ }
             }
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("配置值类型应为 " + type + "，实际为: " + value);
+            throw new BizException(ErrorCode.PARAM_INVALID, "配置值类型应为 " + type + "，实际为: " + value);
         }
     }
 

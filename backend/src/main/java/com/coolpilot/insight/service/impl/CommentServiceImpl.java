@@ -5,6 +5,8 @@ import com.coolpilot.insight.service.CommentService;
 import com.coolpilot.insight.service.VideoService;
 import com.coolpilot.insight.content.application.ContentAccessService;
 import com.coolpilot.insight.system.application.PermissionService;
+import com.coolpilot.insight.common.exception.BizException;
+import com.coolpilot.insight.common.exception.ErrorCode;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
@@ -82,7 +84,7 @@ public class CommentServiceImpl implements CommentService {
             contentAccess.requireRead(vid);
         } else if (!permission.isAdmin()) {
             // 全局搜索仅管理员可用，避免越权遍历他人数据
-            throw new SecurityException("全局评论搜索仅管理员可用");
+            throw new BizException(ErrorCode.FORBIDDEN, "全局评论搜索仅管理员可用");
         }
         int safeSize = Math.min(Math.max(size, 1), 200);
         int safePage = Math.max(page, 1);

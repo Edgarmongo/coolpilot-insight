@@ -11,6 +11,8 @@ import com.coolpilot.insight.common.util.MemoryCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.coolpilot.insight.content.application.ContentAccessService;
+import com.coolpilot.insight.common.exception.BizException;
+import com.coolpilot.insight.common.exception.ErrorCode;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -565,7 +567,7 @@ public class AnalysisServiceImpl implements AnalysisService {
     public Map<String, Object> refreshAnalysis(String videoId) {
         Long vid = requireVideoId(videoId);
         if (vid == null) {
-            throw new IllegalArgumentException("视频不存在");
+            throw new BizException(ErrorCode.NOT_FOUND, "视频不存在");
         }
         contentAccess.requireRead(vid);
         cache.deleteByPrefix(CACHE_PREFIX + "*");

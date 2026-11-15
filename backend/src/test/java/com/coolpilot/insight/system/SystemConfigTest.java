@@ -9,6 +9,8 @@ import com.coolpilot.insight.system.domain.SystemConfig;
 import com.coolpilot.insight.system.dto.AuditLogView;
 import com.coolpilot.insight.system.dto.ConfigItemView;
 import com.coolpilot.insight.system.infrastructure.persistence.SystemConfigMapper;
+import com.coolpilot.insight.common.exception.BizException;
+import com.coolpilot.insight.common.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -89,16 +91,20 @@ class SystemConfigTest extends AbstractIntegrationTest {
         insertConfig(key, "10", "INT", 0);
 
         assertThatThrownBy(() -> configAdminService.update(key, "not-a-number"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("INT");
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("INT")
+                .extracting(e -> ((BizException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PARAM_INVALID);
     }
 
     @Test
     @DisplayName("更新不存在的配置项被拒绝")
     void updateMissingKeyRejected() {
         assertThatThrownBy(() -> configAdminService.update("no.such.key", "x"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("不存在");
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("不存在")
+                .extracting(e -> ((BizException) e).getErrorCode())
+                .isEqualTo(ErrorCode.NOT_FOUND);
     }
 
     @Test
@@ -108,7 +114,9 @@ class SystemConfigTest extends AbstractIntegrationTest {
         insertConfig(key, "v", "STRING", 0);
 
         assertThatThrownBy(() -> configAdminService.update(key, "  "))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(BizException.class)
+                .extracting(e -> ((BizException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PARAM_INVALID);
     }
 
     @Test

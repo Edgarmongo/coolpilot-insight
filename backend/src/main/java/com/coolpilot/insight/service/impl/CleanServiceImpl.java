@@ -9,6 +9,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.coolpilot.insight.content.application.ContentAccessService;
 import com.coolpilot.insight.system.application.PermissionService;
+import com.coolpilot.insight.common.exception.BizException;
+import com.coolpilot.insight.common.exception.ErrorCode;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -150,14 +152,14 @@ public class CleanServiceImpl implements CleanService {
         for (String name : fileNames) {
             String base = baseName(name);
             if (base == null) {
-                throw new SecurityException("非法文件名: " + name);
+                throw new BizException(ErrorCode.PARAM_INVALID, "非法文件名: " + name);
             }
             if (!permission.isAdmin() && !canAccessFile(base)) {
-                throw new SecurityException("无权导出文件: " + base);
+                throw new BizException(ErrorCode.FORBIDDEN, "无权导出文件: " + base);
             }
             Path p = safeResolve(base);
             if (p == null || !Files.exists(p)) {
-                throw new IllegalArgumentException("文件不存在: " + base);
+                throw new BizException(ErrorCode.NOT_FOUND, "文件不存在: " + base);
             }
             paths.add(p);
         }

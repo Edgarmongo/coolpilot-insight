@@ -12,6 +12,8 @@ import com.coolpilot.insight.mapper.VideoInsightMapper;
 import com.coolpilot.insight.system.application.AuditService;
 import com.coolpilot.insight.content.application.ContentAccessService;
 import com.coolpilot.insight.system.application.PermissionService;
+import com.coolpilot.insight.common.exception.BizException;
+import com.coolpilot.insight.common.exception.ErrorCode;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -56,13 +58,13 @@ public class ReportService {
     public Map<String, Object> createFromVideo(String videoId, String title) {
         Long vid = videoService.resolveInternalId(videoId);
         if (vid == null) {
-            throw new IllegalArgumentException("视频不存在");
+            throw new BizException(ErrorCode.NOT_FOUND, "视频不存在");
         }
         contentAccess.requireRead(vid);
 
         VideoInsight insight = insightMapper.selectLatestByVideoId(vid);
         if (insight == null) {
-            throw new IllegalStateException("该视频还没有洞察结果，请先生成视频级洞察");
+            throw new BizException(ErrorCode.STATE_CONFLICT, "该视频还没有洞察结果，请先生成视频级洞察");
         }
 
         Report report = new Report();
@@ -151,7 +153,7 @@ public class ReportService {
         requireReport(id);
         ReportVersion latest = versionMapper.selectLatestByReportId(id);
         if (latest == null) {
-            throw new IllegalStateException("报告没有内容");
+            throw new BizException(ErrorCode.STATE_CONFLICT, "报告没有内容");
         }
         Report report = reportMapper.selectById(id);
         Map<String, Object> out = new LinkedHashMap<>();
@@ -180,7 +182,7 @@ public class ReportService {
         Report report = requireReport(id);
         ReportVersion latest = versionMapper.selectLatestByReportId(id);
         if (latest == null) {
-            throw new IllegalStateException("报告没有内容");
+            throw new BizException(ErrorCode.STATE_CONFLICT, "报告没有内容");
         }
         String fmt = "xlsx".equalsIgnoreCase(format) ? "xlsx" : "pdf";
 
@@ -199,7 +201,7 @@ public class ReportService {
 
         byte[] bytes = callRender(payload);
         if (bytes == null || bytes.length == 0) {
-            throw new IllegalStateException("报告渲染失败：渲染服务不可用");
+            throw new BizException(ErrorCode.UPSTREAM_ERROR, "报告渲染失败：渲染服务不可用");
         }
         auditService.audit("EXPORT_REPORT_FILE", "REPORT", id, fmt);
 
@@ -324,10 +326,10 @@ public class ReportService {
     private Report requireReport(Long id) {
         Report report = reportMapper.selectById(id);
         if (report == null || report.getDeletedAt() != null) {
-            throw new IllegalArgumentException("报告不存在");
+            throw new BizException(ErrorCode.NOT_FOUND, "报告不存在");
         }
         if (!permission.isAdmin() && !Objects.equals(report.getOwnerUserId(), permission.currentUserId())) {
-            throw new SecurityException("无权访问该报告");
+            throw new BizException(ErrorCode.FORBIDDEN, "无权访问该报告");
         }
         return report;
     }

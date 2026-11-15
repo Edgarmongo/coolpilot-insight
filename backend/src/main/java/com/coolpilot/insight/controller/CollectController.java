@@ -8,6 +8,8 @@ import com.coolpilot.insight.common.security.RequestContext;
 import com.coolpilot.insight.service.CollectService;
 import com.coolpilot.insight.utils.CollectUtils;
 import com.coolpilot.insight.system.application.AuditService;
+import com.coolpilot.insight.common.exception.BizException;
+import com.coolpilot.insight.common.exception.ErrorCode;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -121,7 +123,7 @@ public class CollectController {
         try {
             Files.createDirectories(root);
         } catch (Exception e) {
-            throw new IllegalStateException("数据目录无法创建: " + e.getMessage());
+            throw new BizException(ErrorCode.INTERNAL, "数据目录无法创建: " + e.getMessage());
         }
 
         List<Map<String, String>> saved = new ArrayList<>();
@@ -132,7 +134,7 @@ public class CollectController {
             String original = file.getOriginalFilename();
             String name = original == null ? "" : original.trim();
             if (name.contains("/") || name.contains("\\") || name.contains("..")) {
-                throw new SecurityException("非法文件名: " + name);
+                throw new BizException(ErrorCode.PARAM_INVALID, "非法文件名: " + name);
             }
             String base = name.replaceAll("(?i)\\.csv$", "");
             if (!base.matches("\\d{6,}") && videoId != null && videoId.matches("\\d{6,}")) {
@@ -140,11 +142,11 @@ public class CollectController {
             }
             String finalName = base + ".csv";
             if (!LEGAL_CSV.matcher(finalName).matches()) {
-                throw new IllegalArgumentException("文件必须以视频编号命名，例如 7703721523349239951.csv");
+                throw new BizException(ErrorCode.PARAM_INVALID, "文件必须以视频编号命名，例如 7703721523349239951.csv");
             }
             Path dest = root.resolve(finalName).normalize();
             if (!dest.startsWith(root)) {
-                throw new SecurityException("非法目标路径");
+                throw new BizException(ErrorCode.PARAM_INVALID, "非法目标路径");
             }
             try {
                 file.transferTo(dest.toFile());
@@ -154,7 +156,7 @@ public class CollectController {
                 saved.add(item);
                 auditService.audit("UPLOAD_CSV", "FILE", null, finalName);
             } catch (Exception e) {
-                throw new IllegalStateException("保存文件失败: " + finalName + " - " + e.getMessage());
+                throw new BizException(ErrorCode.INTERNAL, "保存文件失败: " + finalName + " - " + e.getMessage());
             }
         }
         return Result.ok(saved);

@@ -9,6 +9,8 @@ import com.coolpilot.insight.mapper.CommentMapper;
 import com.coolpilot.insight.mapper.VideoInsightMapper;
 import com.coolpilot.insight.mapper.VideoMapper;
 import com.coolpilot.insight.content.application.ContentAccessService;
+import com.coolpilot.insight.common.exception.BizException;
+import com.coolpilot.insight.common.exception.ErrorCode;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -40,10 +42,10 @@ public class CompareService {
     /** 并排对比 N 个视频：基础指标 + 需求/痛点 Top */
     public Map<String, Object> compare(List<String> videoIds) {
         if (videoIds == null || videoIds.isEmpty()) {
-            throw new IllegalArgumentException("请至少选择一个视频");
+            throw new BizException(ErrorCode.PARAM_INVALID, "请至少选择一个视频");
         }
         if (videoIds.size() > 10) {
-            throw new IllegalArgumentException("单次最多对比 10 个视频");
+            throw new BizException(ErrorCode.PARAM_INVALID, "单次最多对比 10 个视频");
         }
         List<Map<String, Object>> rows = new ArrayList<>();
         for (String raw : videoIds) {

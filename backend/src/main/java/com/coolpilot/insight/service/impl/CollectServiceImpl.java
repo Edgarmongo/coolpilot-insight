@@ -12,6 +12,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.coolpilot.insight.system.application.AuditService;
 import com.coolpilot.insight.system.application.PermissionService;
+import com.coolpilot.insight.common.exception.BizException;
+import com.coolpilot.insight.common.exception.ErrorCode;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -77,7 +79,7 @@ public class CollectServiceImpl implements CollectService {
     @Override
     public Map<String, Object> submit(List<String> videoIds, int maxComments, String collectMode, Long ownerUserId) {
         if (videoIds == null || videoIds.isEmpty()) {
-            throw new IllegalArgumentException("请至少提供一个视频链接或编号");
+            throw new BizException(ErrorCode.PARAM_INVALID, "请至少提供一个视频链接或编号");
         }
         int max = Math.min(Math.max(maxComments, 1), 1000);
 
@@ -97,7 +99,7 @@ public class CollectServiceImpl implements CollectService {
             }
         }
         if (awemeIds.isEmpty()) {
-            throw new IllegalArgumentException("没有可用的视频编号：" + String.join("；", rejected));
+            throw new BizException(ErrorCode.PARAM_INVALID, "没有可用的视频编号：" + String.join("；", rejected));
         }
 
         List<Long> accepted = new ArrayList<>();
@@ -488,10 +490,10 @@ public class CollectServiceImpl implements CollectService {
     public Map<String, Object> getTaskDetail(Long taskId) {
         CollectionTask task = taskMapper.selectById(taskId);
         if (task == null) {
-            throw new IllegalArgumentException("任务不存在");
+            throw new BizException(ErrorCode.NOT_FOUND, "任务不存在");
         }
         if (!permission.isAdmin() && !Objects.equals(task.getOwnerUserId(), permission.currentUserId())) {
-            throw new SecurityException("无权查看该任务");
+            throw new BizException(ErrorCode.FORBIDDEN, "无权查看该任务");
         }
         Map<String, Object> out = taskRow(task);
         out.put("params", task.getParamsJson());
@@ -517,10 +519,10 @@ public class CollectServiceImpl implements CollectService {
     public List<Map<String, Object>> getTaskLogs(Long taskId) {
         CollectionTask task = taskMapper.selectById(taskId);
         if (task == null) {
-            throw new IllegalArgumentException("任务不存在");
+            throw new BizException(ErrorCode.NOT_FOUND, "任务不存在");
         }
         if (!permission.isAdmin() && !Objects.equals(task.getOwnerUserId(), permission.currentUserId())) {
-            throw new SecurityException("无权查看该任务");
+            throw new BizException(ErrorCode.FORBIDDEN, "无权查看该任务");
         }
         List<Map<String, Object>> out = new ArrayList<>();
         for (CollectionTaskLog l : logMapper.selectByTaskLimit(taskId, 500)) {
@@ -540,10 +542,10 @@ public class CollectServiceImpl implements CollectService {
     public void cancel(Long taskId) {
         CollectionTask task = taskMapper.selectById(taskId);
         if (task == null) {
-            throw new IllegalArgumentException("任务不存在");
+            throw new BizException(ErrorCode.NOT_FOUND, "任务不存在");
         }
         if (!permission.isAdmin() && !Objects.equals(task.getOwnerUserId(), permission.currentUserId())) {
-            throw new SecurityException("无权取消该任务");
+            throw new BizException(ErrorCode.FORBIDDEN, "无权取消该任务");
         }
         if ("PENDING".equals(task.getStatus())) {
             CollectionTask up = new CollectionTask();
@@ -558,7 +560,7 @@ public class CollectServiceImpl implements CollectService {
             up.setStatus("CANCEL_REQUESTED");
             taskMapper.updateById(up);
         } else {
-            throw new IllegalStateException("任务已结束，无法取消");
+            throw new BizException(ErrorCode.STATE_CONFLICT, "任务已结束，无法取消");
         }
         writeLog(taskId, null, "CANCEL", "WARN", "用户请求取消任务", null);
         auditService.audit("CANCEL_COLLECTION_TASK", "COLLECTION_TASK", taskId, null);
@@ -568,13 +570,13 @@ public class CollectServiceImpl implements CollectService {
     public void retry(Long taskId) {
         CollectionTask task = taskMapper.selectById(taskId);
         if (task == null) {
-            throw new IllegalArgumentException("任务不存在");
+            throw new BizException(ErrorCode.NOT_FOUND, "任务不存在");
         }
         if (!permission.isAdmin() && !Objects.equals(task.getOwnerUserId(), permission.currentUserId())) {
-            throw new SecurityException("无权重试该任务");
+            throw new BizException(ErrorCode.FORBIDDEN, "无权重试该任务");
         }
         if (!"FAILED".equals(task.getStatus()) && !"PARTIAL_SUCCESS".equals(task.getStatus())) {
-            throw new IllegalStateException("只有失败或部分成功的任务可以重试");
+            throw new BizException(ErrorCode.STATE_CONFLICT, "只有失败或部分成功的任务可以重试");
         }
         List<CollectionTaskItem> failedItems = itemMapper.selectByTaskAndStatus(taskId, "FAILED");
         for (CollectionTaskItem item : failedItems) {

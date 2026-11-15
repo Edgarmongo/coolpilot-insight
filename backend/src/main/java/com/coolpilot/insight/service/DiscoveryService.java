@@ -10,6 +10,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.coolpilot.insight.system.application.AuditService;
 import com.coolpilot.insight.system.application.PermissionService;
+import com.coolpilot.insight.common.exception.BizException;
+import com.coolpilot.insight.common.exception.ErrorCode;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
@@ -62,10 +64,10 @@ public class DiscoveryService {
     public Map<String, Object> createKeyword(String keyword, String description) {
         String raw = keyword == null ? "" : keyword.trim();
         if (raw.isEmpty()) {
-            throw new IllegalArgumentException("关键词不能为空");
+            throw new BizException(ErrorCode.PARAM_INVALID, "关键词不能为空");
         }
         if (raw.length() > 128) {
-            throw new IllegalArgumentException("关键词最长 128 字符");
+            throw new BizException(ErrorCode.PARAM_INVALID, "关键词最长 128 字符");
         }
         String normalized = normalize(raw);
         Long owner = permission.currentUserId();
@@ -108,10 +110,10 @@ public class DiscoveryService {
     public void deleteKeyword(Long id) {
         Keyword k = keywordMapper.selectById(id);
         if (k == null) {
-            throw new IllegalArgumentException("关键词不存在");
+            throw new BizException(ErrorCode.NOT_FOUND, "关键词不存在");
         }
         if (!permission.isAdmin() && !Objects.equals(k.getOwnerUserId(), permission.currentUserId())) {
-            throw new SecurityException("无权删除该关键词");
+            throw new BizException(ErrorCode.FORBIDDEN, "无权删除该关键词");
         }
         k.setStatus(0);
         keywordMapper.updateById(k);
@@ -135,10 +137,10 @@ public class DiscoveryService {
     public Map<String, Object> submitDiscovery(Long keywordId, int max, Map<String, Object> params) {
         Keyword k = keywordMapper.selectById(keywordId);
         if (k == null) {
-            throw new IllegalArgumentException("关键词不存在");
+            throw new BizException(ErrorCode.NOT_FOUND, "关键词不存在");
         }
         if (!permission.isAdmin() && !Objects.equals(k.getOwnerUserId(), permission.currentUserId())) {
-            throw new SecurityException("无权使用该关键词");
+            throw new BizException(ErrorCode.FORBIDDEN, "无权使用该关键词");
         }
         DiscoveryTask task = new DiscoveryTask();
         task.setTaskNo("DT" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
@@ -284,7 +286,7 @@ public class DiscoveryService {
         }
         int exit = process.waitFor();
         if (exit != 0 && hits.isEmpty()) {
-            throw new IllegalStateException("搜索脚本执行失败: " + tail.toString().trim());
+            throw new BizException(ErrorCode.UPSTREAM_ERROR, "搜索脚本执行失败: " + tail.toString().trim());
         }
         return hits;
     }

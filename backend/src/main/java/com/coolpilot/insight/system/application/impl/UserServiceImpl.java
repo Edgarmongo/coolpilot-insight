@@ -8,6 +8,8 @@ import com.coolpilot.insight.system.application.UserService;
 import com.coolpilot.insight.common.security.JwtUtil;
 import com.coolpilot.insight.utils.TokenStore;
 import com.coolpilot.insight.system.application.AuditService;
+import com.coolpilot.insight.common.exception.BizException;
+import com.coolpilot.insight.common.exception.ErrorCode;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -36,16 +38,16 @@ public class UserServiceImpl implements UserService {
     @Override
     public void register(String phone, String password, String confirmPassword) {
         if (phone == null || !phone.matches("^1[3-9]\\d{9}$")) {
-            throw new IllegalArgumentException("手机号格式不正确");
+            throw new BizException(ErrorCode.PARAM_INVALID, "手机号格式不正确");
         }
         if (password == null || password.length() < 8 || password.length() > 64) {
-            throw new IllegalArgumentException("密码长度为 8-64 位");
+            throw new BizException(ErrorCode.PARAM_INVALID, "密码长度为 8-64 位");
         }
         if (!password.equals(confirmPassword)) {
-            throw new IllegalArgumentException("两次密码输入不一致");
+            throw new BizException(ErrorCode.PARAM_INVALID, "两次密码输入不一致");
         }
         if (userMapper.countByPhone(phone) > 0) {
-            throw new IllegalStateException("该手机号已被注册");
+            throw new BizException(ErrorCode.DUPLICATE, "该手机号已被注册");
         }
 
         User user = new User();
@@ -62,16 +64,16 @@ public class UserServiceImpl implements UserService {
     public LoginResponse login(String phone, String password) {
         User user = userMapper.selectByPhone(phone);
         if (user == null) {
-            throw new IllegalArgumentException("账号或密码错误");
+            throw new BizException(ErrorCode.CREDENTIALS_INVALID, "账号或密码错误");
         }
         if (SENTINEL.equals(user.getPasswordHash())) {
-            throw new IllegalStateException("该账号尚未初始化密码，请联系管理员");
+            throw new BizException(ErrorCode.STATE_CONFLICT, "该账号尚未初始化密码，请联系管理员");
         }
         if (user.getStatus() != null && user.getStatus() == 0) {
-            throw new IllegalStateException("账号已被禁用");
+            throw new BizException(ErrorCode.FORBIDDEN, "账号已被禁用");
         }
         if (!encoder.matches(password, user.getPasswordHash())) {
-            throw new IllegalArgumentException("账号或密码错误");
+            throw new BizException(ErrorCode.CREDENTIALS_INVALID, "账号或密码错误");
         }
 
         String token = jwtUtil.createToken(user.getId(), user.getRole());
@@ -97,7 +99,7 @@ public class UserServiceImpl implements UserService {
     public User getCurrentUser() {
         Long userId = RequestContext.getUserId();
         if (userId == null) {
-            throw new SecurityException("未登录");
+            throw new BizException(ErrorCode.UNAUTHORIZED, "未登录");
         }
         return userMapper.selectById(userId);
     }
@@ -109,10 +111,10 @@ public class UserServiceImpl implements UserService {
                 && !SENTINEL.equals(user.getPasswordHash())
                 && encoder.matches(oldPassword, user.getPasswordHash());
         if (!ok) {
-            throw new IllegalArgumentException("原密码不正确");
+            throw new BizException(ErrorCode.CREDENTIALS_INVALID, "原密码不正确");
         }
         if (newPassword == null || newPassword.length() < 8 || newPassword.length() > 64) {
-            throw new IllegalArgumentException("新密码长度为 8-64 位");
+            throw new BizException(ErrorCode.PARAM_INVALID, "新密码长度为 8-64 位");
         }
         User patch = new User();
         patch.setId(user.getId());

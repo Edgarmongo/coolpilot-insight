@@ -1,6 +1,8 @@
 package com.coolpilot.insight.system.application;
 
 import com.coolpilot.insight.common.security.RequestContext;
+import com.coolpilot.insight.common.exception.BizException;
+import com.coolpilot.insight.common.exception.ErrorCode;
 import org.springframework.stereotype.Service;
 
 /**
@@ -27,7 +29,7 @@ public class PermissionService {
     public Long requireLogin() {
         Long userId = currentUserId();
         if (userId == null) {
-            throw new SecurityException("未登录");
+            throw new BizException(ErrorCode.UNAUTHORIZED, "未登录");
         }
         return userId;
     }
@@ -35,7 +37,7 @@ public class PermissionService {
     /** 非管理员时抛出，由 GlobalExceptionHandler 转为 403。 */
     public void requireAdmin() {
         if (!isAdmin()) {
-            throw new SecurityException("需要管理员权限");
+            throw new BizException(ErrorCode.FORBIDDEN, "需要管理员权限");
         }
     }
 }

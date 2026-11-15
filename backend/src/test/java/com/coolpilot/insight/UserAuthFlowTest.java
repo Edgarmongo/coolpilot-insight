@@ -4,6 +4,8 @@ import com.coolpilot.insight.system.dto.LoginResponse;
 import com.coolpilot.insight.system.domain.User;
 import com.coolpilot.insight.system.infrastructure.persistence.UserMapper;
 import com.coolpilot.insight.system.application.UserService;
+import com.coolpilot.insight.common.exception.BizException;
+import com.coolpilot.insight.common.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -68,8 +70,10 @@ class UserAuthFlowTest extends AbstractIntegrationTest {
         userService.register(phone, PASSWORD, PASSWORD);
 
         assertThatThrownBy(() -> userService.register(phone, PASSWORD, PASSWORD))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("已被注册");
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("已被注册")
+                .extracting(e -> ((BizException) e).getErrorCode())
+                .isEqualTo(ErrorCode.DUPLICATE);
     }
 
     @Test
@@ -79,14 +83,18 @@ class UserAuthFlowTest extends AbstractIntegrationTest {
         userService.register(phone, PASSWORD, PASSWORD);
 
         assertThatThrownBy(() -> userService.login(phone, "WrongPass!999"))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(BizException.class)
+                .extracting(e -> ((BizException) e).getErrorCode())
+                .isEqualTo(ErrorCode.CREDENTIALS_INVALID);
     }
 
     @Test
     @DisplayName("两次密码不一致时注册失败")
     void confirmMismatchRejected() {
         assertThatThrownBy(() -> userService.register(nextPhone(), PASSWORD, "Another!1234"))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(BizException.class)
+                .extracting(e -> ((BizException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PARAM_INVALID);
     }
 
     @Test
@@ -94,6 +102,8 @@ class UserAuthFlowTest extends AbstractIntegrationTest {
     void sentinelAccountCannotLogin() {
         // V6 种子写入的 00000000001 使用哨兵值，未初始化前任何密码都不该通过
         assertThatThrownBy(() -> userService.login("00000000001", "anything"))
-                .isInstanceOf(RuntimeException.class);
+                .isInstanceOf(BizException.class)
+                .extracting(e -> ((BizException) e).getErrorCode())
+                .isEqualTo(ErrorCode.STATE_CONFLICT);
     }
 }
