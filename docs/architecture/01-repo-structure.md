@@ -83,7 +83,7 @@ include:
 
 **Java 包名与模块未按目标拆分。** 目标结构里 backend 下面是
 `source / collection / content / analysis / lead / conversion / analytics / integration / common`，
-当前仍是 `com.coolskyai.coolpilot.insight.{controller,service,mapper,entity,...}`。
+根包已于 R2-01 迁移为 `com.coolpilot.insight`，但内部仍是 `{controller,service,mapper,entity,...}` 技术分层。
 
 不做的理由：
 

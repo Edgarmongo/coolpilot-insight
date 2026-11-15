@@ -3,9 +3,9 @@
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <!-- 由 tools/codegen/generate_mybatis_crud.py 生成，替代 MyBatis-Plus BaseMapper。
      语义与 MP 一致：insert/updateById 跳过 null 字段，id 自增回填。手工业务 SQL 请追加在本文件末尾。 -->
-<mapper namespace="com.coolskyai.coolpilot.insight.mapper.CollectionCheckpointMapper">
+<mapper namespace="com.coolpilot.insight.mapper.CollectionCheckpointMapper">
 
-    <resultMap id="BaseResultMap" type="com.coolskyai.coolpilot.insight.entity.CollectionCheckpoint">
+    <resultMap id="BaseResultMap" type="com.coolpilot.insight.entity.CollectionCheckpoint">
         <id column="id" property="id"/>
         <result column="task_item_id" property="taskItemId"/>
         <result column="cursor_value" property="cursorValue"/>

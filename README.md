@@ -230,7 +230,7 @@ coolpilot-insight/
 ├── backend/                         # Spring Boot 4.1 / JDK 21
 │   ├── pom.xml
 │   └── src/
-│       ├── main/java/com/coolskyai/coolpilot/insight/
+│       ├── main/java/com/coolpilot/insight/
 │       │   ├── controller/           # 12 个 REST 控制器
 │       │   ├── service/              # 业务逻辑（采集调度、清洗、AI 分析、报告、鉴权）
 │       │   ├── mapper/               # MyBatis 接口（SQL 在 resources/mapper/*.xml）
@@ -281,7 +281,7 @@ coolpilot-insight/
 ```
 
 > `frontend/` `backend/` `collection-service/` `ai-service/` 是**目标组织方式**，
-> 当前 Java 包名仍为 `com.coolskyai.coolpilot.insight`，尚未按 `source/collection/content/analysis/lead/...`
+> Java 根包已迁移为 `com.coolpilot.insight`；业务模块尚未按 `source/collection/content/analysis/lead/...`
 > 拆分模块——那属于 P1 阶段工作，见 `docs/audit/06-migration-recommendations.md`。
 
 ---

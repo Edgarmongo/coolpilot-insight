@@ -1,0 +1,20 @@
+package com.coolpilot.insight.system.dto;
+
+import lombok.Data;
+
+@Data
+public class LoginResponse {
+    private String token;
+    private Long userId;
+    private String phone;
+    private Integer role;
+    /** 1 表示必须改密（哨兵初始化后的首次登录） */
+    private Integer mustChangePwd;
+
+    public LoginResponse(String token, Long userId, String phone, Integer role) {
+        this.token = token;
+        this.userId = userId;
+        this.phone = phone;
+        this.role = role;
+    }
+}
