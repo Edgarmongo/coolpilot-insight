@@ -3,6 +3,8 @@ package com.coolpilot.insight.system.application;
 import com.coolpilot.insight.common.security.RequestContext;
 import com.coolpilot.insight.common.exception.BizException;
 import com.coolpilot.insight.common.exception.ErrorCode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -14,11 +16,35 @@ import org.springframework.stereotype.Service;
 @Service
 public class PermissionService {
 
+    private static final Logger log = LoggerFactory.getLogger(PermissionService.class);
     private static final int ROLE_ADMIN = 1;
 
+    private final PermissionQueryService permissionQueryService;
+
+    public PermissionService(PermissionQueryService permissionQueryService) {
+        this.permissionQueryService = permissionQueryService;
+    }
+
+    /**
+     * 是否管理员。
+     *
+     * <p><b>过渡期双读</b>：以 RBAC（user_role → ADMIN）为准，
+     * 同时比对旧 {@code user.role}，不一致时打 WARN。
+     * 不一致说明迁移有遗漏——这是唯一能在不阻塞业务的前提下发现权限错位的手段。
+     * 待连续观察无差异后，删除 legacy 判断与告警。
+     */
     public boolean isAdmin() {
-        Integer role = RequestContext.getRole();
-        return role != null && role == ROLE_ADMIN;
+        Long userId = RequestContext.getUserId();
+        if (userId == null) {
+            return false;
+        }
+        boolean byRbac = permissionQueryService.hasRole(userId, "ADMIN");
+        Integer legacyRole = RequestContext.getRole();
+        boolean byLegacy = legacyRole != null && legacyRole == ROLE_ADMIN;
+        if (byRbac != byLegacy) {
+            log.warn("[rbac] 判定不一致 userId={} rbac={} legacy={}", userId, byRbac, byLegacy);
+        }
+        return byRbac;
     }
 
     public Long currentUserId() {

@@ -4,6 +4,7 @@ import com.coolpilot.insight.system.dto.LoginResponse;
 import com.coolpilot.insight.system.domain.User;
 import com.coolpilot.insight.common.security.RequestContext;
 import com.coolpilot.insight.system.infrastructure.persistence.UserMapper;
+import com.coolpilot.insight.system.infrastructure.role.RoleMapper;
 import com.coolpilot.insight.system.application.UserService;
 import com.coolpilot.insight.common.security.JwtUtil;
 import com.coolpilot.insight.utils.TokenStore;
@@ -23,6 +24,8 @@ public class UserServiceImpl implements UserService {
 
     @Autowired
     private UserMapper userMapper;
+    @Autowired
+    private RoleMapper roleMapper;
 
     @Autowired
     private JwtUtil jwtUtil;
@@ -58,6 +61,13 @@ public class UserServiceImpl implements UserService {
         user.setStatus(1);
         user.setMustChangePwd(0);
         userMapper.insert(user);
+
+        // 新用户默认授予 USER 角色。缺了它，用户在 RBAC 下没有任何权限，
+        // 表现为"登录成功但什么都看不到"——且不会报错。
+        com.coolpilot.insight.system.domain.role.Role userRole = roleMapper.selectByCode("USER");
+        if (userRole != null) {
+            roleMapper.assign(user.getId(), userRole.getId());
+        }
     }
 
     @Override
