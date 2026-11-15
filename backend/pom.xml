@@ -27,6 +27,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
+        <!-- Batch 1：Jakarta Validation（版本由 Spring Boot BOM 管理，不单独指定） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
         <!-- 可观测性：暴露 HikariCP 连接池、JVM、HTTP 指标（替代 Druid 监控面板） -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

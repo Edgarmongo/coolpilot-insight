@@ -85,6 +85,37 @@ public class GlobalExceptionHandler {
                 .body(Result.fail(ErrorCode.NOT_FOUND.getCode(), "接口不存在"));
     }
 
+    /**
+     * 参数校验失败（@Valid）。
+     *
+     * <p>只返回第一条字段错误，避免把整个对象结构刷给前端；
+     * 错误码统一 40001，message 带字段中文名。
+     */
+    @ExceptionHandler(org.springframework.web.bind.MethodArgumentNotValidException.class)
+    public ResponseEntity<Result<String>> handleValidation(
+            org.springframework.web.bind.MethodArgumentNotValidException e) {
+        String msg = e.getBindingResult().getFieldErrors().stream()
+                .findFirst()
+                .map(err -> err.getDefaultMessage())
+                .orElse("参数校验失败");
+        log.warn("[参数校验失败] {}", msg);
+        return ResponseEntity.status(400)
+                .body(Result.fail(ErrorCode.PARAM_INVALID.getCode(), msg));
+    }
+
+    /** 方法参数（非 @RequestBody）上的约束校验失败。 */
+    @ExceptionHandler(jakarta.validation.ConstraintViolationException.class)
+    public ResponseEntity<Result<String>> handleConstraint(
+            jakarta.validation.ConstraintViolationException e) {
+        String msg = e.getConstraintViolations().stream()
+                .findFirst()
+                .map(v -> v.getMessage())
+                .orElse("参数校验失败");
+        log.warn("[参数校验失败] {}", msg);
+        return ResponseEntity.status(400)
+                .body(Result.fail(ErrorCode.PARAM_INVALID.getCode(), msg));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Result<String>> handleException(Exception e) {
         // 记录完整堆栈，否则线上问题无法定位；对外只给通用文案，不泄露内部细节

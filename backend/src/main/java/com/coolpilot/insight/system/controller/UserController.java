@@ -6,6 +6,7 @@ import com.coolpilot.insight.system.dto.*;
 import com.coolpilot.insight.system.domain.User;
 import com.coolpilot.insight.system.application.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -19,13 +20,13 @@ public class UserController {
     private UserService userService;
 
     @PostMapping("/register")
-    public Result<String> register(@RequestBody RegisterRequest req) {
+    public Result<String> register(@Valid @RequestBody RegisterRequest req) {
         userService.register(req.getPhone(), req.getPassword(), req.getConfirmPassword());
         return Result.ok("注册成功");
     }
 
     @PostMapping("/login")
-    public Result<LoginResponse> login(@RequestBody LoginRequest req) {
+    public Result<LoginResponse> login(@Valid @RequestBody LoginRequest req) {
         return Result.ok(userService.login(req.getPhone(), req.getPassword()));
     }
 
