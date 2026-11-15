@@ -169,15 +169,20 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { analysisApi, aiApi, reportApi } from '../api'
 import { ElMessage } from 'element-plus'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAppStore } from '../stores/user'
 
 const router = useRouter()
+const route = useRoute()
 const appStore = useAppStore()
+
+// 支持从菜单带参进入：/insight?tab=comments|insight|compare
+const VALID_TABS = ['comments', 'insight', 'compare']
+const initialTab = VALID_TABS.includes(route.query.tab) ? route.query.tab : 'comments'
 
 const videos = ref([])
 const videoId = ref(appStore.currentVideo || '')
-const tab = ref('comments')
+const tab = ref(initialTab)
 const limit = ref(100)
 const running = ref(false)
 const insightRunning = ref(false)

@@ -1,108 +1,240 @@
 <template>
   <div class="app-layout">
-    <header class="navbar">
-      <span class="navbar-logo">CoolPilot Insight</span>
-      <nav class="navbar-links">
-        <router-link to="/dashboard" class="nav-item" :class="{ active: route.path === '/dashboard' }">
-          <el-icon><DataAnalysis /></el-icon><span>总览</span>
-        </router-link>
-        <router-link to="/overview" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/overview' }">
-          <el-icon><TrendCharts /></el-icon><span>运营概览</span>
-        </router-link>
-        <router-link to="/comments" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/comments' }">
-          <el-icon><ChatLineSquare /></el-icon><span>评论</span>
-        </router-link>
-        <router-link to="/collect" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/collect' }">
-          <el-icon><Download /></el-icon><span>采集</span>
-        </router-link>
-        <router-link to="/tasks" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/tasks' }">
-          <el-icon><List /></el-icon><span>任务</span>
-        </router-link>
-        <router-link to="/clean" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/clean' }">
-          <el-icon><Operation /></el-icon><span>清洗</span>
-        </router-link>
-        <router-link to="/keywords" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/keywords' }">
-          <el-icon><Search /></el-icon><span>关键词</span>
-        </router-link>
-        <router-link to="/insight" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/insight' }">
-          <el-icon><Opportunity /></el-icon><span>洞察</span>
-        </router-link>
-        <router-link to="/review" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/review' }">
-          <el-icon><Finished /></el-icon><span>复核</span>
-        </router-link>
-        <router-link to="/reports" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/reports' }">
-          <el-icon><Document /></el-icon><span>报告</span>
-        </router-link>
-        <router-link to="/profile" class="nav-item" v-if="userStore.token" :class="{ active: route.path === '/profile' }">
-          <el-icon><User /></el-icon><span>用户</span>
-        </router-link>
-        <router-link to="/admin/users" class="nav-item" v-if="userStore.userInfo?.role === 1" :class="{ active: route.path === '/admin/users' }">
-          <el-icon><Setting /></el-icon><span>管理</span>
-        </router-link>
-      </nav>
-      <div class="navbar-right">
-        <template v-if="userStore.token">
-          <span class="role-tag" :class="userStore.userInfo?.role === 1 ? 'admin' : 'user'">
-            {{ userStore.userInfo?.role === 1 ? '管理员' : '用户' }}
-          </span>
-          <span class="phone-text">{{ userStore.userInfo?.phone }}</span>
-          <button class="logout-btn" @click="doLogout">退出</button>
-        </template>
-        <template v-else>
-          <router-link to="/login" class="login-link">登录</router-link>
-        </template>
+    <!-- 左侧信息架构：七个业务中心 -->
+    <aside class="sidebar" :class="{ collapsed }">
+      <div class="brand" @click="router.push('/dashboard')">
+        <div class="brand-mark">CP</div>
+        <div class="brand-text" v-show="!collapsed">
+          <div class="brand-name">CoolPilot Insight</div>
+          <div class="brand-sub">内容洞察 · 智能获客</div>
+        </div>
       </div>
-    </header>
-    <main class="content">
-      <router-view v-slot="{ Component }">
-        <transition name="fade" mode="out-in">
-          <component :is="Component" />
-        </transition>
-      </router-view>
-    </main>
+
+      <el-scrollbar class="menu-scroll">
+        <el-menu
+          :default-active="activeIndex"
+          :collapse="collapsed"
+          :collapse-transition="false"
+          :default-openeds="openeds"
+          class="side-menu"
+          @select="onSelect"
+        >
+          <el-sub-menu v-for="g in menuGroups" :key="g.key" :index="g.key">
+            <template #title>
+              <el-icon><component :is="g.icon" /></el-icon>
+              <span>{{ g.title }}</span>
+            </template>
+
+            <el-menu-item
+              v-for="it in visibleItems(g)"
+              :key="it.title"
+              :index="itemIndex(it)"
+              :disabled="it.status === 'planned'"
+            >
+              <el-icon v-if="it.icon"><component :is="it.icon" /></el-icon>
+              <span class="item-title">{{ it.title }}</span>
+              <span v-if="it.status === 'planned'" class="item-badge">规划中</span>
+            </el-menu-item>
+          </el-sub-menu>
+        </el-menu>
+      </el-scrollbar>
+
+      <div class="sidebar-foot" v-show="!collapsed">
+        <span class="dot" />本地自用版
+      </div>
+    </aside>
+
+    <!-- 右侧主体 -->
+    <div class="body">
+      <header class="topbar">
+        <button class="icon-btn" :title="collapsed ? '展开菜单' : '收起菜单'" @click="toggleCollapse">
+          <el-icon><Fold v-if="!collapsed" /><Expand v-else /></el-icon>
+        </button>
+
+        <el-breadcrumb separator="/" class="crumb">
+          <el-breadcrumb-item>{{ current.groupTitle || '工作台' }}</el-breadcrumb-item>
+          <el-breadcrumb-item>{{ current.title || '获客驾驶舱' }}</el-breadcrumb-item>
+        </el-breadcrumb>
+
+        <div class="topbar-right">
+          <template v-if="userStore.token">
+            <span class="role-tag" :class="userStore.userInfo?.role === 1 ? 'admin' : 'user'">
+              {{ userStore.userInfo?.role === 1 ? '管理员' : '用户' }}
+            </span>
+            <el-dropdown trigger="click" @command="onUserCommand">
+              <span class="user-entry">
+                <el-icon><UserFilled /></el-icon>
+                <span class="phone">{{ userStore.userInfo?.phone }}</span>
+                <el-icon><CaretBottom /></el-icon>
+              </span>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="profile">个人中心</el-dropdown-item>
+                  <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </template>
+          <router-link v-else to="/login" class="login-link">登录</router-link>
+        </div>
+      </header>
+
+      <main class="content">
+        <router-view v-slot="{ Component }">
+          <transition name="fade" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </router-view>
+      </main>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { useRouter, useRoute } from 'vue-router'
+import { computed, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
 import { userApi } from '../api'
+import { menuGroups, findMenuByPath } from '../config/menu'
 
-const router = useRouter()
 const route = useRoute()
+const router = useRouter()
 const userStore = useUserStore()
 
-async function doLogout() {
-  try { await userApi.logout() } catch (e) { /* */ }
-  userStore.logout()
-  router.push('/login')
+const collapsed = ref(localStorage.getItem('cp.sidebar.collapsed') === '1')
+
+function toggleCollapse() {
+  collapsed.value = !collapsed.value
+  localStorage.setItem('cp.sidebar.collapsed', collapsed.value ? '1' : '0')
+}
+
+/** 当前菜单项：路径 + tab 参数共同决定，避免 /insight 与 /insight?tab=comments 互相抢高亮 */
+const activeIndex = computed(() => {
+  const tab = route.query.tab
+  return tab ? `${route.path}?tab=${tab}` : route.path
+})
+
+function itemIndex(it) {
+  return it.path || it.title
+}
+
+/** 面包屑：优先匹配带 tab 的入口 */
+const current = computed(() => {
+  const tab = route.query.tab
+  if (tab) {
+    const withTab = menuGroups
+      .flatMap((g) => g.items.map((it) => ({ ...it, groupTitle: g.title })))
+      .find((it) => it.path === `${route.path}?tab=${tab}`)
+    if (withTab) return withTab
+  }
+  if (route.path === '/profile') return { groupTitle: '账号', title: '个人中心' }
+  return findMenuByPath(route.path) || {}
+})
+
+/** 首次进入时展开当前页所在分组，否则落地页看不到选中项 */
+const openeds = computed(() => {
+  const tab = route.query.tab
+  for (const g of menuGroups) {
+    const hit = g.items.some((it) => {
+      if (!it.path) return false
+      const [p, q] = it.path.split('?')
+      if (p !== route.path) return false
+      return q ? `tab=${tab}` === q : !tab
+    })
+    if (hit) return [g.key]
+  }
+  return ['workbench']
+})
+
+/** 按角色过滤（如「用户与权限」仅管理员可见） */
+function visibleItems(group) {
+  return group.items.filter((it) => !(it.role && userStore.userInfo?.role !== it.role))
+}
+
+function onSelect(index) {
+  if (!index.startsWith('/')) return
+  const [path, query] = index.split('?')
+  const q = {}
+  if (query) {
+    for (const kv of query.split('&')) {
+      const [k, v] = kv.split('=')
+      q[k] = v
+    }
+  }
+  router.push({ path, query: q })
+}
+
+async function onUserCommand(cmd) {
+  if (cmd === 'profile') return router.push('/profile')
+  if (cmd === 'logout') {
+    try { await userApi.logout() } catch (e) { /* 忽略登出接口异常 */ }
+    userStore.logout()
+    router.push('/login')
+  }
 }
 </script>
 
 <style scoped>
-.app-layout { display: flex; flex-direction: column; height: 100%; }
-.navbar {
-  height: 52px; min-height: 52px;
-  background: linear-gradient(90deg, #0D9488 0%, #14B8A6 70%, #5EEAD4 100%);
-  display: flex; align-items: center; padding: 0 20px; gap: 8px;
+.app-layout { display: flex; height: 100%; background: var(--page-bg); }
+
+/* ---------- 侧边栏 ---------- */
+.sidebar {
+  width: 232px; flex-shrink: 0; display: flex; flex-direction: column;
+  background: #fff; border-right: 1px solid #E6EAEF; transition: width .18s ease;
 }
-.navbar-logo { font-size: 16px; font-weight: 700; color: #fff; letter-spacing: 1px; white-space: nowrap; flex-shrink: 0; }
-/* 导航项较多（9 个），左右留白过大时会把右侧用户区挤到换行，故压缩留白并允许横向分配 */
-.navbar-links { display: flex; align-items: center; flex: 1; justify-content: space-evenly; padding: 0 16px; gap: 2px; min-width: 0; }
-.nav-item {
-  display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px;
-  color: rgba(255,255,255,0.8); text-decoration: none; font-size: 14px; transition: all .15s ease; white-space: nowrap;
+.sidebar.collapsed { width: 64px; }
+
+.brand { display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 16px; cursor: pointer; border-bottom: 1px solid #EEF2F6; }
+.brand-mark {
+  width: 32px; height: 32px; flex-shrink: 0; border-radius: 9px;
+  background: linear-gradient(135deg, #0D9488, #14B8A6);
+  color: #fff; font-size: 13px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; letter-spacing: .5px;
 }
-.nav-item:hover { background: rgba(255,255,255,0.12); color: #fff; }
-.nav-item.active { background: rgba(255,255,255,0.2); color: #fff; font-weight: 600; }
-.nav-item .el-icon { font-size: 17px; }
-/* 用户信息区不允许被压缩：此前会被挤压成「管理/员」「000****0001」被裁切 */
-.navbar-right { display: flex; align-items: center; gap: 12px; margin-left: auto; flex-shrink: 0; }
+.brand-name { font-size: 14px; font-weight: 700; color: #0F172A; line-height: 1.2; white-space: nowrap; }
+.brand-sub { font-size: 11px; color: #94A3B8; white-space: nowrap; }
+
+.menu-scroll { flex: 1; overflow: hidden; }
+
+.side-menu { border-right: none; --el-menu-item-height: 42px; --el-menu-sub-item-height: 38px; }
+.side-menu :deep(.el-sub-menu__title) { font-weight: 600; color: #334155; }
+.side-menu :deep(.el-menu-item) { color: #475569; font-size: 13px; }
+.side-menu :deep(.el-menu-item.is-active) {
+  color: #0D9488; background: #ECFDF5; font-weight: 600;
+  border-right: 3px solid #0D9488;
+}
+.side-menu :deep(.el-menu-item.is-disabled) { opacity: .55; }
+.item-title { flex: 1; }
+.item-badge {
+  font-size: 10px; color: #94A3B8; border: 1px solid #E2E8F0;
+  border-radius: 4px; padding: 0 4px; line-height: 16px; flex-shrink: 0;
+}
+
+.sidebar-foot {
+  height: 34px; display: flex; align-items: center; gap: 6px;
+  padding: 0 18px; font-size: 11px; color: #94A3B8; border-top: 1px solid #EEF2F6;
+}
+.dot { width: 6px; height: 6px; border-radius: 50%; background: #10B981; }
+
+/* ---------- 顶栏 ---------- */
+.body { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.topbar {
+  height: 60px; flex-shrink: 0; display: flex; align-items: center; gap: 14px;
+  padding: 0 20px; background: #fff; border-bottom: 1px solid #E6EAEF;
+}
+.icon-btn {
+  border: none; background: #F1F5F9; width: 30px; height: 30px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center; cursor: pointer; color: #475569;
+}
+.icon-btn:hover { background: #E2E8F0; }
+.crumb { font-size: 13px; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
 .role-tag { padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; white-space: nowrap; }
-.role-tag.user { background: rgba(255,255,255,0.25); color: #fff; }
+.role-tag.user { background: #E0F2FE; color: #075985; }
 .role-tag.admin { background: #FEE2E2; color: #991B1B; }
-.phone-text { font-size: 13px; color: rgba(255,255,255,0.8); white-space: nowrap; }
-.logout-btn, .login-link { background: none; border: none; font-size: 13px; color: rgba(255,255,255,0.7); cursor: pointer; text-decoration: none; white-space: nowrap; }
-.logout-btn:hover, .login-link:hover { color: #fff; }
-.content { flex: 1; overflow: hidden; background: var(--page-bg); }
+.user-entry { display: flex; align-items: center; gap: 6px; cursor: pointer; color: #334155; font-size: 13px; }
+.phone { white-space: nowrap; }
+.login-link { font-size: 13px; color: #0D9488; text-decoration: none; }
+
+.content { flex: 1; overflow: auto; }
 </style>
