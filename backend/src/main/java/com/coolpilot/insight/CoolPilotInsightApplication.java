@@ -15,7 +15,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
         "com.coolpilot.insight.system.infrastructure.persistence",
         "com.coolpilot.insight.source.infrastructure.persistence",
         "com.coolpilot.insight.collection.infrastructure.persistence",
-        "com.coolpilot.insight.content.infrastructure.persistence"
+        "com.coolpilot.insight.content.infrastructure.persistence",
+        "com.coolpilot.insight.system.infrastructure.role"
 })
 public class CoolPilotInsightApplication {
     public static void main(String[] args) {
