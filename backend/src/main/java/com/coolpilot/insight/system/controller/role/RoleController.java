@@ -1,5 +1,6 @@
 package com.coolpilot.insight.system.controller.role;
 
+import com.coolpilot.insight.common.security.RequirePermission;
 import com.coolpilot.insight.common.security.RequireRole;
 import com.coolpilot.insight.common.web.Result;
 import com.coolpilot.insight.system.application.role.RoleCommandService;
@@ -35,7 +36,8 @@ public class RoleController {
         this.roleCommandService = roleCommandService;
     }
 
-    @RequireRole(role = 1)
+    @RequireRole(role = 0)
+    @RequirePermission("system:role:list")
     @GetMapping
     public Result<List<RoleView>> list() {
         return Result.ok(roleQueryService.list());

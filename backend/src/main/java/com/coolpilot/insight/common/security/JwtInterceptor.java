@@ -9,6 +9,7 @@ import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import jakarta.servlet.http.HttpServletRequest;
+import com.coolpilot.insight.system.application.PermissionQueryService;
 import jakarta.servlet.http.HttpServletResponse;
 
 import java.io.IOException;
@@ -22,6 +23,8 @@ public class JwtInterceptor implements HandlerInterceptor {
 
     @Autowired
     private TokenStore tokenStore;
+    @Autowired
+    private PermissionQueryService permissionQueryService;
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
@@ -56,6 +59,16 @@ public class JwtInterceptor implements HandlerInterceptor {
             RequireRole requireRole = method.getAnnotation(RequireRole.class);
             if (requireRole.role() > role) {
                 writeJson(response, 403, "权限不足");
+                return false;
+            }
+
+            RequestContext.setUserId(userId);
+
+            // 细粒度权限：有 @RequirePermission 时必须命中，否则 403
+            RequirePermission requirePermission = method.getAnnotation(RequirePermission.class);
+            if (requirePermission != null
+                    && !permissionQueryService.hasPermission(userId, requirePermission.value())) {
+                writeJson(response, 403, "缺少权限: " + requirePermission.value());
                 return false;
             }
 
