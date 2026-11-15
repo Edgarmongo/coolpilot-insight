@@ -41,6 +41,17 @@ public class RoleController {
         this.roleMapper = roleMapper;
     }
 
+    /** 该用户当前拥有的角色（供「分配角色」弹窗回显）。 */
+    @RequireRole(role = 0)
+    @RequirePermission("system:user:assign-role")
+    @GetMapping("/users/{userId}")
+    public Result<List<java.util.Map<String, Object>>> rolesOfUser(@PathVariable Long userId) {
+        return Result.ok(roleMapper.selectByUserId(userId).stream()
+                .map(r -> java.util.Map.<String, Object>of("id", r.getId(), "code", r.getCode(),
+                        "name", r.getName()))
+                .toList());
+    }
+
     /** 该角色已授权的菜单 id（用于回显勾选状态）。 */
     @RequireRole(role = 0)
     @RequirePermission("system:role:list")
