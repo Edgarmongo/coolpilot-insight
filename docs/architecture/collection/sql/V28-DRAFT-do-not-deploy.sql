@@ -1,3 +1,7 @@
+-- ============================================================
+-- DRAFT · 已被 backend/.../db/migration/V28__account_auth_status.sql 取代
+-- 保留本文件作为评审历史，请勿执行、勿移入 migration 目录。
+-- ============================================================
 -- ⚠️ 草案，禁止放入 backend/src/main/resources/db/migration
 -- 该目录下任何 .sql 都会随服务重启被 Flyway 自动执行。
 -- 评审通过后再移入 migration 并赋予正式版本号。

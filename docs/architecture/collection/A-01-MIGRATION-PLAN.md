@@ -60,7 +60,7 @@ ALTER TABLE `ds_account`
 | 阶段 | 内容 | 授权 |
 |---|---|---|
 | A-01 | 最终 SQL + 评审记录 + 执行方案 | ✅ 已完成（本次） |
-| A-01.1 | 移入 `db/migration` | ❌ 待批 |
+| A-01.1 | 移入 `db/migration` | ✅ 已完成（V28__account_auth_status.sql，未重启） |
 | A-01.2 | 备份并执行迁移 | ❌ 待批 |
 | A-02 | AccountService + 6 接口 | ❌ 待批 |
 | A-03 | 账号管理前端 | ❌ 待批 |
