@@ -97,3 +97,8 @@ export const adminApi = {
   listUsers: (params) => request.get('/admin/users', { params }),
   deleteUser: (id) => request.delete('/admin/user/' + id),
 }
+
+export const menuApi = {
+  /** 当前用户可见菜单（后端按权限过滤） */
+  current: () => request.get('/v1/system/menus/current'),
+}

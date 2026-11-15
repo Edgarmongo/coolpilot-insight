@@ -91,17 +91,50 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '../stores/user'
-import { userApi } from '../api'
-import { menuGroups, findMenuByPath } from '../config/menu'
+import { userApi, menuApi } from '../api'
+import { menuGroups as staticGroups, findMenuByPath } from '../config/menu'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 
 const collapsed = ref(localStorage.getItem('cp.sidebar.collapsed') === '1')
+
+/**
+ * 菜单数据源：优先用后端返回（按权限过滤），失败回退到静态配置。
+ *
+ * 回退是必要的——后端未启动或接口异常时，侧边栏不能整块消失，
+ * 否则用户连"从哪儿进"都看不到，比多显示几个无权菜单更糟。
+ */
+const menuGroups = ref(staticGroups)
+
+/** 后端 ENABLED/PLANNED 映射为前端 ready/planned */
+function toGroups(nodes) {
+  return nodes.map((g) => ({
+    key: 'g' + g.id,
+    title: g.name,
+    icon: g.icon || 'Menu',
+    items: (g.children || []).map((it) => ({
+      title: it.name,
+      path: it.path || undefined,
+      icon: it.icon || undefined,
+      status: it.status === 'PLANNED' ? 'planned' : 'ready',
+    })),
+  }))
+}
+
+onMounted(async () => {
+  try {
+    const res = await menuApi.current()
+    const groups = toGroups(res.data || [])
+    if (groups.length) menuGroups.value = groups
+  } catch (e) {
+    console.warn('[menu] 接口不可用，使用静态菜单', e?.message)
+  }
+})
 
 function toggleCollapse() {
   collapsed.value = !collapsed.value
@@ -122,7 +155,7 @@ function itemIndex(it) {
 const current = computed(() => {
   const tab = route.query.tab
   if (tab) {
-    const withTab = menuGroups
+    const withTab = menuGroups.value
       .flatMap((g) => g.items.map((it) => ({ ...it, groupTitle: g.title })))
       .find((it) => it.path === `${route.path}?tab=${tab}`)
     if (withTab) return withTab
@@ -134,7 +167,7 @@ const current = computed(() => {
 /** 首次进入时展开当前页所在分组，否则落地页看不到选中项 */
 const openeds = computed(() => {
   const tab = route.query.tab
-  for (const g of menuGroups) {
+  for (const g of menuGroups.value) {
     const hit = g.items.some((it) => {
       if (!it.path) return false
       const [p, q] = it.path.split('?')
