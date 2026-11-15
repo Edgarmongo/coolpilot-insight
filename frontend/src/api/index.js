@@ -115,3 +115,12 @@ export const dictApi = {
   types: () => request.get('/v1/system/dicts'),
   items: (code) => request.get(`/v1/system/dicts/${code}/items`),
 }
+
+export const auditApi = {
+  page: (params) => request.get('/v1/system/audit-logs', { params }),
+}
+
+export const configApi = {
+  list: () => request.get('/v1/system/configs'),
+  update: (key, value) => request.put('/v1/system/configs/' + key, { value }),
+}

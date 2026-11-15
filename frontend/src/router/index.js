@@ -23,6 +23,8 @@ const routes = [
       { path: 'admin/users', name: 'AdminUsers', component: () => import('../views/admin/UserManageView.vue'), meta: { role: 1 } },
       { path: 'system/roles', name: 'SystemRoles', component: () => import('../views/admin/RoleManageView.vue'), meta: { role: 1 } },
       { path: 'system/dicts', name: 'SystemDicts', component: () => import('../views/admin/DictManageView.vue'), meta: { role: 1 } },
+      { path: 'system/audits', name: 'SystemAudits', component: () => import('../views/admin/AuditLogView.vue'), meta: { role: 1 } },
+      { path: 'system/configs', name: 'SystemConfigs', component: () => import('../views/admin/ConfigManageView.vue'), meta: { role: 1 } },
     ]
   },
 ]
