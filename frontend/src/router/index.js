@@ -22,6 +22,7 @@ const routes = [
       { path: 'profile', name: 'Profile', component: () => import('../views/ProfileView.vue') },
       { path: 'admin/users', name: 'AdminUsers', component: () => import('../views/admin/UserManageView.vue'), meta: { role: 1 } },
       { path: 'system/roles', name: 'SystemRoles', component: () => import('../views/admin/RoleManageView.vue'), meta: { role: 1 } },
+      { path: 'system/dicts', name: 'SystemDicts', component: () => import('../views/admin/DictManageView.vue'), meta: { role: 1 } },
     ]
   },
 ]
