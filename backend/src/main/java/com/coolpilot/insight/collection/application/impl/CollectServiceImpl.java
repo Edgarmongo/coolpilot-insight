@@ -17,6 +17,7 @@ import com.coolpilot.insight.entity.*;
 import com.coolpilot.insight.mapper.*;
 import com.coolpilot.insight.service.CleanService;
 import com.coolpilot.insight.collection.application.CollectService;
+import com.coolpilot.insight.collection.application.CollectionQueryService;
 import com.coolpilot.insight.service.VideoService;
 import com.coolpilot.insight.utils.CollectUtils;
 import org.slf4j.Logger;
@@ -78,6 +79,8 @@ public class CollectServiceImpl implements CollectService {
     private AppProperties appProperties;
     @Autowired
     private CollectionClient collectionClient;
+    @Autowired
+    private CollectionQueryService queryService;
 
     /** 同一时刻只允许一个采集批次在跑（Chrome 单实例限制） */
     private final AtomicBoolean busy = new AtomicBoolean(false);
@@ -429,100 +432,24 @@ public class CollectServiceImpl implements CollectService {
 
     @Override
     public Map<String, String> getStatus(String videoId) {
-        Map<String, String> out = new LinkedHashMap<>();
-        Long vid = videoService.resolveInternalId(videoId);
-        if (vid == null) {
-            out.put("status", "IDLE");
-            return out;
-        }
-        CollectionTaskItem item = itemMapper.selectLatestByVideo(vid);
-        if (item == null) {
-            out.put("status", "IDLE");
-            return out;
-        }
-        CollectionTask task = taskMapper.selectById(item.getTaskId());
-        out.put("status", item.getStatus());
-        out.put("taskStatus", task == null ? "" : task.getStatus());
-        out.put("taskId", String.valueOf(item.getTaskId()));
-        out.put("collected", String.valueOf(item.getCollectedCount()));
-        out.put("error", item.getErrorMessage() == null ? "" : item.getErrorMessage());
-        return out;
+        return queryService.statusOf(videoId);
     }
 
     @Override
     public List<Map<String, Object>> listTasks(String status, int page, int size) {
-        int limit = Math.min(Math.max(size, 1), 200);
-        int offset = Math.max(page - 1, 0) * Math.max(size, 1);
-        Long owner = permission.isAdmin() ? null : permission.currentUserId();
-        return taskMapper.selectPage(status, owner, limit, offset).stream()
-                .map(this::taskRow).collect(Collectors.toList());
+        return queryService.listTasks(status, page, size);
     }
 
-    private Map<String, Object> taskRow(CollectionTask t) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("id", t.getId());
-        m.put("taskNo", t.getTaskNo());
-        m.put("taskType", t.getTaskType());
-        m.put("status", t.getStatus());
-        m.put("totalItems", t.getTotalItems());
-        m.put("successItems", t.getSuccessItems());
-        m.put("failedItems", t.getFailedItems());
-        m.put("createdAt", t.getCreatedAt());
-        m.put("startedAt", t.getStartedAt());
-        m.put("finishedAt", t.getFinishedAt());
-        return m;
-    }
+    
 
     @Override
     public Map<String, Object> getTaskDetail(Long taskId) {
-        CollectionTask task = taskMapper.selectById(taskId);
-        if (task == null) {
-            throw new BizException(ErrorCode.NOT_FOUND, "任务不存在");
-        }
-        if (!permission.isAdmin() && !Objects.equals(task.getOwnerUserId(), permission.currentUserId())) {
-            throw new BizException(ErrorCode.FORBIDDEN, "无权查看该任务");
-        }
-        Map<String, Object> out = taskRow(task);
-        out.put("params", task.getParamsJson());
-
-        List<Map<String, Object>> items = new ArrayList<>();
-        for (CollectionTaskItem item : itemMapper.selectByTask(taskId)) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("id", item.getId());
-            m.put("videoId", videoService.externalId(item.getVideoId()));
-            m.put("status", item.getStatus());
-            m.put("collectedCount", item.getCollectedCount());
-            m.put("retryCount", item.getRetryCount());
-            m.put("errorMessage", item.getErrorMessage());
-            m.put("startedAt", item.getStartedAt());
-            m.put("finishedAt", item.getFinishedAt());
-            items.add(m);
-        }
-        out.put("items", items);
-        return out;
+        return queryService.taskDetail(taskId);
     }
 
     @Override
     public List<Map<String, Object>> getTaskLogs(Long taskId) {
-        CollectionTask task = taskMapper.selectById(taskId);
-        if (task == null) {
-            throw new BizException(ErrorCode.NOT_FOUND, "任务不存在");
-        }
-        if (!permission.isAdmin() && !Objects.equals(task.getOwnerUserId(), permission.currentUserId())) {
-            throw new BizException(ErrorCode.FORBIDDEN, "无权查看该任务");
-        }
-        List<Map<String, Object>> out = new ArrayList<>();
-        for (CollectionTaskLog l : logMapper.selectByTaskLimit(taskId, 500)) {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("id", l.getId());
-            m.put("itemId", l.getTaskItemId());
-            m.put("eventType", l.getEventType());
-            m.put("eventLevel", l.getEventLevel());
-            m.put("message", l.getMessage());
-            m.put("createdAt", l.getCreatedAt());
-            out.add(m);
-        }
-        return out;
+        return queryService.taskLogs(taskId);
     }
 
     @Override
