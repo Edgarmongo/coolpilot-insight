@@ -4,7 +4,8 @@ import com.coolpilot.insight.common.security.RequireRole;
 import com.coolpilot.insight.common.web.Result;
 import com.coolpilot.insight.mapper.UsageRecordMapper;
 import com.coolpilot.insight.service.AiAnalysisService;
-import com.coolpilot.insight.service.GovernanceService;
+import com.coolpilot.insight.system.application.AuditService;
+import com.coolpilot.insight.system.application.ConfigService;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.LinkedHashMap;
@@ -17,13 +18,15 @@ public class AiController {
 
     private final AiAnalysisService aiService;
     private final UsageRecordMapper usageMapper;
-    private final GovernanceService governance;
+    private final AuditService auditService;
+    private final ConfigService configService;
 
     public AiController(AiAnalysisService aiService, UsageRecordMapper usageMapper,
-                        GovernanceService governance) {
+                        AuditService auditService, ConfigService configService) {
         this.aiService = aiService;
         this.usageMapper = usageMapper;
-        this.governance = governance;
+        this.auditService = auditService;
+        this.configService = configService;
     }
 
     /** 提交评论级结构化分析（异步，返回 taskId 供轮询） */
@@ -39,7 +42,7 @@ public class AiController {
     @PostMapping("/video-insight")
     public Result<Map<String, Object>> videoInsight(@RequestParam String videoId) {
         Map<String, Object> out = aiService.generateVideoInsight(videoId);
-        governance.audit("GENERATE_VIDEO_INSIGHT", "VIDEO", null, videoId);
+        auditService.audit("GENERATE_VIDEO_INSIGHT", "VIDEO", null, videoId);
         return Result.ok(out);
     }
 
@@ -75,9 +78,9 @@ public class AiController {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("todayTokens", usageMapper.todayTokens());
         out.put("todayCost", usageMapper.todayCost());
-        out.put("dailyTokenBudget", governance.getInt("ai.daily_token_budget", 2_000_000));
-        out.put("singleTaskTokenBudget", governance.getInt("ai.single_task_token_budget", 200_000));
-        out.put("priceVersion", governance.get("ai.price_version"));
+        out.put("dailyTokenBudget", configService.getInt("ai.daily_token_budget", 2_000_000));
+        out.put("singleTaskTokenBudget", configService.getInt("ai.single_task_token_budget", 200_000));
+        out.put("priceVersion", configService.get("ai.price_version"));
         return Result.ok(out);
     }
 }

@@ -2,8 +2,9 @@ package com.coolpilot.insight.service.impl;
 
 import com.coolpilot.insight.mapper.CommentMapper;
 import com.coolpilot.insight.service.CommentService;
-import com.coolpilot.insight.service.GovernanceService;
 import com.coolpilot.insight.service.VideoService;
+import com.coolpilot.insight.content.application.ContentAccessService;
+import com.coolpilot.insight.system.application.PermissionService;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
@@ -17,13 +18,15 @@ public class CommentServiceImpl implements CommentService {
 
     private final CommentMapper commentMapper;
     private final VideoService videoService;
-    private final GovernanceService governance;
+    private final ContentAccessService contentAccess;
+    private final PermissionService permission;
 
     public CommentServiceImpl(CommentMapper commentMapper, VideoService videoService,
-                              GovernanceService governance) {
+                              ContentAccessService contentAccess, PermissionService permission) {
         this.commentMapper = commentMapper;
         this.videoService = videoService;
-        this.governance = governance;
+        this.contentAccess = contentAccess;
+        this.permission = permission;
     }
 
     private static String sentimentText(Integer sentiment) {
@@ -60,7 +63,7 @@ public class CommentServiceImpl implements CommentService {
         if (vid == null) {
             return emptyPage(page, size);
         }
-        governance.requireReadComments(vid);
+        contentAccess.requireRead(vid);
 
         int safeSize = Math.min(Math.max(size, 1), 200);
         int safePage = Math.max(page, 1);
@@ -76,8 +79,8 @@ public class CommentServiceImpl implements CommentService {
     public Map<String, Object> search(String keyword, String videoId, int page, int size) {
         Long vid = (videoId == null || videoId.isEmpty()) ? null : videoService.resolveInternalId(videoId);
         if (vid != null) {
-            governance.requireReadComments(vid);
-        } else if (!governance.isAdmin()) {
+            contentAccess.requireRead(vid);
+        } else if (!permission.isAdmin()) {
             // 全局搜索仅管理员可用，避免越权遍历他人数据
             throw new SecurityException("全局评论搜索仅管理员可用");
         }
@@ -95,7 +98,7 @@ public class CommentServiceImpl implements CommentService {
         if (vid == null) {
             return Collections.emptyMap();
         }
-        governance.requireReadComments(vid);
+        contentAccess.requireRead(vid);
 
         int safeLimit = Math.min(Math.max(limit, 1), 2000);
         List<Map<String, Object>> rows = commentMapper.treeRows(vid, safeLimit);

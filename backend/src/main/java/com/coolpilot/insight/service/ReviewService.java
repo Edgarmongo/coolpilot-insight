@@ -8,6 +8,9 @@ import com.coolpilot.insight.entity.CommentAnalysis;
 import com.coolpilot.insight.mapper.AnalysisReviewMapper;
 import com.coolpilot.insight.mapper.AnalysisReviewMapperExt;
 import com.coolpilot.insight.mapper.CommentMapper;
+import com.coolpilot.insight.system.application.AuditService;
+import com.coolpilot.insight.content.application.ContentAccessService;
+import com.coolpilot.insight.system.application.PermissionService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,16 +36,20 @@ public class ReviewService {
     private final AnalysisReviewMapper reviewMapper;
     private final CommentMapper commentMapper;
     private final VideoService videoService;
-    private final GovernanceService governance;
+    private final AuditService auditService;
+    private final ContentAccessService contentAccess;
+    private final PermissionService permission;
 
     public ReviewService(AnalysisReviewMapperExt queueMapper, AnalysisReviewMapper reviewMapper,
                          CommentMapper commentMapper, VideoService videoService,
-                         GovernanceService governance) {
+                         AuditService auditService, ContentAccessService contentAccess, PermissionService permission) {
         this.queueMapper = queueMapper;
         this.reviewMapper = reviewMapper;
         this.commentMapper = commentMapper;
         this.videoService = videoService;
-        this.governance = governance;
+        this.auditService = auditService;
+        this.contentAccess = contentAccess;
+        this.permission = permission;
     }
 
     /** 复核队列：默认低置信优先 */
@@ -51,7 +58,7 @@ public class ReviewService {
         if (vid == null) {
             return emptyPage(page, size);
         }
-        governance.requireReadComments(vid);
+        contentAccess.requireRead(vid);
 
         int safeSize = Math.min(Math.max(size, 1), 100);
         int safePage = Math.max(page, 1);
@@ -80,7 +87,7 @@ public class ReviewService {
         if (vid == null) {
             return out;
         }
-        governance.requireReadComments(vid);
+        contentAccess.requireRead(vid);
         Map<String, Long> counts = new LinkedHashMap<>();
         counts.put("PENDING", 0L);
         counts.put("APPROVED", 0L);
@@ -110,7 +117,7 @@ public class ReviewService {
         if (comment == null) {
             throw new IllegalArgumentException("评论不存在");
         }
-        governance.requireReadComments(comment.getVideoId());
+        contentAccess.requireRead(comment.getVideoId());
 
         String st = status == null ? "" : status.trim().toUpperCase();
         if (!Arrays.asList("APPROVED", "REJECTED", "CORRECTED").contains(st)) {
@@ -133,27 +140,27 @@ public class ReviewService {
             correctedJson = diff.toJSONString();
 
             ca.setReviewStatus("CORRECTED");
-            ca.setReviewedBy(governance.currentUserId());
+            ca.setReviewedBy(permission.currentUserId());
             ca.setReviewedAt(LocalDateTime.now());
             queueMapper.updateById(ca);
         } else {
             CommentAnalysis patch = new CommentAnalysis();
             patch.setId(ca.getId());
             patch.setReviewStatus(st);
-            patch.setReviewedBy(governance.currentUserId());
+            patch.setReviewedBy(permission.currentUserId());
             patch.setReviewedAt(LocalDateTime.now());
             queueMapper.updateById(patch);
         }
 
         AnalysisReview review = new AnalysisReview();
         review.setCommentAnalysisId(analysisId);
-        review.setReviewerUserId(governance.currentUserId());
+        review.setReviewerUserId(permission.currentUserId());
         review.setStatus(st);
         review.setNote(note == null ? null : truncate(note, 500));
         review.setCorrectedJson(correctedJson);
         reviewMapper.insert(review);
 
-        governance.audit("REVIEW_ANALYSIS", "COMMENT_ANALYSIS", analysisId, st);
+        auditService.audit("REVIEW_ANALYSIS", "COMMENT_ANALYSIS", analysisId, st);
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("analysisId", analysisId);
@@ -170,7 +177,7 @@ public class ReviewService {
         }
         Comment comment = commentMapper.selectById(ca.getCommentId());
         if (comment != null) {
-            governance.requireReadComments(comment.getVideoId());
+            contentAccess.requireRead(comment.getVideoId());
         }
         List<Map<String, Object>> out = new ArrayList<>();
         for (AnalysisReview r : reviewMapper.selectByCommentAnalysisId(analysisId)) {

@@ -5,6 +5,7 @@ import com.coolpilot.insight.entity.VideoInsight;
 import com.coolpilot.insight.mapper.CommentMapper;
 import com.coolpilot.insight.mapper.VideoInsightMapper;
 import com.coolpilot.insight.mapper.VideoMapper;
+import com.coolpilot.insight.content.application.ContentAccessService;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -22,14 +23,14 @@ public class VideoService {
     private final VideoMapper videoMapper;
     private final VideoInsightMapper insightMapper;
     private final CommentMapper commentMapper;
-    private final GovernanceService governance;
+    private final ContentAccessService contentAccess;
 
     public VideoService(VideoMapper videoMapper, VideoInsightMapper insightMapper,
-                        CommentMapper commentMapper, GovernanceService governance) {
+                        CommentMapper commentMapper, ContentAccessService contentAccess) {
         this.videoMapper = videoMapper;
         this.insightMapper = insightMapper;
         this.commentMapper = commentMapper;
-        this.governance = governance;
+        this.contentAccess = contentAccess;
     }
 
     public Video findByAwemeId(String awemeId) {
@@ -100,7 +101,7 @@ public class VideoService {
 
     /** 视频列表（含真实评论数与最近分析时间） */
     public List<Map<String, Object>> listForCurrentUser() {
-        List<Long> allowed = governance.readableVideoIds();
+        List<Long> allowed = contentAccess.readableContentIds();
         if (allowed != null && allowed.isEmpty()) {
             return java.util.Collections.emptyList();
         }

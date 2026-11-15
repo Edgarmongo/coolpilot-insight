@@ -8,6 +8,8 @@ import com.coolpilot.insight.entity.*;
 import com.coolpilot.insight.mapper.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.coolpilot.insight.system.application.AuditService;
+import com.coolpilot.insight.system.application.PermissionService;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
@@ -36,20 +38,22 @@ public class DiscoveryService {
     private final VideoMapper videoMapper;
     private final KeywordVideoMapper keywordVideoMapper;
     private final VideoService videoService;
-    private final GovernanceService governance;
+    private final AuditService auditService;
+    private final PermissionService permission;
     private final AppProperties appProperties;
 
     public DiscoveryService(KeywordMapper keywordMapper, DiscoveryTaskMapper taskMapper,
                             DiscoveryTaskItemMapper itemMapper, VideoMapper videoMapper,
                             KeywordVideoMapper keywordVideoMapper, VideoService videoService,
-                            GovernanceService governance, AppProperties appProperties) {
+                            AuditService auditService, PermissionService permission, AppProperties appProperties) {
         this.keywordMapper = keywordMapper;
         this.taskMapper = taskMapper;
         this.itemMapper = itemMapper;
         this.videoMapper = videoMapper;
         this.keywordVideoMapper = keywordVideoMapper;
         this.videoService = videoService;
-        this.governance = governance;
+        this.auditService = auditService;
+        this.permission = permission;
         this.appProperties = appProperties;
     }
 
@@ -64,7 +68,7 @@ public class DiscoveryService {
             throw new IllegalArgumentException("关键词最长 128 字符");
         }
         String normalized = normalize(raw);
-        Long owner = governance.currentUserId();
+        Long owner = permission.currentUserId();
         Keyword exist = keywordMapper.selectByOwnerAndNormalized(owner, normalized);
         if (exist != null) {
             return row(exist);
@@ -76,7 +80,7 @@ public class DiscoveryService {
         k.setOwnerUserId(owner);
         k.setStatus(1);
         keywordMapper.insert(k);
-        governance.audit("CREATE_KEYWORD", "KEYWORD", k.getId(), null);
+        auditService.audit("CREATE_KEYWORD", "KEYWORD", k.getId(), null);
         return row(k);
     }
 
@@ -97,7 +101,7 @@ public class DiscoveryService {
     }
 
     public List<Map<String, Object>> listKeywords() {
-        Long owner = governance.isAdmin() ? null : governance.currentUserId();
+        Long owner = permission.isAdmin() ? null : permission.currentUserId();
         return keywordMapper.selectOrdered(owner).stream().map(this::row).collect(Collectors.toList());
     }
 
@@ -106,12 +110,12 @@ public class DiscoveryService {
         if (k == null) {
             throw new IllegalArgumentException("关键词不存在");
         }
-        if (!governance.isAdmin() && !Objects.equals(k.getOwnerUserId(), governance.currentUserId())) {
+        if (!permission.isAdmin() && !Objects.equals(k.getOwnerUserId(), permission.currentUserId())) {
             throw new SecurityException("无权删除该关键词");
         }
         k.setStatus(0);
         keywordMapper.updateById(k);
-        governance.audit("DISABLE_KEYWORD", "KEYWORD", id, null);
+        auditService.audit("DISABLE_KEYWORD", "KEYWORD", id, null);
     }
 
     private Map<String, Object> row(Keyword k) {
@@ -133,7 +137,7 @@ public class DiscoveryService {
         if (k == null) {
             throw new IllegalArgumentException("关键词不存在");
         }
-        if (!governance.isAdmin() && !Objects.equals(k.getOwnerUserId(), governance.currentUserId())) {
+        if (!permission.isAdmin() && !Objects.equals(k.getOwnerUserId(), permission.currentUserId())) {
             throw new SecurityException("无权使用该关键词");
         }
         DiscoveryTask task = new DiscoveryTask();
@@ -141,7 +145,7 @@ public class DiscoveryService {
                 + String.format("%03d", new Random().nextInt(1000)));
         task.setKeywordId(keywordId);
         task.setStatus("PENDING");
-        task.setOwnerUserId(governance.currentUserId());
+        task.setOwnerUserId(permission.currentUserId());
         task.setRequestedMax(Math.min(Math.max(max, 1), 200));
         task.setFoundCount(0);
         task.setNewVideoCount(0);
@@ -309,7 +313,7 @@ public class DiscoveryService {
     }
 
     public List<Map<String, Object>> listTasks() {
-        Long owner = governance.isAdmin() ? null : governance.currentUserId();
+        Long owner = permission.isAdmin() ? null : permission.currentUserId();
         List<DiscoveryTask> tasks = taskMapper.selectOrdered(owner, 100);
         return tasks.stream().map(t -> {
             Map<String, Object> m = new LinkedHashMap<>();

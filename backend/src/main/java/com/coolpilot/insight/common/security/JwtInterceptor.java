@@ -10,6 +10,8 @@ import org.springframework.web.servlet.HandlerInterceptor;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+
+import java.io.IOException;
 import java.lang.reflect.Method;
 
 @Component
@@ -38,15 +40,13 @@ public class JwtInterceptor implements HandlerInterceptor {
 
         String token = request.getHeader("Authorization");
         if (token == null || token.isEmpty()) {
-            response.setStatus(401);
-            response.getWriter().write("{\"code\":401,\"message\":\"未登录\"}");
+            writeJson(response, 401, "未登录");
             return false;
         }
 
         try {
             if (!tokenStore.exists(token)) {
-                response.setStatus(401);
-                response.getWriter().write("{\"code\":401,\"message\":\"登录已过期\"}");
+                writeJson(response, 401, "登录已过期");
                 return false;
             }
 
@@ -55,8 +55,7 @@ public class JwtInterceptor implements HandlerInterceptor {
 
             RequireRole requireRole = method.getAnnotation(RequireRole.class);
             if (requireRole.role() > role) {
-                response.setStatus(403);
-                response.getWriter().write("{\"code\":403,\"message\":\"权限不足\"}");
+                writeJson(response, 403, "权限不足");
                 return false;
             }
 
@@ -64,8 +63,7 @@ public class JwtInterceptor implements HandlerInterceptor {
             RequestContext.setRole(role);
             return true;
         } catch (Exception e) {
-            response.setStatus(401);
-            response.getWriter().write("{\"code\":401,\"message\":\"Token无效\"}");
+            writeJson(response, 401, "Token无效");
             return false;
         }
     }
@@ -73,5 +71,18 @@ public class JwtInterceptor implements HandlerInterceptor {
     @Override
     public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
         RequestContext.clear();
+    }
+
+    /**
+     * 直接写 JSON 响应。
+     *
+     * <p>必须显式设置 charset：{@code response.getWriter()} 默认按 ISO-8859-1 编码，
+     * 中文会变成 "????"。此处统一处理，避免每个分支重复。
+     */
+    private void writeJson(HttpServletResponse response, int status, String message) throws IOException {
+        response.setStatus(status);
+        response.setCharacterEncoding("UTF-8");
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().write("{\"code\":" + status + ",\"message\":\"" + message + "\"}");
     }
 }

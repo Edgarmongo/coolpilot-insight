@@ -3,11 +3,12 @@ package com.coolpilot.insight.service.impl;
 import com.coolpilot.insight.integration.config.AppProperties;
 import com.coolpilot.insight.common.security.RequestContext;
 import com.coolpilot.insight.service.CleanService;
-import com.coolpilot.insight.service.GovernanceService;
 import com.coolpilot.insight.service.VideoService;
 import com.coolpilot.insight.common.util.MemoryCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.coolpilot.insight.content.application.ContentAccessService;
+import com.coolpilot.insight.system.application.PermissionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -35,7 +36,9 @@ public class CleanServiceImpl implements CleanService {
     private MemoryCache cache;
 
     @Autowired
-    private GovernanceService governance;
+    private ContentAccessService contentAccess;
+    @Autowired
+    private PermissionService permission;
 
     @Autowired
     private VideoService videoService;
@@ -51,7 +54,7 @@ public class CleanServiceImpl implements CleanService {
         if (csvFiles == null) {
             return files;
         }
-        boolean admin = governance.isAdmin();
+        boolean admin = permission.isAdmin();
         for (File f : csvFiles) {
             if (!admin && !canAccessFile(f.getName())) {
                 continue;
@@ -85,7 +88,7 @@ public class CleanServiceImpl implements CleanService {
                 result.put("output", "非法文件名: " + name);
                 return result;
             }
-            if (!governance.isAdmin() && !canAccessFile(base)) {
+            if (!permission.isAdmin() && !canAccessFile(base)) {
                 result.put("success", false);
                 result.put("output", "无权处理文件: " + base);
                 return result;
@@ -149,7 +152,7 @@ public class CleanServiceImpl implements CleanService {
             if (base == null) {
                 throw new SecurityException("非法文件名: " + name);
             }
-            if (!governance.isAdmin() && !canAccessFile(base)) {
+            if (!permission.isAdmin() && !canAccessFile(base)) {
                 throw new SecurityException("无权导出文件: " + base);
             }
             Path p = safeResolve(base);
@@ -210,6 +213,6 @@ public class CleanServiceImpl implements CleanService {
             // 尚未入库的视频：允许上传者后续清洗，归属由上传接口记录
             return true;
         }
-        return governance.canReadComments(vid);
+        return contentAccess.canRead(vid);
     }
 }

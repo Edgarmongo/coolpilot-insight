@@ -5,6 +5,7 @@ import com.coolpilot.insight.entity.Video;
 import com.coolpilot.insight.mapper.OverviewMapper;
 import com.coolpilot.insight.mapper.UsageRecordMapper;
 import com.coolpilot.insight.mapper.VideoMapper;
+import com.coolpilot.insight.content.application.ContentAccessService;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -19,20 +20,20 @@ public class OverviewService {
     private final UsageRecordMapper usageMapper;
     private final VideoMapper videoMapper;
     private final VideoService videoService;
-    private final GovernanceService governance;
+    private final ContentAccessService contentAccess;
 
     public OverviewService(OverviewMapper overviewMapper, UsageRecordMapper usageMapper,
                            VideoMapper videoMapper, VideoService videoService,
-                           GovernanceService governance) {
+                           ContentAccessService contentAccess) {
         this.overviewMapper = overviewMapper;
         this.usageMapper = usageMapper;
         this.videoMapper = videoMapper;
         this.videoService = videoService;
-        this.governance = governance;
+        this.contentAccess = contentAccess;
     }
 
     public Map<String, Object> overview() {
-        List<Long> ids = governance.readableVideoIds();
+        List<Long> ids = contentAccess.readableContentIds();
         if (ids != null && ids.isEmpty()) {
             return empty();
         }

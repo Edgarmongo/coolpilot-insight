@@ -6,11 +6,12 @@ import com.coolpilot.insight.entity.*;
 import com.coolpilot.insight.mapper.*;
 import com.coolpilot.insight.service.CleanService;
 import com.coolpilot.insight.service.CollectService;
-import com.coolpilot.insight.service.GovernanceService;
 import com.coolpilot.insight.service.VideoService;
 import com.coolpilot.insight.utils.CollectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.coolpilot.insight.system.application.AuditService;
+import com.coolpilot.insight.system.application.PermissionService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -57,7 +58,9 @@ public class CollectServiceImpl implements CollectService {
     @Autowired
     private CleanService cleanService;
     @Autowired
-    private GovernanceService governance;
+    private AuditService auditService;
+    @Autowired
+    private PermissionService permission;
     @Autowired
     private AppProperties appProperties;
 
@@ -461,7 +464,7 @@ public class CollectServiceImpl implements CollectService {
     public List<Map<String, Object>> listTasks(String status, int page, int size) {
         int limit = Math.min(Math.max(size, 1), 200);
         int offset = Math.max(page - 1, 0) * Math.max(size, 1);
-        Long owner = governance.isAdmin() ? null : governance.currentUserId();
+        Long owner = permission.isAdmin() ? null : permission.currentUserId();
         return taskMapper.selectPage(status, owner, limit, offset).stream()
                 .map(this::taskRow).collect(Collectors.toList());
     }
@@ -487,7 +490,7 @@ public class CollectServiceImpl implements CollectService {
         if (task == null) {
             throw new IllegalArgumentException("任务不存在");
         }
-        if (!governance.isAdmin() && !Objects.equals(task.getOwnerUserId(), governance.currentUserId())) {
+        if (!permission.isAdmin() && !Objects.equals(task.getOwnerUserId(), permission.currentUserId())) {
             throw new SecurityException("无权查看该任务");
         }
         Map<String, Object> out = taskRow(task);
@@ -516,7 +519,7 @@ public class CollectServiceImpl implements CollectService {
         if (task == null) {
             throw new IllegalArgumentException("任务不存在");
         }
-        if (!governance.isAdmin() && !Objects.equals(task.getOwnerUserId(), governance.currentUserId())) {
+        if (!permission.isAdmin() && !Objects.equals(task.getOwnerUserId(), permission.currentUserId())) {
             throw new SecurityException("无权查看该任务");
         }
         List<Map<String, Object>> out = new ArrayList<>();
@@ -539,7 +542,7 @@ public class CollectServiceImpl implements CollectService {
         if (task == null) {
             throw new IllegalArgumentException("任务不存在");
         }
-        if (!governance.isAdmin() && !Objects.equals(task.getOwnerUserId(), governance.currentUserId())) {
+        if (!permission.isAdmin() && !Objects.equals(task.getOwnerUserId(), permission.currentUserId())) {
             throw new SecurityException("无权取消该任务");
         }
         if ("PENDING".equals(task.getStatus())) {
@@ -558,7 +561,7 @@ public class CollectServiceImpl implements CollectService {
             throw new IllegalStateException("任务已结束，无法取消");
         }
         writeLog(taskId, null, "CANCEL", "WARN", "用户请求取消任务", null);
-        governance.audit("CANCEL_COLLECTION_TASK", "COLLECTION_TASK", taskId, null);
+        auditService.audit("CANCEL_COLLECTION_TASK", "COLLECTION_TASK", taskId, null);
     }
 
     @Override
@@ -567,7 +570,7 @@ public class CollectServiceImpl implements CollectService {
         if (task == null) {
             throw new IllegalArgumentException("任务不存在");
         }
-        if (!governance.isAdmin() && !Objects.equals(task.getOwnerUserId(), governance.currentUserId())) {
+        if (!permission.isAdmin() && !Objects.equals(task.getOwnerUserId(), permission.currentUserId())) {
             throw new SecurityException("无权重试该任务");
         }
         if (!"FAILED".equals(task.getStatus()) && !"PARTIAL_SUCCESS".equals(task.getStatus())) {
@@ -595,7 +598,7 @@ public class CollectServiceImpl implements CollectService {
         up.setFailedItems(0);
         taskMapper.updateById(up);
         writeLog(taskId, null, "RETRY", "INFO", "用户触发重试", null);
-        governance.audit("RETRY_COLLECTION_TASK", "COLLECTION_TASK", taskId, null);
+        auditService.audit("RETRY_COLLECTION_TASK", "COLLECTION_TASK", taskId, null);
     }
 
     private void releaseActiveFlags(Long taskId) {

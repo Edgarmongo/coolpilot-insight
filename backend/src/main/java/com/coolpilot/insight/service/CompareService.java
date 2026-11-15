@@ -8,6 +8,7 @@ import com.coolpilot.insight.entity.VideoInsight;
 import com.coolpilot.insight.mapper.CommentMapper;
 import com.coolpilot.insight.mapper.VideoInsightMapper;
 import com.coolpilot.insight.mapper.VideoMapper;
+import com.coolpilot.insight.content.application.ContentAccessService;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -24,16 +25,16 @@ public class CompareService {
     private final VideoMapper videoMapper;
     private final VideoInsightMapper insightMapper;
     private final CommentMapper commentMapper;
-    private final GovernanceService governance;
+    private final ContentAccessService contentAccess;
 
     public CompareService(VideoService videoService, VideoMapper videoMapper,
                           VideoInsightMapper insightMapper, CommentMapper commentMapper,
-                          GovernanceService governance) {
+                          ContentAccessService contentAccess) {
         this.videoService = videoService;
         this.videoMapper = videoMapper;
         this.insightMapper = insightMapper;
         this.commentMapper = commentMapper;
-        this.governance = governance;
+        this.contentAccess = contentAccess;
     }
 
     /** 并排对比 N 个视频：基础指标 + 需求/痛点 Top */
@@ -50,7 +51,7 @@ public class CompareService {
             if (vid == null) {
                 continue;
             }
-            governance.requireReadComments(vid);
+            contentAccess.requireRead(vid);
             Video v = videoMapper.selectById(vid);
 
             Map<String, Object> row = new LinkedHashMap<>();

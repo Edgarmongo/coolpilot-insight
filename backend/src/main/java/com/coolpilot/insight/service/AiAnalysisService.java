@@ -8,6 +8,9 @@ import com.coolpilot.insight.entity.*;
 import com.coolpilot.insight.mapper.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.coolpilot.insight.system.application.ConfigService;
+import com.coolpilot.insight.content.application.ContentAccessService;
+import com.coolpilot.insight.system.application.PermissionService;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
@@ -52,7 +55,9 @@ public class AiAnalysisService {
     private final CommentMapper commentMapper;
     private final UsageRecordMapper usageMapper;
     private final VideoService videoService;
-    private final GovernanceService governance;
+    private final ConfigService configService;
+    private final ContentAccessService contentAccess;
+    private final PermissionService permission;
     private final AppProperties appProperties;
 
     /** AI 调用并发上限（进程内；跨实例限流需网关层，见文档 6.6） */
@@ -67,7 +72,7 @@ public class AiAnalysisService {
                              CommentAnalysisMapper commentAnalysisMapper, VideoInsightMapper insightMapper,
                              AnalysisEvidenceMapper evidenceMapper, CommentMapper commentMapper,
                              UsageRecordMapper usageMapper, VideoService videoService,
-                             GovernanceService governance, AppProperties appProperties) {
+                             ConfigService configService, ContentAccessService contentAccess, PermissionService permission, AppProperties appProperties) {
         this.profileMapper = profileMapper;
         this.taskMapper = taskMapper;
         this.batchMapper = batchMapper;
@@ -78,7 +83,9 @@ public class AiAnalysisService {
         this.commentMapper = commentMapper;
         this.usageMapper = usageMapper;
         this.videoService = videoService;
-        this.governance = governance;
+        this.configService = configService;
+        this.contentAccess = contentAccess;
+        this.permission = permission;
         this.appProperties = appProperties;
     }
 
@@ -90,7 +97,7 @@ public class AiAnalysisService {
         if (vid == null) {
             throw new IllegalArgumentException("视频不存在");
         }
-        governance.requireReadComments(vid);
+        contentAccess.requireRead(vid);
 
         int max = Math.min(Math.max(limit, 1), MAX_COMMENTS_PER_TASK);
         AnalysisProfile profile = defaultProfile();
@@ -111,7 +118,7 @@ public class AiAnalysisService {
         }
 
         long todayTokens = usageMapper.todayTokens();
-        int dailyBudget = governance.getInt("ai.daily_token_budget", 2_000_000);
+        int dailyBudget = configService.getInt("ai.daily_token_budget", 2_000_000);
         if (todayTokens >= dailyBudget) {
             throw new IllegalStateException("今日 AI Token 预算已用尽（" + todayTokens + "/" + dailyBudget + "），请明日再试");
         }
@@ -120,7 +127,7 @@ public class AiAnalysisService {
         task.setTaskNo(nextNo("AT"));
         task.setTaskType("COMMENT_LEVEL");
         task.setStatus("PENDING");
-        task.setOwnerUserId(governance.currentUserId());
+        task.setOwnerUserId(permission.currentUserId());
         task.setScopeType("VIDEO");
         task.setScopeJson(JSON.toJSONString(Collections.singletonMap("videoId", videoId)));
         task.setProfileId(profile.getId());
@@ -130,7 +137,7 @@ public class AiAnalysisService {
         task.setInputTokens(0L);
         task.setOutputTokens(0L);
         task.setCostAmount(BigDecimal.ZERO);
-        task.setPriceVersion(governance.get("ai.price_version"));
+        task.setPriceVersion(configService.get("ai.price_version"));
         taskMapper.insert(task);
 
         for (Map<String, Object> c : todo) {
@@ -147,7 +154,7 @@ public class AiAnalysisService {
         }
 
         Long taskId = task.getId();
-        Long ownerId = governance.currentUserId();
+        Long ownerId = permission.currentUserId();
         executor.submit(() -> runCommentTask(taskId, vid, ownerId));
 
         Map<String, Object> out = new LinkedHashMap<>();
@@ -329,7 +336,7 @@ public class AiAnalysisService {
         if (vid == null) {
             throw new IllegalArgumentException("视频不存在");
         }
-        governance.requireReadComments(vid);
+        contentAccess.requireRead(vid);
         AnalysisProfile profile = defaultProfile();
 
         List<Map<String, Object>> rows = commentMapper.commentRowsWithSentiment(vid);
@@ -338,7 +345,7 @@ public class AiAnalysisService {
         }
 
         long todayTokens = usageMapper.todayTokens();
-        int dailyBudget = governance.getInt("ai.daily_token_budget", 2_000_000);
+        int dailyBudget = configService.getInt("ai.daily_token_budget", 2_000_000);
         if (todayTokens >= dailyBudget) {
             throw new IllegalStateException("今日 AI Token 预算已用尽，请明日再试");
         }
@@ -347,13 +354,13 @@ public class AiAnalysisService {
         task.setTaskNo(nextNo("AT"));
         task.setTaskType("VIDEO_LEVEL");
         task.setStatus("RUNNING");
-        task.setOwnerUserId(governance.currentUserId());
+        task.setOwnerUserId(permission.currentUserId());
         task.setScopeType("VIDEO");
         task.setScopeJson(JSON.toJSONString(Collections.singletonMap("videoId", videoId)));
         task.setProfileId(profile.getId());
         task.setTotalItems(1);
         task.setStartedAt(LocalDateTime.now());
-        task.setPriceVersion(governance.get("ai.price_version"));
+        task.setPriceVersion(configService.get("ai.price_version"));
         taskMapper.insert(task);
 
         AnalysisTaskItem item = new AnalysisTaskItem();
@@ -530,7 +537,7 @@ public class AiAnalysisService {
         if (vid == null) {
             return Collections.emptyList();
         }
-        governance.requireReadComments(vid);
+        contentAccess.requireRead(vid);
         return insightMapper.selectByVideoIdLimit(vid, 20)
                 .stream().map(v -> {
                     Map<String, Object> m = new LinkedHashMap<>();
@@ -550,7 +557,7 @@ public class AiAnalysisService {
         if (t == null) {
             throw new IllegalArgumentException("分析任务不存在");
         }
-        if (!governance.isAdmin() && !Objects.equals(t.getOwnerUserId(), governance.currentUserId())) {
+        if (!permission.isAdmin() && !Objects.equals(t.getOwnerUserId(), permission.currentUserId())) {
             throw new SecurityException("无权查看该分析任务");
         }
         Map<String, Object> out = new LinkedHashMap<>();
@@ -586,7 +593,7 @@ public class AiAnalysisService {
     public List<Map<String, Object>> listTasks(int page, int size) {
         int limit = Math.min(Math.max(size, 1), 100);
         int offset = Math.max(page - 1, 0) * Math.max(size, 1);
-        Long owner = governance.isAdmin() ? null : governance.currentUserId();
+        Long owner = permission.isAdmin() ? null : permission.currentUserId();
         return taskMapper.selectOrdered(owner, limit, offset).stream().map(t -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", t.getId());
@@ -607,7 +614,7 @@ public class AiAnalysisService {
         if (vid == null) {
             return Collections.emptyMap();
         }
-        governance.requireReadComments(vid);
+        contentAccess.requireRead(vid);
 
         List<Map<String, Object>> rows = commentMapper.commentRowsWithSentiment(vid);
         List<Long> ids = rows.stream().map(r -> ((Number) r.get("id")).longValue()).collect(Collectors.toList());
@@ -718,8 +725,8 @@ public class AiAnalysisService {
     }
 
     private BigDecimal calcCost(long inTok, long outTok) {
-        BigDecimal inPrice = governance.getDecimal("ai.input_price_per_m", new BigDecimal("2.0"));
-        BigDecimal outPrice = governance.getDecimal("ai.output_price_per_m", new BigDecimal("8.0"));
+        BigDecimal inPrice = configService.getDecimal("ai.input_price_per_m", new BigDecimal("2.0"));
+        BigDecimal outPrice = configService.getDecimal("ai.output_price_per_m", new BigDecimal("8.0"));
         BigDecimal in = BigDecimal.valueOf(inTok).multiply(inPrice)
                 .divide(BigDecimal.valueOf(1_000_000), 6, RoundingMode.HALF_UP);
         BigDecimal out = BigDecimal.valueOf(outTok).multiply(outPrice)

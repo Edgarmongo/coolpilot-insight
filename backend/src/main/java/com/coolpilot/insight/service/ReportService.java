@@ -9,6 +9,9 @@ import com.coolpilot.insight.entity.VideoInsight;
 import com.coolpilot.insight.mapper.ReportMapper;
 import com.coolpilot.insight.mapper.ReportVersionMapper;
 import com.coolpilot.insight.mapper.VideoInsightMapper;
+import com.coolpilot.insight.system.application.AuditService;
+import com.coolpilot.insight.content.application.ContentAccessService;
+import com.coolpilot.insight.system.application.PermissionService;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -28,19 +31,23 @@ public class ReportService {
     private final ReportVersionMapper versionMapper;
     private final VideoInsightMapper insightMapper;
     private final VideoService videoService;
-    private final GovernanceService governance;
+    private final AuditService auditService;
+    private final ContentAccessService contentAccess;
+    private final PermissionService permission;
     private final AppProperties appProperties;
     private final com.coolpilot.insight.mapper.CommentMapper commentMapper;
 
     public ReportService(ReportMapper reportMapper, ReportVersionMapper versionMapper,
                          VideoInsightMapper insightMapper, VideoService videoService,
-                         GovernanceService governance, AppProperties appProperties,
+                         AuditService auditService, ContentAccessService contentAccess, PermissionService permission, AppProperties appProperties,
                          com.coolpilot.insight.mapper.CommentMapper commentMapper) {
         this.reportMapper = reportMapper;
         this.versionMapper = versionMapper;
         this.insightMapper = insightMapper;
         this.videoService = videoService;
-        this.governance = governance;
+        this.auditService = auditService;
+        this.contentAccess = contentAccess;
+        this.permission = permission;
         this.appProperties = appProperties;
         this.commentMapper = commentMapper;
     }
@@ -51,7 +58,7 @@ public class ReportService {
         if (vid == null) {
             throw new IllegalArgumentException("视频不存在");
         }
-        governance.requireReadComments(vid);
+        contentAccess.requireRead(vid);
 
         VideoInsight insight = insightMapper.selectLatestByVideoId(vid);
         if (insight == null) {
@@ -70,7 +77,7 @@ public class ReportService {
         scope.put("sampleCount", insight.getSampleCount());
         scope.put("generatedAt", LocalDateTime.now().toString());
         report.setScopeJson(JSON.toJSONString(scope));
-        report.setOwnerUserId(governance.currentUserId());
+        report.setOwnerUserId(permission.currentUserId());
         report.setStatus("PUBLISHED");
         report.setCurrentVersion(1);
         reportMapper.insert(report);
@@ -82,15 +89,15 @@ public class ReportService {
         version.setContentMd(toMarkdown(report.getTitle(), scope, insight));
         version.setAnalysisTaskId(insight.getAnalysisTaskId());
         version.setEvidenceCount(insight.getEvidenceCount() == null ? 0 : insight.getEvidenceCount());
-        version.setGeneratedBy(governance.currentUserId());
+        version.setGeneratedBy(permission.currentUserId());
         versionMapper.insert(version);
 
-        governance.audit("CREATE_REPORT", "REPORT", report.getId(), report.getReportType());
+        auditService.audit("CREATE_REPORT", "REPORT", report.getId(), report.getReportType());
         return detail(report.getId());
     }
 
     public List<Map<String, Object>> list() {
-        Long owner = governance.isAdmin() ? null : governance.currentUserId();
+        Long owner = permission.isAdmin() ? null : permission.currentUserId();
         return reportMapper.selectActive(owner).stream().map(r -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", r.getId());
@@ -150,7 +157,7 @@ public class ReportService {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("fileName", report.getReportNo() + ".md");
         out.put("content", latest.getContentMd() == null ? "" : latest.getContentMd());
-        governance.audit("EXPORT_REPORT", "REPORT", id, "markdown");
+        auditService.audit("EXPORT_REPORT", "REPORT", id, "markdown");
         return out;
     }
 
@@ -158,7 +165,7 @@ public class ReportService {
         Report report = requireReport(id);
         report.setDeletedAt(LocalDateTime.now());
         reportMapper.updateById(report);
-        governance.audit("DELETE_REPORT", "REPORT", id, null);
+        auditService.audit("DELETE_REPORT", "REPORT", id, null);
     }
 
     // ================================================================ 文件导出
@@ -194,7 +201,7 @@ public class ReportService {
         if (bytes == null || bytes.length == 0) {
             throw new IllegalStateException("报告渲染失败：渲染服务不可用");
         }
-        governance.audit("EXPORT_REPORT_FILE", "REPORT", id, fmt);
+        auditService.audit("EXPORT_REPORT_FILE", "REPORT", id, fmt);
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("fileName", report.getReportNo() + "." + fmt);
@@ -319,7 +326,7 @@ public class ReportService {
         if (report == null || report.getDeletedAt() != null) {
             throw new IllegalArgumentException("报告不存在");
         }
-        if (!governance.isAdmin() && !Objects.equals(report.getOwnerUserId(), governance.currentUserId())) {
+        if (!permission.isAdmin() && !Objects.equals(report.getOwnerUserId(), permission.currentUserId())) {
             throw new SecurityException("无权访问该报告");
         }
         return report;

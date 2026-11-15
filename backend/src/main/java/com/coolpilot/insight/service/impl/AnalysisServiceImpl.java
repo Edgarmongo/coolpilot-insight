@@ -6,11 +6,11 @@ import com.coolpilot.insight.integration.config.AppProperties;
 import com.coolpilot.insight.mapper.CommentMapper;
 import com.coolpilot.insight.mapper.VideoMapper;
 import com.coolpilot.insight.service.AnalysisService;
-import com.coolpilot.insight.service.GovernanceService;
 import com.coolpilot.insight.service.VideoService;
 import com.coolpilot.insight.common.util.MemoryCache;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.coolpilot.insight.content.application.ContentAccessService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -44,7 +44,7 @@ public class AnalysisServiceImpl implements AnalysisService {
     @Autowired
     private VideoService videoService;
     @Autowired
-    private GovernanceService governance;
+    private ContentAccessService contentAccess;
     @Autowired
     private MemoryCache cache;
     @Autowired
@@ -118,7 +118,7 @@ public class AnalysisServiceImpl implements AnalysisService {
         if (vid == null) {
             return emptySummary(videoId);
         }
-        governance.requireReadComments(vid);
+        contentAccess.requireRead(vid);
 
         Map<String, Object> row = commentMapper.summaryRow(vid);
         long total = row == null || row.get("total") == null ? 0L : ((Number) row.get("total")).longValue();
@@ -156,7 +156,7 @@ public class AnalysisServiceImpl implements AnalysisService {
         if (vid == null) {
             return Collections.emptyList();
         }
-        governance.requireReadComments(vid);
+        contentAccess.requireRead(vid);
 
         List<Map<String, Object>> rows = commentMapper.regionStats(vid);
         long total = rows.stream().mapToLong(r -> ((Number) r.get("count")).longValue()).sum();
@@ -189,7 +189,7 @@ public class AnalysisServiceImpl implements AnalysisService {
         if (vid == null) {
             return Collections.emptyList();
         }
-        governance.requireReadComments(vid);
+        contentAccess.requireRead(vid);
 
         Map<String, Long> counts = new LinkedHashMap<>();
         counts.put("积极", 0L);
@@ -222,7 +222,7 @@ public class AnalysisServiceImpl implements AnalysisService {
         if (vid == null) {
             return Collections.emptyList();
         }
-        governance.requireReadComments(vid);
+        contentAccess.requireRead(vid);
         List<Map<String, Object>> rows = commentMapper.dailyStats(vid);
         List<Map<String, Object>> out = new ArrayList<>();
         for (Map<String, Object> r : rows) {
@@ -242,7 +242,7 @@ public class AnalysisServiceImpl implements AnalysisService {
         if (vid == null) {
             return Collections.emptyList();
         }
-        governance.requireReadComments(vid);
+        contentAccess.requireRead(vid);
         List<Map<String, Object>> rows = commentMapper.topComments(vid, 20);
         List<Map<String, Object>> out = new ArrayList<>(rows.size());
         for (Map<String, Object> r : rows) {
@@ -273,7 +273,7 @@ public class AnalysisServiceImpl implements AnalysisService {
         if (vid == null) {
             return Collections.emptyList();
         }
-        governance.requireReadComments(vid);
+        contentAccess.requireRead(vid);
         String cacheKey = CACHE_PREFIX + "wordcloud:" + vid;
         String cached = cache.get(cacheKey);
         if (cached != null) {
@@ -302,7 +302,7 @@ public class AnalysisServiceImpl implements AnalysisService {
         if (vid == null) {
             return Collections.emptyMap();
         }
-        governance.requireReadComments(vid);
+        contentAccess.requireRead(vid);
 
         String cacheKey = CACHE_PREFIX + "sankey:" + vid;
         String cached = cache.get(cacheKey);
@@ -398,7 +398,7 @@ public class AnalysisServiceImpl implements AnalysisService {
         if (vid == null) {
             return "";
         }
-        governance.requireReadComments(vid);
+        contentAccess.requireRead(vid);
 
         String cacheKey = CACHE_PREFIX + "topic:" + vid;
         String cached = cache.get(cacheKey);
@@ -567,7 +567,7 @@ public class AnalysisServiceImpl implements AnalysisService {
         if (vid == null) {
             throw new IllegalArgumentException("视频不存在");
         }
-        governance.requireReadComments(vid);
+        contentAccess.requireRead(vid);
         cache.deleteByPrefix(CACHE_PREFIX + "*");
 
         Map<String, Object> row = commentMapper.summaryRow(vid);

@@ -6,8 +6,8 @@ import com.coolpilot.insight.dto.CollectRequest;
 import com.coolpilot.insight.common.web.Result;
 import com.coolpilot.insight.common.security.RequestContext;
 import com.coolpilot.insight.service.CollectService;
-import com.coolpilot.insight.service.GovernanceService;
 import com.coolpilot.insight.utils.CollectUtils;
+import com.coolpilot.insight.system.application.AuditService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -32,7 +32,7 @@ public class CollectController {
     private AppProperties appProperties;
 
     @Autowired
-    private GovernanceService governance;
+    private AuditService auditService;
 
     @RequireRole
     @PostMapping("/start")
@@ -53,7 +53,7 @@ public class CollectController {
         String mode = req.getCollectMode() == null ? "online" : req.getCollectMode();
         Map<String, Object> result = collectService.submit(
                 inputs, max, mode, RequestContext.getUserId());
-        governance.audit("SUBMIT_COLLECTION", "COLLECTION_TASK",
+        auditService.audit("SUBMIT_COLLECTION", "COLLECTION_TASK",
                 result.get("taskId") instanceof Number ? ((Number) result.get("taskId")).longValue() : null,
                 "items=" + result.get("totalItems"));
         return Result.ok(result);
@@ -152,7 +152,7 @@ public class CollectController {
                 item.put("fileName", finalName);
                 item.put("size", (Files.size(dest) / 1024) + " KB");
                 saved.add(item);
-                governance.audit("UPLOAD_CSV", "FILE", null, finalName);
+                auditService.audit("UPLOAD_CSV", "FILE", null, finalName);
             } catch (Exception e) {
                 throw new IllegalStateException("保存文件失败: " + finalName + " - " + e.getMessage());
             }

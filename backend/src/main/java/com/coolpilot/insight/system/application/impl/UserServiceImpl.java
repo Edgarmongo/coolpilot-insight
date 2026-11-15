@@ -4,10 +4,10 @@ import com.coolpilot.insight.system.dto.LoginResponse;
 import com.coolpilot.insight.system.domain.User;
 import com.coolpilot.insight.common.security.RequestContext;
 import com.coolpilot.insight.system.infrastructure.persistence.UserMapper;
-import com.coolpilot.insight.service.GovernanceService;
 import com.coolpilot.insight.system.application.UserService;
 import com.coolpilot.insight.common.security.JwtUtil;
 import com.coolpilot.insight.utils.TokenStore;
+import com.coolpilot.insight.system.application.AuditService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -29,7 +29,7 @@ public class UserServiceImpl implements UserService {
     private TokenStore tokenStore;
 
     @Autowired
-    private GovernanceService governance;
+    private AuditService auditService;
 
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
@@ -85,7 +85,7 @@ public class UserServiceImpl implements UserService {
         // 登录审计：只记录行为，不记录凭据
         RequestContext.setUserId(user.getId());
         RequestContext.setRole(user.getRole());
-        governance.audit("LOGIN", "USER", user.getId(), null);
+        auditService.audit("LOGIN", "USER", user.getId(), null);
 
         String maskPhone = phone.substring(0, 3) + "****" + phone.substring(7);
         LoginResponse resp = new LoginResponse(token, user.getId(), maskPhone, user.getRole());
@@ -119,7 +119,7 @@ public class UserServiceImpl implements UserService {
         patch.setPasswordHash(encoder.encode(newPassword));
         patch.setMustChangePwd(0);
         userMapper.updateById(patch);
-        governance.audit("CHANGE_PASSWORD", "USER", user.getId(), null);
+        auditService.audit("CHANGE_PASSWORD", "USER", user.getId(), null);
     }
 
     @Override
