@@ -27,4 +27,10 @@ public interface CollectService {
     void cancel(Long taskId);
 
     void retry(Long taskId);
+
+    /** 任务运行历史。 */
+    java.util.List<com.coolpilot.insight.collection.domain.ColRun> listRuns(Long taskId, int page, int size);
+
+    /** 运行详情。 */
+    com.coolpilot.insight.collection.domain.ColRun runDetail(Long runId);
 }

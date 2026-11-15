@@ -9,6 +9,7 @@ public class CollectionTask {
     private Long id;
     private String taskNo;
     private String taskType;
+    private Long sourceId;
     private String status;
     private Long ownerUserId;
     private String paramsJson;

@@ -6,11 +6,14 @@ import com.coolpilot.insight.dto.CollectRequest;
 import com.coolpilot.insight.common.web.Result;
 import com.coolpilot.insight.common.security.RequestContext;
 import com.coolpilot.insight.collection.application.CollectService;
+import com.coolpilot.insight.collection.application.RunApplicationService;
+import com.coolpilot.insight.collection.domain.ColRun;
 import com.coolpilot.insight.utils.CollectUtils;
 import com.coolpilot.insight.system.application.AuditService;
 import com.coolpilot.insight.common.exception.BizException;
 import com.coolpilot.insight.common.exception.ErrorCode;
 import org.springframework.beans.factory.annotation.Autowired;
+import java.util.List;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -24,6 +27,10 @@ import java.util.regex.Pattern;
 @RestController
 @RequestMapping("/api/collect")
 public class CollectController {
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private RunApplicationService runApplicationService;
+
 
     private static final Pattern LEGAL_CSV = Pattern.compile("^\\d{6,}\\.csv$");
 
@@ -160,5 +167,32 @@ public class CollectController {
             }
         }
         return Result.ok(saved);
+    }
+
+    // ---------------------------------------------------------------- Run
+
+    /** 手动触发一次运行。与定时调度共用同一应用服务。 */
+    @PostMapping("/tasks/{id}/trigger")
+    public Result<ColRun> trigger(@PathVariable Long id) {
+        Long userId = com.coolpilot.insight.common.security.RequestContext.getUserId();
+        return Result.ok(runApplicationService.trigger(id, "MANUAL", userId));
+    }
+
+    /** 该任务最近一次运行（Task 列表展示"最近运行时间"用）。 */
+    @GetMapping("/tasks/{id}/runs/latest")
+    public Result<ColRun> latestRun(@PathVariable Long id) {
+        return Result.ok(runApplicationService.latestOf(id));
+    }
+
+    @GetMapping("/tasks/{id}/runs")
+    public Result<List<ColRun>> listRuns(@PathVariable Long id,
+                                         @RequestParam(defaultValue = "1") int page,
+                                         @RequestParam(defaultValue = "20") int size) {
+        return Result.ok(collectService.listRuns(id, page, size));
+    }
+
+    @GetMapping("/runs/{runId}")
+    public Result<ColRun> runDetail(@PathVariable Long runId) {
+        return Result.ok(collectService.runDetail(runId));
     }
 }

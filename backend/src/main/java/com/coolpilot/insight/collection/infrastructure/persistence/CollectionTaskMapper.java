@@ -7,6 +7,7 @@ import com.coolpilot.insight.collection.domain.CollectionTask;
 import org.apache.ibatis.annotations.Param;
 
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.util.List;
 
@@ -37,4 +38,13 @@ public interface CollectionTaskMapper extends BaseCrudMapper<CollectionTask> {
     List<CollectionTask> selectPage(@Param("status") String status,
                                     @Param("ownerUserId") Long ownerUserId,
                                     @Param("limit") int limit, @Param("offset") int offset);
+
+    /** 原子闸门：只有 IDLE 的任务能进入 RUNNING，返回 1 表示领取成功。 */
+    @Update("UPDATE collection_task SET status = 'RUNNING', started_at = NOW() "
+            + "WHERE id = #{id} AND status = 'IDLE'")
+    int claimIdle(@Param("id") Long id);
+
+    /** Run 结束后回落到 IDLE 或 PAUSED（不写 Run 的结果）。 */
+    @Update("UPDATE collection_task SET status = #{status} WHERE id = #{id}")
+    int releaseToIdle(@Param("id") Long id, @Param("status") String status);
 }

@@ -81,6 +81,8 @@ public class CollectServiceImpl implements CollectService {
     private CollectionClient collectionClient;
     @Autowired
     private CollectionQueryService queryService;
+    @Autowired
+    private com.coolpilot.insight.collection.infrastructure.persistence.ColRunMapper runMapper;
 
     /** 同一时刻只允许一个采集批次在跑（Chrome 单实例限制） */
     private final AtomicBoolean busy = new AtomicBoolean(false);
@@ -538,5 +540,21 @@ public class CollectServiceImpl implements CollectService {
      */
     private void clearActiveFlag(Long itemId) {
         itemMapper.clearActiveFlag(itemId);
+    }
+
+    @Override
+    public List<com.coolpilot.insight.collection.domain.ColRun> listRuns(Long taskId, int page, int size) {
+        int limit = Math.min(Math.max(size, 1), 100);
+        int offset = Math.max(page - 1, 0) * Math.max(size, 1);
+        return runMapper.selectPageByTask(taskId, offset, limit);
+    }
+
+    @Override
+    public com.coolpilot.insight.collection.domain.ColRun runDetail(Long runId) {
+        var run = runMapper.selectById(runId);
+        if (run == null) {
+            throw new BizException(ErrorCode.NOT_FOUND, "运行记录不存在");
+        }
+        return run;
     }
 }
