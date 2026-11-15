@@ -58,4 +58,12 @@ public class ConfigService {
             return def;
         }
     }
+
+    /** 配置被修改后调用，强制下次读取回源。 */
+    public void invalidate() {
+        synchronized (cache) {
+            cache.clear();
+            cachedAt = 0L;
+        }
+    }
 }
