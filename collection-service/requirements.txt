@@ -1,0 +1,3 @@
+# 采集服务依赖。DrissionPage 仅抖音适配器需要，未安装时该适配器不可用（服务仍可启动）
+Flask>=3.0
+DrissionPage>=4.1
