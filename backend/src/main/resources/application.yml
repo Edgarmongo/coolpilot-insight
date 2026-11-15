@@ -8,6 +8,12 @@ spring:
     multipart:
       max-file-size: 20MB
       max-request-size: 100MB
+  # Boot 4 使用 Jackson 3（tools.jackson），部分旧属性已移除（如 serialization.fail-on-empty-beans），
+  # 写了会导致 JacksonProperties 绑定失败、整个 Web 上下文起不来。
+  jackson:
+    deserialization:
+      # 前端按 code/message 处理错误，未知字段不应导致 400（网关或多传字段时容忍）
+      fail-on-unknown-properties: false
   # Flyway：唯一数据库结构变更入口（ADR-001）
   # 禁止 baseline-on-migrate —— 只允许在空库上从 V1 建起
   flyway:

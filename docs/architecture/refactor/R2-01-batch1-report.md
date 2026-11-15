@@ -67,7 +67,7 @@ spring-boot-starter-validation:jar:4.1.2:compile
 | 项 | 原因 | 影响 |
 |---|---|---|
 | `common/enums` 抽取 | 业务枚举分散在 8 个模块，应先随模块迁移归位，单独抽会二次改 | 不阻塞 |
-| 全局 Jackson 序列化规范 | 改全局配置会影响所有接口返回格式，需单独一轮回归 | 不阻塞 |
+| ~~全局 Jackson 序列化规范~~ | **已完成**：仅开启 `fail-on-unknown-properties=false`，字段与时间格式未变 | — |
 | 分页请求对象（`PageQuery`） | 现有各接口用 `page/size` 裸参数，统一需改 12 个 Controller | 不阻塞 |
 
 ## 6. 风险与兼容性
@@ -77,6 +77,20 @@ spring-boot-starter-validation:jar:4.1.2:compile
 | 登录参数校验更严格 | 空手机号由 401 变 400，前端错误提示分支需确认（`request.js` 已按 `message` 展示，无影响） |
 | Trace ID 不拒绝非法输入 | 有意设计：观测手段不应让业务失败 |
 | `MDC` 与 `RequestContext` 需同时清理 | 两者都基于 ThreadLocal/ThreadLocal-MDC，线程池场景都要注意 |
+
+## 6.1 Jackson 序列化（补充完成）
+
+只做了一件事：`spring.jackson.deserialization.fail-on-unknown-properties: false`。
+
+**没有**改时间格式、没有改 null 策略——验证过 `createdAt` 仍为 `2026-11-04T04:30:27`，
+分页字段仍为 `records/total/current/size/pages`，前端零影响。
+
+过程中踩坑：Boot 4 使用 **Jackson 3**（`tools.jackson`），
+`spring.jackson.serialization.fail-on-empty-beans` 属性已不存在，
+写上会导致 `JacksonProperties` 绑定失败 → **整个 Web 上下文起不来，57 个测试报错**。
+已移除该属性并在配置里注明原因。
+
+验证：带未知字段 `unexpectedField` 登录 → 200（此前会被 Jackson 拒绝）。
 
 ## 7. 结论
 
