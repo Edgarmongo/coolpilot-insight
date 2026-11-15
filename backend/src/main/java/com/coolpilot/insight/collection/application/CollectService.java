@@ -1,4 +1,4 @@
-package com.coolpilot.insight.service;
+package com.coolpilot.insight.collection.application;
 
 import java.util.List;
 import java.util.Map;

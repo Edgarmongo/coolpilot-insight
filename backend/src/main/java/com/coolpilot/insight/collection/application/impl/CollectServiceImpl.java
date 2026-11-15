@@ -1,13 +1,22 @@
-package com.coolpilot.insight.service.impl;
+package com.coolpilot.insight.collection.application.impl;
+
+import com.coolpilot.insight.collection.domain.CollectionTask;
+import com.coolpilot.insight.collection.domain.CollectionTaskItem;
+import com.coolpilot.insight.collection.domain.CollectionTaskLog;
+import com.coolpilot.insight.collection.domain.CollectionCheckpoint;
 
 import com.alibaba.fastjson2.JSON;
 import com.coolpilot.insight.integration.collection.CollectionClient;
 import com.coolpilot.insight.integration.common.CommandResult;
 import com.coolpilot.insight.integration.config.AppProperties;
+import com.coolpilot.insight.collection.infrastructure.persistence.CollectionTaskMapper;
+import com.coolpilot.insight.collection.infrastructure.persistence.CollectionTaskItemMapper;
+import com.coolpilot.insight.collection.infrastructure.persistence.CollectionTaskLogMapper;
+import com.coolpilot.insight.collection.infrastructure.persistence.CollectionCheckpointMapper;
 import com.coolpilot.insight.entity.*;
 import com.coolpilot.insight.mapper.*;
 import com.coolpilot.insight.service.CleanService;
-import com.coolpilot.insight.service.CollectService;
+import com.coolpilot.insight.collection.application.CollectService;
 import com.coolpilot.insight.service.VideoService;
 import com.coolpilot.insight.utils.CollectUtils;
 import org.slf4j.Logger;

@@ -13,7 +13,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @MapperScan({
         "com.coolpilot.insight.mapper",
         "com.coolpilot.insight.system.infrastructure.persistence",
-        "com.coolpilot.insight.source.infrastructure.persistence"
+        "com.coolpilot.insight.source.infrastructure.persistence",
+        "com.coolpilot.insight.collection.infrastructure.persistence"
 })
 public class CoolPilotInsightApplication {
     public static void main(String[] args) {

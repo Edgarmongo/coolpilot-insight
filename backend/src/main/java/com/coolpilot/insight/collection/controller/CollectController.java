@@ -1,11 +1,11 @@
-package com.coolpilot.insight.controller;
+package com.coolpilot.insight.collection.controller;
 
 import com.coolpilot.insight.common.security.RequireRole;
 import com.coolpilot.insight.integration.config.AppProperties;
 import com.coolpilot.insight.dto.CollectRequest;
 import com.coolpilot.insight.common.web.Result;
 import com.coolpilot.insight.common.security.RequestContext;
-import com.coolpilot.insight.service.CollectService;
+import com.coolpilot.insight.collection.application.CollectService;
 import com.coolpilot.insight.utils.CollectUtils;
 import com.coolpilot.insight.system.application.AuditService;
 import com.coolpilot.insight.common.exception.BizException;

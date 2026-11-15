@@ -1,7 +1,7 @@
 package com.coolpilot.insight.content.application;
 
-import com.coolpilot.insight.mapper.CollectionTaskItemMapper;
-import com.coolpilot.insight.mapper.CollectionTaskMapper;
+import com.coolpilot.insight.collection.infrastructure.persistence.CollectionTaskItemMapper;
+import com.coolpilot.insight.collection.infrastructure.persistence.CollectionTaskMapper;
 import com.coolpilot.insight.mapper.VideoGrantMapper;
 import com.coolpilot.insight.system.application.PermissionService;
 import com.coolpilot.insight.common.exception.BizException;

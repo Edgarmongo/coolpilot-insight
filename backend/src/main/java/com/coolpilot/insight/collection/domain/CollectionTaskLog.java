@@ -1,4 +1,4 @@
-package com.coolpilot.insight.entity;
+package com.coolpilot.insight.collection.domain;
 
 import lombok.Data;
 

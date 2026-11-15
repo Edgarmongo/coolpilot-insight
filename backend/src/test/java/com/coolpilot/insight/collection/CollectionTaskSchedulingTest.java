@@ -1,10 +1,11 @@
-package com.coolpilot.insight;
+package com.coolpilot.insight.collection;
 
-import com.coolpilot.insight.entity.CollectionTask;
-import com.coolpilot.insight.entity.CollectionTaskItem;
+import com.coolpilot.insight.AbstractIntegrationTest;
+import com.coolpilot.insight.collection.domain.CollectionTask;
+import com.coolpilot.insight.collection.domain.CollectionTaskItem;
 import com.coolpilot.insight.entity.Video;
-import com.coolpilot.insight.mapper.CollectionTaskItemMapper;
-import com.coolpilot.insight.mapper.CollectionTaskMapper;
+import com.coolpilot.insight.collection.infrastructure.persistence.CollectionTaskItemMapper;
+import com.coolpilot.insight.collection.infrastructure.persistence.CollectionTaskMapper;
 import com.coolpilot.insight.mapper.VideoMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

@@ -1,6 +1,8 @@
-package com.coolpilot.insight.mapper;
+package com.coolpilot.insight.collection.infrastructure.persistence;
 
-import com.coolpilot.insight.entity.CollectionTaskItem;
+import com.coolpilot.insight.mapper.BaseCrudMapper;
+
+import com.coolpilot.insight.collection.domain.CollectionTaskItem;
 
 import org.apache.ibatis.annotations.Param;
 
