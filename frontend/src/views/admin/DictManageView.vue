@@ -11,7 +11,7 @@
       <el-card class="side" shadow="never">
         <div class="side-head">
           <span>字典类型</span>
-          <el-button size="small" link type="primary" @click="openType">新建</el-button>
+          <el-button v-if="hasPerm('system:dict:manage')" size="small" link type="primary" @click="openType">新建</el-button>
         </div>
         <el-menu :default-active="activeCode" class="type-menu" @select="selectType">
           <el-menu-item v-for="t in types" :key="t.typeCode" :index="t.typeCode">
@@ -24,7 +24,7 @@
       <el-card class="main" shadow="never">
         <div class="side-head">
           <span>{{ activeName || '请选择字典类型' }}</span>
-          <el-button size="small" type="primary" :disabled="!activeCode" @click="openItem">新增字典项</el-button>
+          <el-button v-if="hasPerm('system:dict:manage')" size="small" type="primary" :disabled="!activeCode" @click="openItem">新增字典项</el-button>
         </div>
         <el-table :data="items" v-loading="loading" class="tbl">
           <el-table-column prop="itemValue" label="值" width="180" />
@@ -84,6 +84,9 @@ import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '../../api/request'
 import { dictApi } from '../../api'
+import { usePermission } from '../../composables/usePermission'
+
+const { hasPerm } = usePermission()
 
 const types = ref([])
 const items = ref([])

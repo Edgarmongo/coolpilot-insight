@@ -5,7 +5,7 @@
         <h2>角色管理</h2>
         <p class="sub">RBAC 角色与权限分配。内置角色不可删除，仍有用户关联的角色需先解除绑定。</p>
       </div>
-      <el-button type="primary" @click="openCreate">新建角色</el-button>
+      <el-button v-if="hasPerm('system:role:manage')" type="primary" @click="openCreate">新建角色</el-button>
     </div>
 
     <el-table :data="roles" v-loading="loading" class="tbl">
@@ -27,8 +27,9 @@
       </el-table-column>
       <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" link type="primary" @click="openPerm(row)">分配权限</el-button>
+          <el-button v-if="hasPerm('system:role:manage')" size="small" link type="primary" @click="openPerm(row)">分配权限</el-button>
           <el-button
+            v-if="hasPerm('system:role:manage')"
             size="small"
             type="danger"
             link
@@ -85,12 +86,15 @@
 import { nextTick, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { roleApi, menuApi } from '../../api'
+import { usePermission } from '../../composables/usePermission'
 
 const roles = ref([])
 const loading = ref(false)
 const dialog = ref(false)
 const saving = ref(false)
 const form = ref({ code: '', name: '' })
+
+const { hasPerm } = usePermission()
 
 const permDrawer = ref(false)
 const permRole = ref({})
