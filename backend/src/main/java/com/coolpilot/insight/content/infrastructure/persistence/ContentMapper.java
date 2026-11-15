@@ -31,4 +31,10 @@ public interface ContentMapper {
 
     @Update("UPDATE ct_content SET normalize_status = #{status} WHERE id = #{id}")
     int updateNormalizeStatus(@Param("id") Long id, @Param("status") String status);
+
+    @Select("SELECT * FROM ct_content ORDER BY id DESC LIMIT #{limit} OFFSET #{offset}")
+    java.util.List<Content> selectPage(@Param("offset") int offset, @Param("limit") int limit);
+
+    @Select("SELECT COUNT(*) FROM ct_content")
+    long countAll();
 }

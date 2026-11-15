@@ -30,4 +30,10 @@ public interface ContentCommentMapper {
 
     @Select("SELECT * FROM ct_comment WHERE content_id = #{contentId} ORDER BY id LIMIT #{limit}")
     List<ContentComment> selectByContent(@Param("contentId") Long contentId, @Param("limit") int limit);
+
+    @Select("SELECT * FROM ct_comment WHERE content_id = #{contentId} "
+            + "ORDER BY published_at DESC, id DESC LIMIT #{limit} OFFSET #{offset}")
+    List<ContentComment> selectPageByContent(@Param("contentId") Long contentId,
+                                             @Param("offset") int offset,
+                                             @Param("limit") int limit);
 }
