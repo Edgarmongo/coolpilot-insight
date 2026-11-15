@@ -12,7 +12,8 @@ import java.io.File;
 @EnableScheduling
 @MapperScan({
         "com.coolpilot.insight.mapper",
-        "com.coolpilot.insight.system.infrastructure.persistence"
+        "com.coolpilot.insight.system.infrastructure.persistence",
+        "com.coolpilot.insight.source.infrastructure.persistence"
 })
 public class CoolPilotInsightApplication {
     public static void main(String[] args) {
