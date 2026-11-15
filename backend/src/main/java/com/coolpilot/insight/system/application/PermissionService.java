@@ -28,23 +28,28 @@ public class PermissionService {
     /**
      * 是否管理员。
      *
-     * <p><b>过渡期双读</b>：以 RBAC（user_role → ADMIN）为准，
-     * 同时比对旧 {@code user.role}，不一致时打 WARN。
-     * 不一致说明迁移有遗漏——这是唯一能在不阻塞业务的前提下发现权限错位的手段。
-     * 待连续观察无差异后，删除 legacy 判断与告警。
+     * <p>以 RBAC 为准（user_role → ADMIN）。**兜底**：当某用户在 RBAC 中一个角色
+     * 都没有时（历史数据、或绕过注册流程创建的用户），回落到旧 {@code user.role}
+     * 并打 WARN，避免这类账号被一刀切成无权限。
+     *
+     * <p>兜底只在"RBAC 完全没数据"时生效；一旦该用户被分配了任一角色，就以 RBAC 为准。
+     * 观察日志中不再出现该 WARN 后，可删除兜底。
      */
     public boolean isAdmin() {
         Long userId = RequestContext.getUserId();
         if (userId == null) {
             return false;
         }
-        boolean byRbac = permissionQueryService.hasRole(userId, "ADMIN");
-        Integer legacyRole = RequestContext.getRole();
-        boolean byLegacy = legacyRole != null && legacyRole == ROLE_ADMIN;
-        if (byRbac != byLegacy) {
-            log.warn("[rbac] 判定不一致 userId={} rbac={} legacy={}", userId, byRbac, byLegacy);
+        java.util.Set<String> roles = permissionQueryService.roleCodesOf(userId);
+        if (roles.isEmpty()) {
+            Integer legacyRole = RequestContext.getRole();
+            boolean byLegacy = legacyRole != null && legacyRole == ROLE_ADMIN;
+            if (byLegacy) {
+                log.warn("[rbac] userId={} 无角色映射，回落 legacy role=1", userId);
+            }
+            return byLegacy;
         }
-        return byRbac;
+        return roles.contains("ADMIN");
     }
 
     public Long currentUserId() {
