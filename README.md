@@ -451,6 +451,17 @@ npm run dev
 
 ---
 
+## 🧪 测试
+
+```bash
+cd dy-backend && mvn -s ../docker/maven-settings.xml test
+```
+
+集成测试用 Testcontainers 起真实 MySQL（需本机 Docker），首个测试类启动约 20 秒。
+当前覆盖：Mapper CRUD 语义与评论幂等、采集任务原子领取、注册登录鉴权，共 17 个用例。
+
+---
+
 ## 📄 相关文档
 
 - [需求设计文档](需求设计（抖音多视频评论分析与可视化平台）.md) — 完整的需求分析、功能设计、数据表设计

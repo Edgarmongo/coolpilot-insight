@@ -89,6 +89,25 @@ int clearActiveFlag(@Param("id") Long id);
 `AdminController` 原返回 MP 的 `Page<User>`，前端读 `data.records` / `data.total`。
 改为手写分页后仍构造同名 Map 字段（`records/total/size/current/pages`），**前端零改动**。
 
+## 4.1 迁移中发现并修复的缺陷：Flyway 静默失效
+
+**这是本次升级最危险的一个坑，靠测试才暴露出来。**
+
+Spring Boot 4 把自动配置拆成细粒度模块，Flyway 的自动配置被移到了独立的
+`spring-boot-flyway` artifacts。只保留 `flyway-core` + `flyway-mysql` 时，
+应用**不会执行任何迁移，也不报错**——启动日志里连一条 Flyway 记录都没有。
+
+为什么升级后没立刻发现：当时验证用的数据库是旧库，schema 早已到 V8，
+不缺表，所以一切正常。换成空库（集成测试用的 Testcontainers）立刻报
+`Table 'coolpilot_insight.user' doesn't exist`。
+
+修复：补上 `org.springframework.boot:spring-boot-flyway`。
+验证：旧库启动输出 `Current version of schema 'coolpilot_insight': 8` +
+`Schema is up to date. No migration necessary.`；空库由 Flyway 建全 25 张表。
+
+> 教训：Boot 4 的「模块化自动配置」会让缺失模块表现为**静默失效**而非启动失败。
+> 任何依赖自动配置的能力（Flyway、Actuator、监控等）都必须验证其确实生效。
+
 ## 5. Druid 为何被移除
 
 `druid-spring-boot-3-starter 1.2.28`（Maven 上最高版本）在 Boot 4 启动即崩：
@@ -109,6 +128,9 @@ Boot 4 把自动配置拆成模块，`DataSourceProperties` 已迁至独立 arti
 |---|---|---|
 | 连接池监控面板 | `spring-boot-starter-actuator` + Micrometer，`/actuator/metrics/hikaricp.connections.*` | 已接入 |
 | 慢 SQL 查看 | p6spy（`P6SPY_ENABLED=true` 开启，默认关闭） | 已接入 |
+
+> p6spy 的开关属性是 `decorator.datasource.p6spy.enable-logging`，
+> 写 `enable` / `enabled` 都无效（实测），会导致它在生产环境静默常开。
 | SQL 防火墙（WallFilter） | 未替代 —— 原项目从未启用，且会误杀动态 SQL | 不需要 |
 
 **安全提醒**：`/actuator/health` 当前 `show-details: always`，会暴露数据库类型与磁盘信息。
@@ -147,6 +169,23 @@ Boot 4 把自动配置拆成模块，`DataSourceProperties` 已迁至独立 arti
 > 注意：容器内 Python 为 **3.10.12**（Ubuntu 22.04 自带），而非 README 早期写的 3.12。
 > 采集脚本目前在 3.10 下运行正常，README 已同步更正。
 
+### 6.2 自动化测试
+
+本次首次建立测试基线（此前项目零测试），用 Testcontainers 起真实 MySQL：
+
+| 测试类 | 用例数 | 覆盖 |
+|---|---|---|
+| `MapperCrudSemanticsTest` | 8 | insert 回填自增 id、updateById 跳过 null、selectById/deleteById、评论双唯一键、无 cid 时指纹去重 |
+| `CollectionTaskSchedulingTest` | 3 | claimPending 原子领取（第二次返回 0）、非 PENDING 拒绝、clearActiveFlag 真正写 NULL |
+| `UserAuthFlowTest` | 6 | 注册→登录、BCrypt 不落明文、重复手机号、密码错误、两次密码不一致、哨兵账号不可登录 |
+
+**结果：17/17 通过。** 运行 `mvn test` 需要本机 Docker 可用。
+
+两个容器生命周期相关的坑已处理：
+- 不用 H2：迁移脚本含 utf8mb4、CHECK、JSON 列，H2 跑不过 Flyway
+- 容器在 JVM 级共享（手动 start、不随测试类停止）：若交给 `@Container` 管理，
+  第二个测试类会另起容器，而缓存的 Spring 上下文仍指向旧端口，报 `Communications link failure`
+
 ## 7. 回滚方式
 
 分支未合入 `main`，直接切回即可：
@@ -159,7 +198,8 @@ git checkout main
 
 ## 8. 遗留待办
 
-- [ ] 补冒烟测试：评论入库幂等、AI 结果落库、报告导出（把本次人工回归固化）
+- [x] 补冒烟测试 —— 已建立 17 个集成用例（见 §6.2）
+- [ ] 补 AI 分析链路测试（需 mock Flask 或起容器，暂未覆盖）
 - [x] 验证容器镜像构建与运行 —— 已实际 build 并启动整套容器（见 §6.1）
 - [ ] 仓库缺 `.env`，`docker compose` 因 `JWT_SECRET` 必填而无法执行
 - [x] 评估是否用 p6spy 补回 Druid 的慢 SQL 能力 —— 已接入 actuator + p6spy（见 §5.1）

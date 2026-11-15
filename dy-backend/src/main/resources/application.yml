@@ -45,7 +45,8 @@ management:
 decorator:
   datasource:
     p6spy:
-      enable: ${P6SPY_ENABLED:false}
+      # 注意：该 starter 的开关是 enable-logging，不是 enable/enabled（实测无效）
+      enable-logging: ${P6SPY_ENABLED:false}
       logging: slf4j
       log-format: "\n### SQL %(executionTime) ms | %(category) | %(sql)"
 
