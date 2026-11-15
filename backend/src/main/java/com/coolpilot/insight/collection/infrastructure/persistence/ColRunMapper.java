@@ -41,4 +41,20 @@ public interface ColRunMapper {
             + "total_execution_count = #{totalExecutionCount}, error_summary = #{errorSummary} "
             + "WHERE id = #{id}")
     int updateResult(ColRun run);
+
+    @Select("SELECT * FROM col_run WHERE status = 'PENDING' ORDER BY id LIMIT 1")
+    ColRun selectPendingOldest();
+
+    /** 原子领取：只有 PENDING 能被改成 RUNNING。 */
+    @Update("UPDATE col_run SET status = 'RUNNING', started_at = NOW() WHERE id = #{id} AND status = 'PENDING'")
+    int claimPending(@Param("id") Long id);
+
+    /** 找出超时仍在 RUNNING 的运行（worker 崩溃/进程重启导致）。 */
+    @Select("SELECT * FROM col_run WHERE status = 'RUNNING' "
+            + "AND started_at < DATE_SUB(NOW(), INTERVAL #{minutes} MINUTE)")
+    List<ColRun> selectStaleRunning(@Param("minutes") int minutes);
+
+    @Update("UPDATE col_run SET status = 'FAILED', finished_at = NOW(), "
+            + "error_summary = #{reason} WHERE id = #{id} AND status = 'RUNNING'")
+    int markFailed(@Param("id") Long id, @Param("reason") String reason);
 }

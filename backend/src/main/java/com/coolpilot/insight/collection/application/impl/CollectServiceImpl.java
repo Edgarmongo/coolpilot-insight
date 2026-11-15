@@ -82,6 +82,8 @@ public class CollectServiceImpl implements CollectService {
     @Autowired
     private CollectionQueryService queryService;
     @Autowired
+    private com.coolpilot.insight.collection.application.RunApplicationService runApplicationService;
+    @Autowired
     private com.coolpilot.insight.collection.infrastructure.persistence.ColRunMapper runMapper;
 
     /** 同一时刻只允许一个采集批次在跑（Chrome 单实例限制） */
@@ -192,37 +194,74 @@ public class CollectServiceImpl implements CollectService {
         if (busy.get()) {
             return;
         }
-        CollectionTask candidate = taskMapper.selectPendingOldest();
+        // 领取单位从 Task 改为 Run（C-03）：Task 只是定义态，PENDING 只属于 Run
+        com.coolpilot.insight.collection.domain.ColRun candidate = runMapper.selectPendingOldest();
         if (candidate == null) {
             return;
         }
-        // 条件更新实现原子领取：只有一个实例能把它从 PENDING 改成 RUNNING
-        CollectionTask claim = new CollectionTask();
-        claim.setId(candidate.getId());
-        claim.setStatus("RUNNING");
-        claim.setStartedAt(LocalDateTime.now());
-        int affected = taskMapper.claimPending(candidate.getId(), claim.getStartedAt());
-        if (affected != 1) {
+        int claimed = runMapper.claimPending(candidate.getId());
+        if (claimed != 1) {
             return;
         }
-        writeLog(candidate.getId(), null, "STATUS_CHANGE", "INFO", "任务开始执行", null);
+        writeLog(candidate.getTaskId(), null, "STATUS_CHANGE", "INFO",
+                "运行 #" + candidate.getRunNo() + " 开始执行", null);
         busy.set(true);
         worker.submit(() -> {
             try {
-                runTask(candidate.getId());
+                int[] r = runTask(candidate.getTaskId());
+                runApplicationService.finish(candidate.getId(), deriveRunStatus(r), r[0], r[1], null);
             } catch (Exception e) {
-                log.error("[collect] 任务 {} 执行异常", candidate.getId(), e);
-                finishWithError(candidate.getId(), e.getMessage());
+                log.error("[collect] 运行 {} 执行异常", candidate.getId(), e);
+                runApplicationService.finish(candidate.getId(), "FAILED", 0, 0,
+                        String.valueOf(e.getMessage()));
             } finally {
                 busy.set(false);
             }
         });
     }
 
-    private void runTask(Long taskId) {
+    /**
+     * 清扫僵尸 Run：worker 崩溃或进程重启会让 Run 永远停在 RUNNING，
+     * 而 Task 的 claimIdle 要求 IDLE —— 结果是该任务再也无法触发。
+     *
+     * <p>超过 30 分钟仍 RUNNING 视为异常终止（单次采集超时上限 10 分钟），
+     * 置 FAILED 并把 Task 释放回 IDLE。
+     */
+    @Scheduled(fixedDelay = 60_000, initialDelay = 20_000)
+    public void sweepStaleRuns() {
+        try {
+            for (com.coolpilot.insight.collection.domain.ColRun r
+                    : runMapper.selectStaleRunning(30)) {
+                if (runMapper.markFailed(r.getId(), "worker interrupted or timeout") == 1) {
+                    taskMapper.releaseToIdle(r.getTaskId(), "IDLE");
+                    writeLog(r.getTaskId(), null, "STATUS_CHANGE", "WARN",
+                            "运行 #" + r.getRunNo() + " 超时，已标记失败", null);
+                    log.warn("[collect] 清扫僵尸 run id={} task={}", r.getId(), r.getTaskId());
+                }
+            }
+        } catch (Exception e) {
+            log.error("[collect] 僵尸 run 清扫失败", e);
+        }
+    }
+
+    /** 计数 → Run 终态。取消不算失败（裁决 DECISION-02 §3）。 */
+    private String deriveRunStatus(int[] r) {
+        int success = r[0];
+        int failed = r[1];
+        int cancelled = r[2];
+        if (cancelled > 0) {
+            return "CANCELLED";
+        }
+        if (failed == 0) {
+            return "COMPLETED";
+        }
+        return success == 0 ? "FAILED" : "PARTIAL_SUCCESS";
+    }
+
+    private int[] runTask(Long taskId) {
         CollectionTask task = taskMapper.selectById(taskId);
         if (task == null) {
-            return;
+            return new int[]{0, 0, 0};
         }
         Map<String, Object> params = paramsOf(task);
         int maxComments = params.get("maxComments") == null ? 300
@@ -258,23 +297,15 @@ public class CollectServiceImpl implements CollectService {
             }
         }
 
+        // 结果只写回 statistics 字段；终态由 Run 承载（Task 不得被 Run 结果污染）
         CollectionTask up = new CollectionTask();
         up.setId(taskId);
         up.setSuccessItems(success);
         up.setFailedItems(failed);
-        up.setFinishedAt(LocalDateTime.now());
-        if (cancelled > 0) {
-            up.setStatus("CANCELLED");
-        } else if (failed == 0) {
-            up.setStatus("SUCCESS");
-        } else if (success == 0) {
-            up.setStatus("FAILED");
-        } else {
-            up.setStatus("PARTIAL_SUCCESS");
-        }
         taskMapper.updateById(up);
         writeLog(taskId, null, "STATUS_CHANGE", "INFO",
-                "任务结束：成功 " + success + " / 失败 " + failed, null);
+                "本次运行结束：成功 " + success + " / 失败 " + failed, null);
+        return new int[]{success, failed, cancelled};
     }
 
     private boolean runItem(CollectionTask task, CollectionTaskItem item, int maxComments, String mode) {
