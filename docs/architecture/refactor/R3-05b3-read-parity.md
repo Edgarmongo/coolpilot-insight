@@ -76,5 +76,21 @@ BUILD SUCCESS
    需要确认用 `parent_external_id` 能否表达，否则要在 `ct_comment` 补列
 4. 切换后先跑 `mvn test`，再验证 `/api/comment/list?videoId=1` 返回 19 条
 
-> 第 3 点是最可能踩的坑：旧表有 `root_cid` 而新表没有，
-> 应在切换前确认楼中楼查询的实际用法，而不是想当然。
+> 第 3 点已核实（见 §8）：`root_cid` 只被查询带出、业务逻辑从未读取，不构成阻塞。
+
+## 8. 已核实：`root_cid` 不影响切换
+
+上一节把「旧表有 `root_cid`、新表没有」列为潜在阻塞点。核实结果：
+
+| 检查 | 结果 |
+|---|---|
+| `CommentMapper.xml` 中的 `root_cid` | 仅出现在 `resultMap`、`Base_Column_List`、insert/update 的 if 分支，**无任何 where/group/order 使用** |
+| `CommentMapper.java:93` | 自定义 SQL 里 `c.root_cid AS rootCid` 只是带出字段 |
+| `CommentServiceImpl` 楼中楼组装（110–135 行） | 只用 `cid` 建索引、用 `parentCid` 挂父子；`rootCid` **零引用** |
+
+结论：`rootCid` 是历史遗留的冗余字段，切换时可以：
+
+- 查询里把 `root_cid AS rootCid` 删除，或固定返回 `null`
+- 前端如果读了该字段（需单独确认），保持返回 `null` 即可
+
+**不需要给 `ct_comment` 补列。** 这消除了切换路径上的一个不确定项。

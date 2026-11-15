@@ -85,7 +85,13 @@ R0/R1 的 19 份文档在 `docs/architecture/refactor/`（`6063ecf`）。
 
 ### 验收
 
-`mvn test` 57/57 + `/api/comment/list?videoId=1` 返回 19 条 + `/api/overview` 数据不变。
+`mvn test` 62/62 + `/api/comment/list?videoId=1` 返回 19 条 + `/api/overview` 数据不变。
+
+### 已排除的阻塞点
+
+`root_cid`（旧表有、新表没有）经核实**只被查询带出、业务逻辑从未读取**，
+楼中楼组装只用 `cid` + `parentCid`。切换时把该字段删掉或返回 null 即可，
+**不需要给 `ct_comment` 补列**。详见 `R3-05b3-read-parity.md` §8。
 
 ---
 
