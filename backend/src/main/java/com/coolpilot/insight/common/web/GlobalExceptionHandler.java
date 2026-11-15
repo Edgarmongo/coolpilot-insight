@@ -71,6 +71,20 @@ public class GlobalExceptionHandler {
                 .body(Result.fail(ErrorCode.STATE_CONFLICT.getCode(), e.getMessage()));
     }
 
+    /**
+     * 路径不存在。
+     *
+     * <p>Spring Boot 4 用 {@code NoResourceFoundException} 表达静态资源/路径未命中；
+     * 若不单独处理会被下面的兜底吞成 500，监控上表现为"内部错误"，掩盖了真实的 404。
+     */
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<Result<String>> handleNotFound(
+            org.springframework.web.servlet.resource.NoResourceFoundException e) {
+        log.warn("[路径不存在] {}", e.getMessage());
+        return ResponseEntity.status(404)
+                .body(Result.fail(ErrorCode.NOT_FOUND.getCode(), "接口不存在"));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Result<String>> handleException(Exception e) {
         // 记录完整堆栈，否则线上问题无法定位；对外只给通用文案，不泄露内部细节

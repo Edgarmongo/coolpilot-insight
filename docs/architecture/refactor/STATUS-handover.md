@@ -1,7 +1,7 @@
 # 重构状态与交接（截至 R3-04）
 
-最后更新：2026-11-15 18:52
-HEAD：`97e2915`　测试基线：**50/50 通过**　容器：四服务 healthy　工作区：干净
+最后更新：2026-11-15 19:00
+HEAD：R3-05a 提交后　测试基线：**57/57 通过**　容器：四服务 healthy　工作区：干净
 
 ---
 
@@ -30,6 +30,7 @@ HEAD：`97e2915`　测试基线：**50/50 通过**　容器：四服务 healthy�
 | R3-03a | 外部调用收敛到 `integration` | `8bc1fc0` | `r3-03a-integration` | 50 |
 | R3-03b | 采集任务域迁入 `collection` | `6497a0c` | `r3-03b-collection` | 50 |
 | R3-04 | 采集服务 HTTP 化（stub 适配器） | `97e2915` | `r3-04-collection-http` | 50 + Python 9 |
+| R3-05a | content 表 + ingest 服务（未切库） | 见 git log | `r3-05a-content-ingest` | 57 |
 
 R0/R1 的 19 份审计与架构文档在 `docs/architecture/refactor/`，提交 `6063ecf`。
 
@@ -43,7 +44,7 @@ R0/R1 的 19 份审计与架构文档在 `docs/architecture/refactor/`，提交 
 | `system` | ✅ | `user`/`system_config`/`audit_log`（旧名） | 用户/配置/审计可用，`sys_role` 表待切库 |
 | `source` | ✅ | `ds_source`/`ds_account`/`ds_keyword`（新） | 唯一已用新表的模块 |
 | `collection` | ✅ 代码 / ❌ 表名 | `collection_task*`（旧名） | 任务域已迁包，表未改名 |
-| `content` | ❌ | `video`/`comment`/`video_grant`（旧名） | **最大缺口** |
+| `content` | ◐ 新表+ingest 就位 | `ct_*`（新，V10）+ 旧表并存 | 写入口已建；读路径仍走旧表 |
 | `analysis` | ❌ | `analysis_*`/`comment_analysis` 等（旧名） | 仍全在旧 `service`/`entity` 包 |
 | `analytics` | ❌ | `report`/`report_version`（旧名） | 同上 |
 | `lead` | ❌ | 无 | 全新领域 |
@@ -56,7 +57,7 @@ R0/R1 的 19 份审计与架构文档在 `docs/architecture/refactor/`，提交 
 
 ## 四、剩余工作（按依赖顺序）
 
-### R3-05a · content 实体与持久层迁移（不切库）
+### R3-05a · content 表与 ingest（✅ 已完成）
 
 | 项 | 内容 |
 |---|---|
