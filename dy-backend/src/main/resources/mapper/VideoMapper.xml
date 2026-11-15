@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 由 tools/codegen/generate_mybatis_crud.py 生成，替代 MyBatis-Plus BaseMapper。
+     语义与 MP 一致：insert/updateById 跳过 null 字段，id 自增回填。手工业务 SQL 请追加在本文件末尾。 -->
+<mapper namespace="com.coolskyai.coolpilot.insight.mapper.VideoMapper">
+
+    <resultMap id="BaseResultMap" type="com.coolskyai.coolpilot.insight.entity.Video">
+        <id column="id" property="id"/>
+        <result column="platform" property="platform"/>
+        <result column="aweme_id" property="awemeId"/>
+        <result column="title" property="title"/>
+        <result column="author_name" property="authorName"/>
+        <result column="author_id" property="authorId"/>
+        <result column="cover_url" property="coverUrl"/>
+        <result column="publish_time" property="publishTime"/>
+        <result column="digg_count" property="diggCount"/>
+        <result column="comment_count" property="commentCount"/>
+        <result column="share_count" property="shareCount"/>
+        <result column="status" property="status"/>
+        <result column="first_discovered_at" property="firstDiscoveredAt"/>
+        <result column="last_collected_at" property="lastCollectedAt"/>
+        <result column="metadata_json" property="metadataJson"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">id, platform, aweme_id, title, author_name, author_id, cover_url, publish_time, digg_count, comment_count, share_count, status, first_discovered_at, last_collected_at, metadata_json, created_at, updated_at</sql>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM video WHERE id = #{id}
+    </select>
+
+    <select id="selectBatchIds" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM video
+        WHERE id IN
+        <foreach collection="collection" item="it" open="(" separator="," close=")">#{it}</foreach>
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO video
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="platform != null">platform,</if>
+            <if test="awemeId != null">aweme_id,</if>
+            <if test="title != null">title,</if>
+            <if test="authorName != null">author_name,</if>
+            <if test="authorId != null">author_id,</if>
+            <if test="coverUrl != null">cover_url,</if>
+            <if test="publishTime != null">publish_time,</if>
+            <if test="diggCount != null">digg_count,</if>
+            <if test="commentCount != null">comment_count,</if>
+            <if test="shareCount != null">share_count,</if>
+            <if test="status != null">status,</if>
+            <if test="firstDiscoveredAt != null">first_discovered_at,</if>
+            <if test="lastCollectedAt != null">last_collected_at,</if>
+            <if test="metadataJson != null">metadata_json,</if>
+            <if test="createdAt != null">created_at,</if>
+            <if test="updatedAt != null">updated_at,</if>
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="platform != null">#{platform},</if>
+            <if test="awemeId != null">#{awemeId},</if>
+            <if test="title != null">#{title},</if>
+            <if test="authorName != null">#{authorName},</if>
+            <if test="authorId != null">#{authorId},</if>
+            <if test="coverUrl != null">#{coverUrl},</if>
+            <if test="publishTime != null">#{publishTime},</if>
+            <if test="diggCount != null">#{diggCount},</if>
+            <if test="commentCount != null">#{commentCount},</if>
+            <if test="shareCount != null">#{shareCount},</if>
+            <if test="status != null">#{status},</if>
+            <if test="firstDiscoveredAt != null">#{firstDiscoveredAt},</if>
+            <if test="lastCollectedAt != null">#{lastCollectedAt},</if>
+            <if test="metadataJson != null">#{metadataJson},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+            <if test="updatedAt != null">#{updatedAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateById">
+        UPDATE video
+        <set>
+            <if test="platform != null">platform = #{platform},</if>
+            <if test="awemeId != null">aweme_id = #{awemeId},</if>
+            <if test="title != null">title = #{title},</if>
+            <if test="authorName != null">author_name = #{authorName},</if>
+            <if test="authorId != null">author_id = #{authorId},</if>
+            <if test="coverUrl != null">cover_url = #{coverUrl},</if>
+            <if test="publishTime != null">publish_time = #{publishTime},</if>
+            <if test="diggCount != null">digg_count = #{diggCount},</if>
+            <if test="commentCount != null">comment_count = #{commentCount},</if>
+            <if test="shareCount != null">share_count = #{shareCount},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="firstDiscoveredAt != null">first_discovered_at = #{firstDiscoveredAt},</if>
+            <if test="lastCollectedAt != null">last_collected_at = #{lastCollectedAt},</if>
+            <if test="metadataJson != null">metadata_json = #{metadataJson},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM video WHERE id = #{id}
+    </delete>
+</mapper>

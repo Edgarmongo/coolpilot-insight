@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 由 tools/codegen/generate_mybatis_crud.py 生成，替代 MyBatis-Plus BaseMapper。
+     语义与 MP 一致：insert/updateById 跳过 null 字段，id 自增回填。手工业务 SQL 请追加在本文件末尾。 -->
+<mapper namespace="com.coolskyai.coolpilot.insight.mapper.KeywordVideoMapper">
+
+    <resultMap id="BaseResultMap" type="com.coolskyai.coolpilot.insight.entity.KeywordVideo">
+        <id column="id" property="id"/>
+        <result column="keyword_id" property="keywordId"/>
+        <result column="video_id" property="videoId"/>
+        <result column="discovered_at" property="discoveredAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">id, keyword_id, video_id, discovered_at</sql>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM keyword_video WHERE id = #{id}
+    </select>
+
+    <select id="selectBatchIds" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM keyword_video
+        WHERE id IN
+        <foreach collection="collection" item="it" open="(" separator="," close=")">#{it}</foreach>
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO keyword_video
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="keywordId != null">keyword_id,</if>
+            <if test="videoId != null">video_id,</if>
+            <if test="discoveredAt != null">discovered_at,</if>
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="keywordId != null">#{keywordId},</if>
+            <if test="videoId != null">#{videoId},</if>
+            <if test="discoveredAt != null">#{discoveredAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateById">
+        UPDATE keyword_video
+        <set>
+            <if test="keywordId != null">keyword_id = #{keywordId},</if>
+            <if test="videoId != null">video_id = #{videoId},</if>
+            <if test="discoveredAt != null">discovered_at = #{discoveredAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM keyword_video WHERE id = #{id}
+    </delete>
+</mapper>

@@ -1,6 +1,5 @@
 package com.coolskyai.coolpilot.insight.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.coolskyai.coolpilot.insight.entity.Video;
 import com.coolskyai.coolpilot.insight.entity.VideoInsight;
 import com.coolskyai.coolpilot.insight.mapper.CommentMapper;
@@ -37,8 +36,7 @@ public class VideoService {
         if (awemeId == null || awemeId.isEmpty()) {
             return null;
         }
-        return videoMapper.selectOne(new LambdaQueryWrapper<Video>()
-                .eq(Video::getAwemeId, awemeId).last("LIMIT 1"));
+        return videoMapper.selectByAwemeId(awemeId);
     }
 
     public Video findById(Long id) {
@@ -103,15 +101,10 @@ public class VideoService {
     /** 视频列表（含真实评论数与最近分析时间） */
     public List<Map<String, Object>> listForCurrentUser() {
         List<Long> allowed = governance.readableVideoIds();
-        LambdaQueryWrapper<Video> wrapper = new LambdaQueryWrapper<Video>().orderByDesc(Video::getId);
-        if (allowed != null) {
-            if (allowed.isEmpty()) {
-                return java.util.Collections.emptyList();
-            }
-            wrapper.in(Video::getId, allowed);
+        if (allowed != null && allowed.isEmpty()) {
+            return java.util.Collections.emptyList();
         }
-        wrapper.last("LIMIT 200");
-        List<Video> videos = videoMapper.selectList(wrapper);
+        List<Video> videos = videoMapper.selectOrdered(allowed, 200);
 
         List<Map<String, Object>> out = new ArrayList<>(videos.size());
         for (Video v : videos) {
@@ -129,9 +122,7 @@ public class VideoService {
             row.put("commentCount", total);
             row.put("totalComments", total);
 
-            VideoInsight last = insightMapper.selectOne(new LambdaQueryWrapper<VideoInsight>()
-                    .eq(VideoInsight::getVideoId, v.getId())
-                    .orderByDesc(VideoInsight::getId).last("LIMIT 1"));
+            VideoInsight last = insightMapper.selectLatestByVideoId(v.getId());
             row.put("analyzedAt", last == null ? null : last.getCreatedAt());
             row.put("hasInsight", last != null);
             row.put("lastCollectedAt", v.getLastCollectedAt());

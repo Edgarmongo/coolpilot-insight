@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 由 tools/codegen/generate_mybatis_crud.py 生成，替代 MyBatis-Plus BaseMapper。
+     语义与 MP 一致：insert/updateById 跳过 null 字段，id 自增回填。手工业务 SQL 请追加在本文件末尾。 -->
+<mapper namespace="com.coolskyai.coolpilot.insight.mapper.AnalysisReviewMapper">
+
+    <resultMap id="BaseResultMap" type="com.coolskyai.coolpilot.insight.entity.AnalysisReview">
+        <id column="id" property="id"/>
+        <result column="comment_analysis_id" property="commentAnalysisId"/>
+        <result column="reviewer_user_id" property="reviewerUserId"/>
+        <result column="status" property="status"/>
+        <result column="note" property="note"/>
+        <result column="corrected_json" property="correctedJson"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">id, comment_analysis_id, reviewer_user_id, status, note, corrected_json, created_at</sql>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM analysis_review WHERE id = #{id}
+    </select>
+
+    <select id="selectBatchIds" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM analysis_review
+        WHERE id IN
+        <foreach collection="collection" item="it" open="(" separator="," close=")">#{it}</foreach>
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO analysis_review
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="commentAnalysisId != null">comment_analysis_id,</if>
+            <if test="reviewerUserId != null">reviewer_user_id,</if>
+            <if test="status != null">status,</if>
+            <if test="note != null">note,</if>
+            <if test="correctedJson != null">corrected_json,</if>
+            <if test="createdAt != null">created_at,</if>
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="commentAnalysisId != null">#{commentAnalysisId},</if>
+            <if test="reviewerUserId != null">#{reviewerUserId},</if>
+            <if test="status != null">#{status},</if>
+            <if test="note != null">#{note},</if>
+            <if test="correctedJson != null">#{correctedJson},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateById">
+        UPDATE analysis_review
+        <set>
+            <if test="commentAnalysisId != null">comment_analysis_id = #{commentAnalysisId},</if>
+            <if test="reviewerUserId != null">reviewer_user_id = #{reviewerUserId},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="note != null">note = #{note},</if>
+            <if test="correctedJson != null">corrected_json = #{correctedJson},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM analysis_review WHERE id = #{id}
+    </delete>
+</mapper>

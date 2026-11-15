@@ -1,6 +1,5 @@
 package com.coolskyai.coolpilot.insight.mapper;
 
-import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.coolskyai.coolpilot.insight.entity.CommentAnalysis;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -8,7 +7,7 @@ import org.apache.ibatis.annotations.Select;
 import java.util.List;
 import java.util.Map;
 
-public interface AnalysisReviewMapperExt extends BaseMapper<CommentAnalysis> {
+public interface AnalysisReviewMapperExt extends BaseCrudMapper<CommentAnalysis> {
 
     /**
      * 复核队列：评论原文 + AI 结构化结果。只取每条评论最新一次分析。

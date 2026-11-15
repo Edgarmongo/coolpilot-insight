@@ -1,7 +1,17 @@
 package com.coolskyai.coolpilot.insight.mapper;
 
-import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.coolskyai.coolpilot.insight.entity.DiscoveryTask;
 
-public interface DiscoveryTaskMapper extends BaseMapper<DiscoveryTask> {
+import org.apache.ibatis.annotations.Param;
+
+import org.apache.ibatis.annotations.Select;
+
+import java.util.List;
+
+public interface DiscoveryTaskMapper extends BaseCrudMapper<DiscoveryTask> {
+
+    @Select("<script>SELECT * FROM discovery_task"
+            + "<if test='ownerUserId != null'> WHERE owner_user_id = #{ownerUserId}</if>"
+            + " ORDER BY id DESC LIMIT #{limit}</script>")
+    List<DiscoveryTask> selectOrdered(@Param("ownerUserId") Long ownerUserId, @Param("limit") int limit);
 }

@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 由 tools/codegen/generate_mybatis_crud.py 生成，替代 MyBatis-Plus BaseMapper。
+     语义与 MP 一致：insert/updateById 跳过 null 字段，id 自增回填。手工业务 SQL 请追加在本文件末尾。 -->
+<mapper namespace="com.coolskyai.coolpilot.insight.mapper.CommentMapper">
+
+    <resultMap id="BaseResultMap" type="com.coolskyai.coolpilot.insight.entity.Comment">
+        <id column="id" property="id"/>
+        <result column="platform" property="platform"/>
+        <result column="cid" property="cid"/>
+        <result column="dedup_key" property="dedupKey"/>
+        <result column="dedup_strategy" property="dedupStrategy"/>
+        <result column="video_id" property="videoId"/>
+        <result column="parent_cid" property="parentCid"/>
+        <result column="root_cid" property="rootCid"/>
+        <result column="is_reply" property="isReply"/>
+        <result column="reply_count" property="replyCount"/>
+        <result column="nickname" property="nickname"/>
+        <result column="douyin_id" property="douyinId"/>
+        <result column="douyin_uid" property="douyinUid"/>
+        <result column="sec_uid" property="secUid"/>
+        <result column="ip_region" property="ipRegion"/>
+        <result column="content" property="content"/>
+        <result column="likes" property="likes"/>
+        <result column="publish_time" property="publishTime"/>
+        <result column="source_item_id" property="sourceItemId"/>
+        <result column="collected_at" property="collectedAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">id, platform, cid, dedup_key, dedup_strategy, video_id, parent_cid, root_cid, is_reply, reply_count, nickname, douyin_id, douyin_uid, sec_uid, ip_region, content, likes, publish_time, source_item_id, collected_at, updated_at</sql>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM comment WHERE id = #{id}
+    </select>
+
+    <select id="selectBatchIds" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM comment
+        WHERE id IN
+        <foreach collection="collection" item="it" open="(" separator="," close=")">#{it}</foreach>
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO comment
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="platform != null">platform,</if>
+            <if test="cid != null">cid,</if>
+            <if test="dedupKey != null">dedup_key,</if>
+            <if test="dedupStrategy != null">dedup_strategy,</if>
+            <if test="videoId != null">video_id,</if>
+            <if test="parentCid != null">parent_cid,</if>
+            <if test="rootCid != null">root_cid,</if>
+            <if test="isReply != null">is_reply,</if>
+            <if test="replyCount != null">reply_count,</if>
+            <if test="nickname != null">nickname,</if>
+            <if test="douyinId != null">douyin_id,</if>
+            <if test="douyinUid != null">douyin_uid,</if>
+            <if test="secUid != null">sec_uid,</if>
+            <if test="ipRegion != null">ip_region,</if>
+            <if test="content != null">content,</if>
+            <if test="likes != null">likes,</if>
+            <if test="publishTime != null">publish_time,</if>
+            <if test="sourceItemId != null">source_item_id,</if>
+            <if test="collectedAt != null">collected_at,</if>
+            <if test="updatedAt != null">updated_at,</if>
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="platform != null">#{platform},</if>
+            <if test="cid != null">#{cid},</if>
+            <if test="dedupKey != null">#{dedupKey},</if>
+            <if test="dedupStrategy != null">#{dedupStrategy},</if>
+            <if test="videoId != null">#{videoId},</if>
+            <if test="parentCid != null">#{parentCid},</if>
+            <if test="rootCid != null">#{rootCid},</if>
+            <if test="isReply != null">#{isReply},</if>
+            <if test="replyCount != null">#{replyCount},</if>
+            <if test="nickname != null">#{nickname},</if>
+            <if test="douyinId != null">#{douyinId},</if>
+            <if test="douyinUid != null">#{douyinUid},</if>
+            <if test="secUid != null">#{secUid},</if>
+            <if test="ipRegion != null">#{ipRegion},</if>
+            <if test="content != null">#{content},</if>
+            <if test="likes != null">#{likes},</if>
+            <if test="publishTime != null">#{publishTime},</if>
+            <if test="sourceItemId != null">#{sourceItemId},</if>
+            <if test="collectedAt != null">#{collectedAt},</if>
+            <if test="updatedAt != null">#{updatedAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateById">
+        UPDATE comment
+        <set>
+            <if test="platform != null">platform = #{platform},</if>
+            <if test="cid != null">cid = #{cid},</if>
+            <if test="dedupKey != null">dedup_key = #{dedupKey},</if>
+            <if test="dedupStrategy != null">dedup_strategy = #{dedupStrategy},</if>
+            <if test="videoId != null">video_id = #{videoId},</if>
+            <if test="parentCid != null">parent_cid = #{parentCid},</if>
+            <if test="rootCid != null">root_cid = #{rootCid},</if>
+            <if test="isReply != null">is_reply = #{isReply},</if>
+            <if test="replyCount != null">reply_count = #{replyCount},</if>
+            <if test="nickname != null">nickname = #{nickname},</if>
+            <if test="douyinId != null">douyin_id = #{douyinId},</if>
+            <if test="douyinUid != null">douyin_uid = #{douyinUid},</if>
+            <if test="secUid != null">sec_uid = #{secUid},</if>
+            <if test="ipRegion != null">ip_region = #{ipRegion},</if>
+            <if test="content != null">content = #{content},</if>
+            <if test="likes != null">likes = #{likes},</if>
+            <if test="publishTime != null">publish_time = #{publishTime},</if>
+            <if test="sourceItemId != null">source_item_id = #{sourceItemId},</if>
+            <if test="collectedAt != null">collected_at = #{collectedAt},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM comment WHERE id = #{id}
+    </delete>
+</mapper>

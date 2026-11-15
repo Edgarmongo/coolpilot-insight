@@ -2,7 +2,6 @@ package com.coolskyai.coolpilot.insight.service;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.coolskyai.coolpilot.insight.config.AppProperties;
 import com.coolskyai.coolpilot.insight.entity.Report;
 import com.coolskyai.coolpilot.insight.entity.ReportVersion;
@@ -54,9 +53,7 @@ public class ReportService {
         }
         governance.requireReadComments(vid);
 
-        VideoInsight insight = insightMapper.selectOne(new LambdaQueryWrapper<VideoInsight>()
-                .eq(VideoInsight::getVideoId, vid)
-                .orderByDesc(VideoInsight::getId).last("LIMIT 1"));
+        VideoInsight insight = insightMapper.selectLatestByVideoId(vid);
         if (insight == null) {
             throw new IllegalStateException("该视频还没有洞察结果，请先生成视频级洞察");
         }
@@ -93,13 +90,8 @@ public class ReportService {
     }
 
     public List<Map<String, Object>> list() {
-        LambdaQueryWrapper<Report> wrapper = new LambdaQueryWrapper<Report>()
-                .isNull(Report::getDeletedAt).orderByDesc(Report::getId);
-        if (!governance.isAdmin()) {
-            wrapper.eq(Report::getOwnerUserId, governance.currentUserId());
-        }
-        wrapper.last("LIMIT 100");
-        return reportMapper.selectList(wrapper).stream().map(r -> {
+        Long owner = governance.isAdmin() ? null : governance.currentUserId();
+        return reportMapper.selectActive(owner).stream().map(r -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", r.getId());
             m.put("reportNo", r.getReportNo());
@@ -114,9 +106,7 @@ public class ReportService {
 
     public Map<String, Object> detail(Long id) {
         Report report = requireReport(id);
-        ReportVersion latest = versionMapper.selectOne(new LambdaQueryWrapper<ReportVersion>()
-                .eq(ReportVersion::getReportId, id)
-                .orderByDesc(ReportVersion::getVersionNo).last("LIMIT 1"));
+        ReportVersion latest = versionMapper.selectLatestByReportId(id);
 
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", report.getId());
@@ -139,8 +129,7 @@ public class ReportService {
 
     public List<Map<String, Object>> versions(Long id) {
         requireReport(id);
-        return versionMapper.selectList(new LambdaQueryWrapper<ReportVersion>()
-                        .eq(ReportVersion::getReportId, id).orderByDesc(ReportVersion::getVersionNo))
+        return versionMapper.selectByReportId(id)
                 .stream().map(v -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("versionNo", v.getVersionNo());
@@ -153,9 +142,7 @@ public class ReportService {
     /** 导出 Markdown（Excel/PDF 导出留待后续版本） */
     public Map<String, Object> exportMarkdown(Long id) {
         requireReport(id);
-        ReportVersion latest = versionMapper.selectOne(new LambdaQueryWrapper<ReportVersion>()
-                .eq(ReportVersion::getReportId, id)
-                .orderByDesc(ReportVersion::getVersionNo).last("LIMIT 1"));
+        ReportVersion latest = versionMapper.selectLatestByReportId(id);
         if (latest == null) {
             throw new IllegalStateException("报告没有内容");
         }
@@ -184,9 +171,7 @@ public class ReportService {
      */
     public Map<String, Object> renderFile(Long id, String format) {
         Report report = requireReport(id);
-        ReportVersion latest = versionMapper.selectOne(new LambdaQueryWrapper<ReportVersion>()
-                .eq(ReportVersion::getReportId, id)
-                .orderByDesc(ReportVersion::getVersionNo).last("LIMIT 1"));
+        ReportVersion latest = versionMapper.selectLatestByReportId(id);
         if (latest == null) {
             throw new IllegalStateException("报告没有内容");
         }

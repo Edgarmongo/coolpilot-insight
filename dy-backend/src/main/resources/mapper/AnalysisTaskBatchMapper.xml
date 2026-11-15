@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 由 tools/codegen/generate_mybatis_crud.py 生成，替代 MyBatis-Plus BaseMapper。
+     语义与 MP 一致：insert/updateById 跳过 null 字段，id 自增回填。手工业务 SQL 请追加在本文件末尾。 -->
+<mapper namespace="com.coolskyai.coolpilot.insight.mapper.AnalysisTaskBatchMapper">
+
+    <resultMap id="BaseResultMap" type="com.coolskyai.coolpilot.insight.entity.AnalysisTaskBatch">
+        <id column="id" property="id"/>
+        <result column="task_id" property="taskId"/>
+        <result column="batch_no" property="batchNo"/>
+        <result column="status" property="status"/>
+        <result column="input_count" property="inputCount"/>
+        <result column="success_count" property="successCount"/>
+        <result column="failed_count" property="failedCount"/>
+        <result column="input_tokens" property="inputTokens"/>
+        <result column="output_tokens" property="outputTokens"/>
+        <result column="error_message" property="errorMessage"/>
+        <result column="started_at" property="startedAt"/>
+        <result column="finished_at" property="finishedAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">id, task_id, batch_no, status, input_count, success_count, failed_count, input_tokens, output_tokens, error_message, started_at, finished_at</sql>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM analysis_task_batch WHERE id = #{id}
+    </select>
+
+    <select id="selectBatchIds" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM analysis_task_batch
+        WHERE id IN
+        <foreach collection="collection" item="it" open="(" separator="," close=")">#{it}</foreach>
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO analysis_task_batch
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="taskId != null">task_id,</if>
+            <if test="batchNo != null">batch_no,</if>
+            <if test="status != null">status,</if>
+            <if test="inputCount != null">input_count,</if>
+            <if test="successCount != null">success_count,</if>
+            <if test="failedCount != null">failed_count,</if>
+            <if test="inputTokens != null">input_tokens,</if>
+            <if test="outputTokens != null">output_tokens,</if>
+            <if test="errorMessage != null">error_message,</if>
+            <if test="startedAt != null">started_at,</if>
+            <if test="finishedAt != null">finished_at,</if>
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="taskId != null">#{taskId},</if>
+            <if test="batchNo != null">#{batchNo},</if>
+            <if test="status != null">#{status},</if>
+            <if test="inputCount != null">#{inputCount},</if>
+            <if test="successCount != null">#{successCount},</if>
+            <if test="failedCount != null">#{failedCount},</if>
+            <if test="inputTokens != null">#{inputTokens},</if>
+            <if test="outputTokens != null">#{outputTokens},</if>
+            <if test="errorMessage != null">#{errorMessage},</if>
+            <if test="startedAt != null">#{startedAt},</if>
+            <if test="finishedAt != null">#{finishedAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateById">
+        UPDATE analysis_task_batch
+        <set>
+            <if test="taskId != null">task_id = #{taskId},</if>
+            <if test="batchNo != null">batch_no = #{batchNo},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="inputCount != null">input_count = #{inputCount},</if>
+            <if test="successCount != null">success_count = #{successCount},</if>
+            <if test="failedCount != null">failed_count = #{failedCount},</if>
+            <if test="inputTokens != null">input_tokens = #{inputTokens},</if>
+            <if test="outputTokens != null">output_tokens = #{outputTokens},</if>
+            <if test="errorMessage != null">error_message = #{errorMessage},</if>
+            <if test="startedAt != null">started_at = #{startedAt},</if>
+            <if test="finishedAt != null">finished_at = #{finishedAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM analysis_task_batch WHERE id = #{id}
+    </delete>
+</mapper>

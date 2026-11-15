@@ -5,14 +5,13 @@ import com.coolskyai.coolpilot.insight.entity.SystemConfig;
 import com.coolskyai.coolpilot.insight.interceptor.RequestContext;
 import com.coolskyai.coolpilot.insight.mapper.AuditLogMapper;
 import com.coolskyai.coolpilot.insight.mapper.SystemConfigMapper;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -84,26 +83,16 @@ public class GovernanceService {
             return false;
         }
         // 1) 显式授权且未过期
-        Long grantCount = grantMapper.selectCount(new LambdaQueryWrapper<com.coolskyai.coolpilot.insight.entity.VideoGrant>()
-                .eq(com.coolskyai.coolpilot.insight.entity.VideoGrant::getGranteeUserId, userId)
-                .eq(com.coolskyai.coolpilot.insight.entity.VideoGrant::getVideoId, videoId)
-                .and(w -> w.isNull(com.coolskyai.coolpilot.insight.entity.VideoGrant::getExpiresAt)
-                        .or().gt(com.coolskyai.coolpilot.insight.entity.VideoGrant::getExpiresAt, LocalDateTime.now())));
+        Long grantCount = grantMapper.countActiveGrant(userId, videoId);
         if (grantCount != null && grantCount > 0) {
             return true;
         }
         // 2) 本人发起过包含该视频的采集任务
-        List<Long> taskIds = taskMapper.selectList(new LambdaQueryWrapper<com.coolskyai.coolpilot.insight.entity.CollectionTask>()
-                        .eq(com.coolskyai.coolpilot.insight.entity.CollectionTask::getOwnerUserId, userId)
-                        .orderByDesc(com.coolskyai.coolpilot.insight.entity.CollectionTask::getId)
-                        .last("LIMIT 500"))
-                .stream().map(com.coolskyai.coolpilot.insight.entity.CollectionTask::getId).collect(java.util.stream.Collectors.toList());
+        List<Long> taskIds = taskMapper.selectIdsByOwner(userId, 500);
         if (taskIds.isEmpty()) {
             return false;
         }
-        Long itemCount = itemMapper.selectCount(new LambdaQueryWrapper<com.coolskyai.coolpilot.insight.entity.CollectionTaskItem>()
-                .eq(com.coolskyai.coolpilot.insight.entity.CollectionTaskItem::getVideoId, videoId)
-                .in(com.coolskyai.coolpilot.insight.entity.CollectionTaskItem::getTaskId, taskIds));
+        Long itemCount = itemMapper.countByVideoAndTaskIds(videoId, taskIds);
         return itemCount != null && itemCount > 0;
     }
 
@@ -124,16 +113,12 @@ public class GovernanceService {
             return java.util.Collections.emptyList();
         }
         java.util.Set<Long> ids = new java.util.HashSet<>();
-        List<Long> taskIds = taskMapper.selectList(new LambdaQueryWrapper<com.coolskyai.coolpilot.insight.entity.CollectionTask>()
-                        .eq(com.coolskyai.coolpilot.insight.entity.CollectionTask::getOwnerUserId, userId))
-                .stream().map(com.coolskyai.coolpilot.insight.entity.CollectionTask::getId).collect(java.util.stream.Collectors.toList());
+        List<Long> taskIds = taskMapper.selectAllIdsByOwner(userId);
         if (!taskIds.isEmpty()) {
-            itemMapper.selectList(new LambdaQueryWrapper<com.coolskyai.coolpilot.insight.entity.CollectionTaskItem>()
-                            .in(com.coolskyai.coolpilot.insight.entity.CollectionTaskItem::getTaskId, taskIds))
+            itemMapper.selectByTaskIds(taskIds)
                     .forEach(i -> ids.add(i.getVideoId()));
         }
-        grantMapper.selectList(new LambdaQueryWrapper<com.coolskyai.coolpilot.insight.entity.VideoGrant>()
-                        .eq(com.coolskyai.coolpilot.insight.entity.VideoGrant::getGranteeUserId, userId))
+        grantMapper.selectByGrantee(userId)
                 .forEach(g -> ids.add(g.getVideoId()));
         return new java.util.ArrayList<>(ids);
     }
@@ -198,7 +183,7 @@ public class GovernanceService {
             synchronized (configCache) {
                 if (now - configCacheAt > 60_000L) {
                     configCache.clear();
-                    configMapper.selectList(null)
+                    configMapper.selectAllConfig()
                             .forEach(c -> configCache.put(c.getConfigKey(), c.getConfigValue()));
                     configCacheAt = now;
                 }

@@ -8,7 +8,6 @@ import com.coolskyai.coolpilot.insight.service.GovernanceService;
 import com.coolskyai.coolpilot.insight.service.UserService;
 import com.coolskyai.coolpilot.insight.utils.JwtUtil;
 import com.coolskyai.coolpilot.insight.utils.TokenStore;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -45,7 +44,7 @@ public class UserServiceImpl implements UserService {
         if (!password.equals(confirmPassword)) {
             throw new IllegalArgumentException("两次密码输入不一致");
         }
-        if (userMapper.selectCount(new LambdaQueryWrapper<User>().eq(User::getPhone, phone)) > 0) {
+        if (userMapper.countByPhone(phone) > 0) {
             throw new IllegalStateException("该手机号已被注册");
         }
 
@@ -61,8 +60,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public LoginResponse login(String phone, String password) {
-        User user = userMapper.selectOne(new LambdaQueryWrapper<User>()
-                .eq(User::getPhone, phone).isNull(User::getDeletedAt).last("LIMIT 1"));
+        User user = userMapper.selectByPhone(phone);
         if (user == null) {
             throw new IllegalArgumentException("账号或密码错误");
         }

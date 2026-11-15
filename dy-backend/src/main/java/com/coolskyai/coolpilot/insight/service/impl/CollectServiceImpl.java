@@ -1,7 +1,6 @@
 package com.coolskyai.coolpilot.insight.service.impl;
 
 import com.alibaba.fastjson2.JSON;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.coolskyai.coolpilot.insight.config.AppProperties;
 import com.coolskyai.coolpilot.insight.entity.*;
 import com.coolskyai.coolpilot.insight.mapper.*;
@@ -102,9 +101,7 @@ public class CollectServiceImpl implements CollectService {
         List<String> alreadyRunning = new ArrayList<>();
         for (String awemeId : awemeIds) {
             Video v = videoService.requireOrCreate(awemeId);
-            Long running = itemMapper.selectCount(new LambdaQueryWrapper<CollectionTaskItem>()
-                    .eq(CollectionTaskItem::getVideoId, v.getId())
-                    .eq(CollectionTaskItem::getActiveFlag, 1));
+            Long running = itemMapper.countActiveByVideo(v.getId());
             if (running != null && running > 0) {
                 alreadyRunning.add(awemeId);
                 continue;
@@ -172,9 +169,7 @@ public class CollectServiceImpl implements CollectService {
         if (busy.get()) {
             return;
         }
-        CollectionTask candidate = taskMapper.selectOne(new LambdaQueryWrapper<CollectionTask>()
-                .eq(CollectionTask::getStatus, "PENDING")
-                .orderByAsc(CollectionTask::getId).last("LIMIT 1"));
+        CollectionTask candidate = taskMapper.selectPendingOldest();
         if (candidate == null) {
             return;
         }
@@ -183,9 +178,7 @@ public class CollectServiceImpl implements CollectService {
         claim.setId(candidate.getId());
         claim.setStatus("RUNNING");
         claim.setStartedAt(LocalDateTime.now());
-        int affected = taskMapper.update(claim, new LambdaQueryWrapper<CollectionTask>()
-                .eq(CollectionTask::getId, candidate.getId())
-                .eq(CollectionTask::getStatus, "PENDING"));
+        int affected = taskMapper.claimPending(candidate.getId(), claim.getStartedAt());
         if (affected != 1) {
             return;
         }
@@ -213,9 +206,7 @@ public class CollectServiceImpl implements CollectService {
                 : ((Number) params.get("maxComments")).intValue();
         String mode = String.valueOf(params.getOrDefault("collectMode", "online"));
 
-        List<CollectionTaskItem> items = itemMapper.selectList(new LambdaQueryWrapper<CollectionTaskItem>()
-                .eq(CollectionTaskItem::getTaskId, taskId)
-                .orderByAsc(CollectionTaskItem::getId));
+        List<CollectionTaskItem> items = itemMapper.selectByTask(taskId);
 
         int success = 0;
         int failed = 0;
@@ -345,8 +336,7 @@ public class CollectServiceImpl implements CollectService {
         }
     }
 
-    private void saveCheckpoint(Long itemId, long persisted) {        CollectionCheckpoint exist = checkpointMapper.selectOne(
-                new LambdaQueryWrapper<CollectionCheckpoint>().eq(CollectionCheckpoint::getTaskItemId, itemId));
+    private void saveCheckpoint(Long itemId, long persisted) {        CollectionCheckpoint exist = checkpointMapper.selectByTaskItemId(itemId);
         if (exist == null) {
             CollectionCheckpoint cp = new CollectionCheckpoint();
             cp.setTaskItemId(itemId);
@@ -453,9 +443,7 @@ public class CollectServiceImpl implements CollectService {
             out.put("status", "IDLE");
             return out;
         }
-        CollectionTaskItem item = itemMapper.selectOne(new LambdaQueryWrapper<CollectionTaskItem>()
-                .eq(CollectionTaskItem::getVideoId, vid)
-                .orderByDesc(CollectionTaskItem::getId).last("LIMIT 1"));
+        CollectionTaskItem item = itemMapper.selectLatestByVideo(vid);
         if (item == null) {
             out.put("status", "IDLE");
             return out;
@@ -471,17 +459,11 @@ public class CollectServiceImpl implements CollectService {
 
     @Override
     public List<Map<String, Object>> listTasks(String status, int page, int size) {
-        LambdaQueryWrapper<CollectionTask> wrapper = new LambdaQueryWrapper<CollectionTask>()
-                .orderByDesc(CollectionTask::getId);
-        if (status != null && !status.isEmpty()) {
-            wrapper.eq(CollectionTask::getStatus, status);
-        }
-        if (!governance.isAdmin()) {
-            wrapper.eq(CollectionTask::getOwnerUserId, governance.currentUserId());
-        }
-        wrapper.last("LIMIT " + Math.min(Math.max(size, 1), 200)
-                + " OFFSET " + Math.max(page - 1, 0) * Math.max(size, 1));
-        return taskMapper.selectList(wrapper).stream().map(this::taskRow).collect(Collectors.toList());
+        int limit = Math.min(Math.max(size, 1), 200);
+        int offset = Math.max(page - 1, 0) * Math.max(size, 1);
+        Long owner = governance.isAdmin() ? null : governance.currentUserId();
+        return taskMapper.selectPage(status, owner, limit, offset).stream()
+                .map(this::taskRow).collect(Collectors.toList());
     }
 
     private Map<String, Object> taskRow(CollectionTask t) {
@@ -512,8 +494,7 @@ public class CollectServiceImpl implements CollectService {
         out.put("params", task.getParamsJson());
 
         List<Map<String, Object>> items = new ArrayList<>();
-        for (CollectionTaskItem item : itemMapper.selectList(new LambdaQueryWrapper<CollectionTaskItem>()
-                .eq(CollectionTaskItem::getTaskId, taskId).orderByAsc(CollectionTaskItem::getId))) {
+        for (CollectionTaskItem item : itemMapper.selectByTask(taskId)) {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", item.getId());
             m.put("videoId", videoService.externalId(item.getVideoId()));
@@ -539,9 +520,7 @@ public class CollectServiceImpl implements CollectService {
             throw new SecurityException("无权查看该任务");
         }
         List<Map<String, Object>> out = new ArrayList<>();
-        for (CollectionTaskLog l : logMapper.selectList(new LambdaQueryWrapper<CollectionTaskLog>()
-                .eq(CollectionTaskLog::getTaskId, taskId)
-                .orderByAsc(CollectionTaskLog::getId).last("LIMIT 500"))) {
+        for (CollectionTaskLog l : logMapper.selectByTaskLimit(taskId, 500)) {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", l.getId());
             m.put("itemId", l.getTaskItemId());
@@ -594,8 +573,7 @@ public class CollectServiceImpl implements CollectService {
         if (!"FAILED".equals(task.getStatus()) && !"PARTIAL_SUCCESS".equals(task.getStatus())) {
             throw new IllegalStateException("只有失败或部分成功的任务可以重试");
         }
-        List<CollectionTaskItem> failedItems = itemMapper.selectList(new LambdaQueryWrapper<CollectionTaskItem>()
-                .eq(CollectionTaskItem::getTaskId, taskId).eq(CollectionTaskItem::getStatus, "FAILED"));
+        List<CollectionTaskItem> failedItems = itemMapper.selectByTaskAndStatus(taskId, "FAILED");
         for (CollectionTaskItem item : failedItems) {
             if (item.getRetryCount() != null && item.getMaxRetry() != null
                     && item.getRetryCount() >= item.getMaxRetry()) {
@@ -621,8 +599,7 @@ public class CollectServiceImpl implements CollectService {
     }
 
     private void releaseActiveFlags(Long taskId) {
-        for (CollectionTaskItem item : itemMapper.selectList(new LambdaQueryWrapper<CollectionTaskItem>()
-                .eq(CollectionTaskItem::getTaskId, taskId))) {
+        for (CollectionTaskItem item : itemMapper.selectByTask(taskId)) {
             if (item.getActiveFlag() != null) {
                 CollectionTaskItem patch = new CollectionTaskItem();
                 patch.setId(item.getId());
@@ -641,8 +618,6 @@ public class CollectServiceImpl implements CollectService {
      * 该视频将永久无法再次采集。
      */
     private void clearActiveFlag(Long itemId) {
-        itemMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<CollectionTaskItem>()
-                .eq(CollectionTaskItem::getId, itemId)
-                .set(CollectionTaskItem::getActiveFlag, null));
+        itemMapper.clearActiveFlag(itemId);
     }
 }

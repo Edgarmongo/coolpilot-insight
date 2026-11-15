@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 由 tools/codegen/generate_mybatis_crud.py 生成，替代 MyBatis-Plus BaseMapper。
+     语义与 MP 一致：insert/updateById 跳过 null 字段，id 自增回填。手工业务 SQL 请追加在本文件末尾。 -->
+<mapper namespace="com.coolskyai.coolpilot.insight.mapper.VideoGrantMapper">
+
+    <resultMap id="BaseResultMap" type="com.coolskyai.coolpilot.insight.entity.VideoGrant">
+        <id column="id" property="id"/>
+        <result column="grantee_user_id" property="granteeUserId"/>
+        <result column="video_id" property="videoId"/>
+        <result column="permission" property="permission"/>
+        <result column="granted_by" property="grantedBy"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="expires_at" property="expiresAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">id, grantee_user_id, video_id, permission, granted_by, created_at, expires_at</sql>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM video_grant WHERE id = #{id}
+    </select>
+
+    <select id="selectBatchIds" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM video_grant
+        WHERE id IN
+        <foreach collection="collection" item="it" open="(" separator="," close=")">#{it}</foreach>
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO video_grant
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="granteeUserId != null">grantee_user_id,</if>
+            <if test="videoId != null">video_id,</if>
+            <if test="permission != null">permission,</if>
+            <if test="grantedBy != null">granted_by,</if>
+            <if test="createdAt != null">created_at,</if>
+            <if test="expiresAt != null">expires_at,</if>
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="granteeUserId != null">#{granteeUserId},</if>
+            <if test="videoId != null">#{videoId},</if>
+            <if test="permission != null">#{permission},</if>
+            <if test="grantedBy != null">#{grantedBy},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+            <if test="expiresAt != null">#{expiresAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateById">
+        UPDATE video_grant
+        <set>
+            <if test="granteeUserId != null">grantee_user_id = #{granteeUserId},</if>
+            <if test="videoId != null">video_id = #{videoId},</if>
+            <if test="permission != null">permission = #{permission},</if>
+            <if test="grantedBy != null">granted_by = #{grantedBy},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+            <if test="expiresAt != null">expires_at = #{expiresAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM video_grant WHERE id = #{id}
+    </delete>
+</mapper>

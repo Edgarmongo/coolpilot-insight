@@ -1,7 +1,6 @@
 package com.coolskyai.coolpilot.insight.service;
 
 import com.alibaba.fastjson2.JSON;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.coolskyai.coolpilot.insight.entity.Video;
 import com.coolskyai.coolpilot.insight.mapper.OverviewMapper;
 import com.coolskyai.coolpilot.insight.mapper.UsageRecordMapper;

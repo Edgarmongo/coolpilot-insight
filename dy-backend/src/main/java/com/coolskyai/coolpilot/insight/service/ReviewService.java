@@ -2,7 +2,6 @@ package com.coolskyai.coolpilot.insight.service;
 
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.coolskyai.coolpilot.insight.entity.AnalysisReview;
 import com.coolskyai.coolpilot.insight.entity.Comment;
 import com.coolskyai.coolpilot.insight.entity.CommentAnalysis;
@@ -174,9 +173,7 @@ public class ReviewService {
             governance.requireReadComments(comment.getVideoId());
         }
         List<Map<String, Object>> out = new ArrayList<>();
-        for (AnalysisReview r : reviewMapper.selectList(new LambdaQueryWrapper<AnalysisReview>()
-                .eq(AnalysisReview::getCommentAnalysisId, analysisId)
-                .orderByDesc(AnalysisReview::getId).last("LIMIT 50"))) {
+        for (AnalysisReview r : reviewMapper.selectByCommentAnalysisId(analysisId)) {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", r.getId());
             m.put("status", r.getStatus());

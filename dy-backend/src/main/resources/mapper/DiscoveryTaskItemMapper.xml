@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 由 tools/codegen/generate_mybatis_crud.py 生成，替代 MyBatis-Plus BaseMapper。
+     语义与 MP 一致：insert/updateById 跳过 null 字段，id 自增回填。手工业务 SQL 请追加在本文件末尾。 -->
+<mapper namespace="com.coolskyai.coolpilot.insight.mapper.DiscoveryTaskItemMapper">
+
+    <resultMap id="BaseResultMap" type="com.coolskyai.coolpilot.insight.entity.DiscoveryTaskItem">
+        <id column="id" property="id"/>
+        <result column="task_id" property="taskId"/>
+        <result column="video_id" property="videoId"/>
+        <result column="position" property="position"/>
+        <result column="is_new" property="isNew"/>
+        <result column="raw_json" property="rawJson"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">id, task_id, video_id, position, is_new, raw_json, created_at</sql>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM discovery_task_item WHERE id = #{id}
+    </select>
+
+    <select id="selectBatchIds" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM discovery_task_item
+        WHERE id IN
+        <foreach collection="collection" item="it" open="(" separator="," close=")">#{it}</foreach>
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO discovery_task_item
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="taskId != null">task_id,</if>
+            <if test="videoId != null">video_id,</if>
+            <if test="position != null">position,</if>
+            <if test="isNew != null">is_new,</if>
+            <if test="rawJson != null">raw_json,</if>
+            <if test="createdAt != null">created_at,</if>
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="taskId != null">#{taskId},</if>
+            <if test="videoId != null">#{videoId},</if>
+            <if test="position != null">#{position},</if>
+            <if test="isNew != null">#{isNew},</if>
+            <if test="rawJson != null">#{rawJson},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateById">
+        UPDATE discovery_task_item
+        <set>
+            <if test="taskId != null">task_id = #{taskId},</if>
+            <if test="videoId != null">video_id = #{videoId},</if>
+            <if test="position != null">position = #{position},</if>
+            <if test="isNew != null">is_new = #{isNew},</if>
+            <if test="rawJson != null">raw_json = #{rawJson},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM discovery_task_item WHERE id = #{id}
+    </delete>
+</mapper>

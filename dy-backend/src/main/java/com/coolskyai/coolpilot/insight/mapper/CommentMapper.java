@@ -1,6 +1,5 @@
 package com.coolskyai.coolpilot.insight.mapper;
 
-import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.coolskyai.coolpilot.insight.entity.Comment;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -8,7 +7,7 @@ import org.apache.ibatis.annotations.Select;
 import java.util.List;
 import java.util.Map;
 
-public interface CommentMapper extends BaseMapper<Comment> {
+public interface CommentMapper extends BaseCrudMapper<Comment> {
 
     /**
      * 评论列表（附带最新一条情感标签）。情感已迁至 comment_analysis，

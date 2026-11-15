@@ -3,7 +3,6 @@ package com.coolskyai.coolpilot.insight.service;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.coolskyai.coolpilot.insight.config.AppProperties;
 import com.coolskyai.coolpilot.insight.entity.*;
 import com.coolskyai.coolpilot.insight.mapper.*;
@@ -66,9 +65,7 @@ public class DiscoveryService {
         }
         String normalized = normalize(raw);
         Long owner = governance.currentUserId();
-        Keyword exist = keywordMapper.selectOne(new LambdaQueryWrapper<Keyword>()
-                .eq(Keyword::getOwnerUserId, owner)
-                .eq(Keyword::getNormalized, normalized).last("LIMIT 1"));
+        Keyword exist = keywordMapper.selectByOwnerAndNormalized(owner, normalized);
         if (exist != null) {
             return row(exist);
         }
@@ -100,11 +97,8 @@ public class DiscoveryService {
     }
 
     public List<Map<String, Object>> listKeywords() {
-        LambdaQueryWrapper<Keyword> wrapper = new LambdaQueryWrapper<Keyword>().orderByDesc(Keyword::getId);
-        if (!governance.isAdmin()) {
-            wrapper.eq(Keyword::getOwnerUserId, governance.currentUserId());
-        }
-        return keywordMapper.selectList(wrapper).stream().map(this::row).collect(Collectors.toList());
+        Long owner = governance.isAdmin() ? null : governance.currentUserId();
+        return keywordMapper.selectOrdered(owner).stream().map(this::row).collect(Collectors.toList());
     }
 
     public void deleteKeyword(Long id) {
@@ -128,8 +122,7 @@ public class DiscoveryService {
         m.put("description", k.getDescription());
         m.put("status", k.getStatus());
         m.put("createdAt", k.getCreatedAt());
-        m.put("videoCount", keywordVideoMapper.selectCount(new LambdaQueryWrapper<KeywordVideo>()
-                .eq(KeywordVideo::getKeywordId, k.getId())));
+        m.put("videoCount", keywordVideoMapper.countByKeywordId(k.getId()));
         return m;
     }
 
@@ -201,9 +194,7 @@ public class DiscoveryService {
                     videoMapper.updateById(v);
                 }
 
-                Long exists = itemMapper.selectCount(new LambdaQueryWrapper<DiscoveryTaskItem>()
-                        .eq(DiscoveryTaskItem::getTaskId, taskId)
-                        .eq(DiscoveryTaskItem::getVideoId, v.getId()));
+                Long exists = itemMapper.countByTaskAndVideo(taskId, v.getId());
                 if (exists == null || exists == 0) {
                     DiscoveryTaskItem item = new DiscoveryTaskItem();
                     item.setTaskId(taskId);
@@ -213,9 +204,7 @@ public class DiscoveryService {
                     itemMapper.insert(item);
                 }
 
-                Long linked = keywordVideoMapper.selectCount(new LambdaQueryWrapper<KeywordVideo>()
-                        .eq(KeywordVideo::getKeywordId, k.getId())
-                        .eq(KeywordVideo::getVideoId, v.getId()));
+                Long linked = keywordVideoMapper.countByKeywordAndVideo(k.getId(), v.getId());
                 if (linked == null || linked == 0) {
                     KeywordVideo kv = new KeywordVideo();
                     kv.setKeywordId(k.getId());
@@ -300,8 +289,7 @@ public class DiscoveryService {
 
     public List<Map<String, Object>> listKeywordVideos(Long keywordId) {
         List<Map<String, Object>> out = new ArrayList<>();
-        List<KeywordVideo> links = keywordVideoMapper.selectList(new LambdaQueryWrapper<KeywordVideo>()
-                .eq(KeywordVideo::getKeywordId, keywordId).orderByDesc(KeywordVideo::getId).last("LIMIT 200"));
+        List<KeywordVideo> links = keywordVideoMapper.selectByKeyword(keywordId, 200);
         for (KeywordVideo link : links) {
             Video v = videoMapper.selectById(link.getVideoId());
             if (v == null) {
@@ -321,13 +309,9 @@ public class DiscoveryService {
     }
 
     public List<Map<String, Object>> listTasks() {
-        LambdaQueryWrapper<DiscoveryTask> wrapper = new LambdaQueryWrapper<DiscoveryTask>()
-                .orderByDesc(DiscoveryTask::getId);
-        if (!governance.isAdmin()) {
-            wrapper.eq(DiscoveryTask::getOwnerUserId, governance.currentUserId());
-        }
-        wrapper.last("LIMIT 100");
-        return taskMapper.selectList(wrapper).stream().map(t -> {
+        Long owner = governance.isAdmin() ? null : governance.currentUserId();
+        List<DiscoveryTask> tasks = taskMapper.selectOrdered(owner, 100);
+        return tasks.stream().map(t -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", t.getId());
             m.put("taskNo", t.getTaskNo());

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 由 tools/codegen/generate_mybatis_crud.py 生成，替代 MyBatis-Plus BaseMapper。
+     语义与 MP 一致：insert/updateById 跳过 null 字段，id 自增回填。手工业务 SQL 请追加在本文件末尾。 -->
+<mapper namespace="com.coolskyai.coolpilot.insight.mapper.AnalysisEvidenceMapper">
+
+    <resultMap id="BaseResultMap" type="com.coolskyai.coolpilot.insight.entity.AnalysisEvidence">
+        <id column="id" property="id"/>
+        <result column="insight_id" property="insightId"/>
+        <result column="comment_analysis_id" property="commentAnalysisId"/>
+        <result column="comment_id" property="commentId"/>
+        <result column="evidence_type" property="evidenceType"/>
+        <result column="relevance_score" property="relevanceScore"/>
+        <result column="explanation" property="explanation"/>
+        <result column="source_level" property="sourceLevel"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">id, insight_id, comment_analysis_id, comment_id, evidence_type, relevance_score, explanation, source_level, created_at</sql>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM analysis_evidence WHERE id = #{id}
+    </select>
+
+    <select id="selectBatchIds" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM analysis_evidence
+        WHERE id IN
+        <foreach collection="collection" item="it" open="(" separator="," close=")">#{it}</foreach>
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO analysis_evidence
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="insightId != null">insight_id,</if>
+            <if test="commentAnalysisId != null">comment_analysis_id,</if>
+            <if test="commentId != null">comment_id,</if>
+            <if test="evidenceType != null">evidence_type,</if>
+            <if test="relevanceScore != null">relevance_score,</if>
+            <if test="explanation != null">explanation,</if>
+            <if test="sourceLevel != null">source_level,</if>
+            <if test="createdAt != null">created_at,</if>
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="insightId != null">#{insightId},</if>
+            <if test="commentAnalysisId != null">#{commentAnalysisId},</if>
+            <if test="commentId != null">#{commentId},</if>
+            <if test="evidenceType != null">#{evidenceType},</if>
+            <if test="relevanceScore != null">#{relevanceScore},</if>
+            <if test="explanation != null">#{explanation},</if>
+            <if test="sourceLevel != null">#{sourceLevel},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateById">
+        UPDATE analysis_evidence
+        <set>
+            <if test="insightId != null">insight_id = #{insightId},</if>
+            <if test="commentAnalysisId != null">comment_analysis_id = #{commentAnalysisId},</if>
+            <if test="commentId != null">comment_id = #{commentId},</if>
+            <if test="evidenceType != null">evidence_type = #{evidenceType},</if>
+            <if test="relevanceScore != null">relevance_score = #{relevanceScore},</if>
+            <if test="explanation != null">explanation = #{explanation},</if>
+            <if test="sourceLevel != null">source_level = #{sourceLevel},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM analysis_evidence WHERE id = #{id}
+    </delete>
+</mapper>

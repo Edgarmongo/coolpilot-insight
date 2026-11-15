@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 由 tools/codegen/generate_mybatis_crud.py 生成，替代 MyBatis-Plus BaseMapper。
+     语义与 MP 一致：insert/updateById 跳过 null 字段，id 自增回填。手工业务 SQL 请追加在本文件末尾。 -->
+<mapper namespace="com.coolskyai.coolpilot.insight.mapper.ReportVersionMapper">
+
+    <resultMap id="BaseResultMap" type="com.coolskyai.coolpilot.insight.entity.ReportVersion">
+        <id column="id" property="id"/>
+        <result column="report_id" property="reportId"/>
+        <result column="version_no" property="versionNo"/>
+        <result column="content_json" property="contentJson"/>
+        <result column="content_md" property="contentMd"/>
+        <result column="analysis_task_id" property="analysisTaskId"/>
+        <result column="evidence_count" property="evidenceCount"/>
+        <result column="generated_by" property="generatedBy"/>
+        <result column="generated_at" property="generatedAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">id, report_id, version_no, content_json, content_md, analysis_task_id, evidence_count, generated_by, generated_at</sql>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM report_version WHERE id = #{id}
+    </select>
+
+    <select id="selectBatchIds" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM report_version
+        WHERE id IN
+        <foreach collection="collection" item="it" open="(" separator="," close=")">#{it}</foreach>
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO report_version
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="reportId != null">report_id,</if>
+            <if test="versionNo != null">version_no,</if>
+            <if test="contentJson != null">content_json,</if>
+            <if test="contentMd != null">content_md,</if>
+            <if test="analysisTaskId != null">analysis_task_id,</if>
+            <if test="evidenceCount != null">evidence_count,</if>
+            <if test="generatedBy != null">generated_by,</if>
+            <if test="generatedAt != null">generated_at,</if>
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="reportId != null">#{reportId},</if>
+            <if test="versionNo != null">#{versionNo},</if>
+            <if test="contentJson != null">#{contentJson},</if>
+            <if test="contentMd != null">#{contentMd},</if>
+            <if test="analysisTaskId != null">#{analysisTaskId},</if>
+            <if test="evidenceCount != null">#{evidenceCount},</if>
+            <if test="generatedBy != null">#{generatedBy},</if>
+            <if test="generatedAt != null">#{generatedAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateById">
+        UPDATE report_version
+        <set>
+            <if test="reportId != null">report_id = #{reportId},</if>
+            <if test="versionNo != null">version_no = #{versionNo},</if>
+            <if test="contentJson != null">content_json = #{contentJson},</if>
+            <if test="contentMd != null">content_md = #{contentMd},</if>
+            <if test="analysisTaskId != null">analysis_task_id = #{analysisTaskId},</if>
+            <if test="evidenceCount != null">evidence_count = #{evidenceCount},</if>
+            <if test="generatedBy != null">generated_by = #{generatedBy},</if>
+            <if test="generatedAt != null">generated_at = #{generatedAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM report_version WHERE id = #{id}
+    </delete>
+</mapper>

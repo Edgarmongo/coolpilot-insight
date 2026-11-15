@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 由 tools/codegen/generate_mybatis_crud.py 生成，替代 MyBatis-Plus BaseMapper。
+     语义与 MP 一致：insert/updateById 跳过 null 字段，id 自增回填。手工业务 SQL 请追加在本文件末尾。 -->
+<mapper namespace="com.coolskyai.coolpilot.insight.mapper.UsageRecordMapper">
+
+    <resultMap id="BaseResultMap" type="com.coolskyai.coolpilot.insight.entity.UsageRecord">
+        <id column="id" property="id"/>
+        <result column="biz_type" property="bizType"/>
+        <result column="biz_ref_id" property="bizRefId"/>
+        <result column="batch_id" property="batchId"/>
+        <result column="owner_user_id" property="ownerUserId"/>
+        <result column="provider" property="provider"/>
+        <result column="model_name" property="modelName"/>
+        <result column="input_tokens" property="inputTokens"/>
+        <result column="output_tokens" property="outputTokens"/>
+        <result column="cost_amount" property="costAmount"/>
+        <result column="price_version" property="priceVersion"/>
+        <result column="latency_ms" property="latencyMs"/>
+        <result column="status" property="status"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">id, biz_type, biz_ref_id, batch_id, owner_user_id, provider, model_name, input_tokens, output_tokens, cost_amount, price_version, latency_ms, status, created_at</sql>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM usage_record WHERE id = #{id}
+    </select>
+
+    <select id="selectBatchIds" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM usage_record
+        WHERE id IN
+        <foreach collection="collection" item="it" open="(" separator="," close=")">#{it}</foreach>
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO usage_record
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="bizType != null">biz_type,</if>
+            <if test="bizRefId != null">biz_ref_id,</if>
+            <if test="batchId != null">batch_id,</if>
+            <if test="ownerUserId != null">owner_user_id,</if>
+            <if test="provider != null">provider,</if>
+            <if test="modelName != null">model_name,</if>
+            <if test="inputTokens != null">input_tokens,</if>
+            <if test="outputTokens != null">output_tokens,</if>
+            <if test="costAmount != null">cost_amount,</if>
+            <if test="priceVersion != null">price_version,</if>
+            <if test="latencyMs != null">latency_ms,</if>
+            <if test="status != null">status,</if>
+            <if test="createdAt != null">created_at,</if>
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="bizType != null">#{bizType},</if>
+            <if test="bizRefId != null">#{bizRefId},</if>
+            <if test="batchId != null">#{batchId},</if>
+            <if test="ownerUserId != null">#{ownerUserId},</if>
+            <if test="provider != null">#{provider},</if>
+            <if test="modelName != null">#{modelName},</if>
+            <if test="inputTokens != null">#{inputTokens},</if>
+            <if test="outputTokens != null">#{outputTokens},</if>
+            <if test="costAmount != null">#{costAmount},</if>
+            <if test="priceVersion != null">#{priceVersion},</if>
+            <if test="latencyMs != null">#{latencyMs},</if>
+            <if test="status != null">#{status},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateById">
+        UPDATE usage_record
+        <set>
+            <if test="bizType != null">biz_type = #{bizType},</if>
+            <if test="bizRefId != null">biz_ref_id = #{bizRefId},</if>
+            <if test="batchId != null">batch_id = #{batchId},</if>
+            <if test="ownerUserId != null">owner_user_id = #{ownerUserId},</if>
+            <if test="provider != null">provider = #{provider},</if>
+            <if test="modelName != null">model_name = #{modelName},</if>
+            <if test="inputTokens != null">input_tokens = #{inputTokens},</if>
+            <if test="outputTokens != null">output_tokens = #{outputTokens},</if>
+            <if test="costAmount != null">cost_amount = #{costAmount},</if>
+            <if test="priceVersion != null">price_version = #{priceVersion},</if>
+            <if test="latencyMs != null">latency_ms = #{latencyMs},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM usage_record WHERE id = #{id}
+    </delete>
+</mapper>

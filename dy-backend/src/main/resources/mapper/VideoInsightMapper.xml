@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 由 tools/codegen/generate_mybatis_crud.py 生成，替代 MyBatis-Plus BaseMapper。
+     语义与 MP 一致：insert/updateById 跳过 null 字段，id 自增回填。手工业务 SQL 请追加在本文件末尾。 -->
+<mapper namespace="com.coolskyai.coolpilot.insight.mapper.VideoInsightMapper">
+
+    <resultMap id="BaseResultMap" type="com.coolskyai.coolpilot.insight.entity.VideoInsight">
+        <id column="id" property="id"/>
+        <result column="video_id" property="videoId"/>
+        <result column="analysis_task_id" property="analysisTaskId"/>
+        <result column="profile_id" property="profileId"/>
+        <result column="insight_type" property="insightType"/>
+        <result column="scope_json" property="scopeJson"/>
+        <result column="sample_count" property="sampleCount"/>
+        <result column="result_json" property="resultJson"/>
+        <result column="summary_md" property="summaryMd"/>
+        <result column="evidence_count" property="evidenceCount"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">id, video_id, analysis_task_id, profile_id, insight_type, scope_json, sample_count, result_json, summary_md, evidence_count, created_at</sql>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM video_insight WHERE id = #{id}
+    </select>
+
+    <select id="selectBatchIds" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM video_insight
+        WHERE id IN
+        <foreach collection="collection" item="it" open="(" separator="," close=")">#{it}</foreach>
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO video_insight
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="videoId != null">video_id,</if>
+            <if test="analysisTaskId != null">analysis_task_id,</if>
+            <if test="profileId != null">profile_id,</if>
+            <if test="insightType != null">insight_type,</if>
+            <if test="scopeJson != null">scope_json,</if>
+            <if test="sampleCount != null">sample_count,</if>
+            <if test="resultJson != null">result_json,</if>
+            <if test="summaryMd != null">summary_md,</if>
+            <if test="evidenceCount != null">evidence_count,</if>
+            <if test="createdAt != null">created_at,</if>
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="videoId != null">#{videoId},</if>
+            <if test="analysisTaskId != null">#{analysisTaskId},</if>
+            <if test="profileId != null">#{profileId},</if>
+            <if test="insightType != null">#{insightType},</if>
+            <if test="scopeJson != null">#{scopeJson},</if>
+            <if test="sampleCount != null">#{sampleCount},</if>
+            <if test="resultJson != null">#{resultJson},</if>
+            <if test="summaryMd != null">#{summaryMd},</if>
+            <if test="evidenceCount != null">#{evidenceCount},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateById">
+        UPDATE video_insight
+        <set>
+            <if test="videoId != null">video_id = #{videoId},</if>
+            <if test="analysisTaskId != null">analysis_task_id = #{analysisTaskId},</if>
+            <if test="profileId != null">profile_id = #{profileId},</if>
+            <if test="insightType != null">insight_type = #{insightType},</if>
+            <if test="scopeJson != null">scope_json = #{scopeJson},</if>
+            <if test="sampleCount != null">sample_count = #{sampleCount},</if>
+            <if test="resultJson != null">result_json = #{resultJson},</if>
+            <if test="summaryMd != null">summary_md = #{summaryMd},</if>
+            <if test="evidenceCount != null">evidence_count = #{evidenceCount},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM video_insight WHERE id = #{id}
+    </delete>
+</mapper>

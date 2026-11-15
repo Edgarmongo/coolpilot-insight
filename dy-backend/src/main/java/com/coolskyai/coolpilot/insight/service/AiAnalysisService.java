@@ -3,7 +3,6 @@ package com.coolskyai.coolpilot.insight.service;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.coolskyai.coolpilot.insight.config.AppProperties;
 import com.coolskyai.coolpilot.insight.entity.*;
 import com.coolskyai.coolpilot.insight.mapper.*;
@@ -98,9 +97,7 @@ public class AiAnalysisService {
 
         // 跳过已分析过的评论（同 profile）
         List<Map<String, Object>> candidates = commentMapper.commentsForAnalysis(vid, max);
-        Set<Long> analyzed = commentAnalysisMapper.selectList(new LambdaQueryWrapper<CommentAnalysis>()
-                        .eq(CommentAnalysis::getProfileId, profile.getId()))
-                .stream().map(CommentAnalysis::getCommentId).collect(Collectors.toSet());
+        Set<Long> analyzed = new HashSet<>(commentAnalysisMapper.selectCommentIdsByProfile(profile.getId()));
         List<Map<String, Object>> todo = candidates.stream()
                 .filter(c -> !analyzed.contains(((Number) c.get("id")).longValue()))
                 .collect(Collectors.toList());
@@ -169,10 +166,7 @@ public class AiAnalysisService {
         }
         markTask(taskId, "RUNNING", null);
 
-        List<AnalysisTaskItem> items = itemMapper.selectList(new LambdaQueryWrapper<AnalysisTaskItem>()
-                .eq(AnalysisTaskItem::getTaskId, taskId)
-                .eq(AnalysisTaskItem::getStatus, "PENDING")
-                .orderByAsc(AnalysisTaskItem::getId));
+        List<AnalysisTaskItem> items = itemMapper.selectPendingByTask(taskId);
 
         int success = 0;
         int failed = 0;
@@ -285,9 +279,7 @@ public class AiAnalysisService {
     @SuppressWarnings("unchecked")
     private void upsertCommentAnalysis(AnalysisTask task, Long videoId, Long commentId,
                                        JSONObject r, long inTok, long outTok, BigDecimal cost) {
-        CommentAnalysis exist = commentAnalysisMapper.selectOne(new LambdaQueryWrapper<CommentAnalysis>()
-                .eq(CommentAnalysis::getCommentId, commentId)
-                .eq(CommentAnalysis::getProfileId, task.getProfileId()).last("LIMIT 1"));
+        CommentAnalysis exist = commentAnalysisMapper.selectByCommentAndProfile(commentId, task.getProfileId());
         CommentAnalysis ca = exist == null ? new CommentAnalysis() : exist;
         ca.setCommentId(commentId);
         ca.setProfileId(task.getProfileId());
@@ -317,9 +309,7 @@ public class AiAnalysisService {
         // 评论级证据：让每条结构化结论都能回到原文
         if (ca.getId() != null) {
             // 重跑同一条评论时先清理旧证据，避免证据表无限堆积
-            evidenceMapper.delete(new LambdaQueryWrapper<AnalysisEvidence>()
-                    .eq(AnalysisEvidence::getCommentAnalysisId, ca.getId())
-                    .eq(AnalysisEvidence::getSourceLevel, "COMMENT_ANALYSIS"));
+            evidenceMapper.deleteByCommentAnalysisAndSource(ca.getId(), "COMMENT_ANALYSIS");
             AnalysisEvidence ev = new AnalysisEvidence();
             ev.setCommentAnalysisId(ca.getId());
             ev.setCommentId(commentId);
@@ -541,9 +531,7 @@ public class AiAnalysisService {
             return Collections.emptyList();
         }
         governance.requireReadComments(vid);
-        return insightMapper.selectList(new LambdaQueryWrapper<VideoInsight>()
-                        .eq(VideoInsight::getVideoId, vid)
-                        .orderByDesc(VideoInsight::getId).last("LIMIT 20"))
+        return insightMapper.selectByVideoIdLimit(vid, 20)
                 .stream().map(v -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("id", v.getId());
@@ -579,8 +567,7 @@ public class AiAnalysisService {
         out.put("createdAt", t.getCreatedAt());
         out.put("finishedAt", t.getFinishedAt());
         out.put("errorMessage", t.getErrorMessage());
-        List<Map<String, Object>> batches = batchMapper.selectList(new LambdaQueryWrapper<AnalysisTaskBatch>()
-                        .eq(AnalysisTaskBatch::getTaskId, taskId).orderByAsc(AnalysisTaskBatch::getBatchNo))
+        List<Map<String, Object>> batches = batchMapper.selectByTaskId(taskId)
                 .stream().map(b -> {
                     Map<String, Object> m = new LinkedHashMap<>();
                     m.put("batchNo", b.getBatchNo());
@@ -597,14 +584,10 @@ public class AiAnalysisService {
     }
 
     public List<Map<String, Object>> listTasks(int page, int size) {
-        LambdaQueryWrapper<AnalysisTask> wrapper = new LambdaQueryWrapper<AnalysisTask>()
-                .orderByDesc(AnalysisTask::getId);
-        if (!governance.isAdmin()) {
-            wrapper.eq(AnalysisTask::getOwnerUserId, governance.currentUserId());
-        }
-        wrapper.last("LIMIT " + Math.min(Math.max(size, 1), 100)
-                + " OFFSET " + Math.max(page - 1, 0) * Math.max(size, 1));
-        return taskMapper.selectList(wrapper).stream().map(t -> {
+        int limit = Math.min(Math.max(size, 1), 100);
+        int offset = Math.max(page - 1, 0) * Math.max(size, 1);
+        Long owner = governance.isAdmin() ? null : governance.currentUserId();
+        return taskMapper.selectOrdered(owner, limit, offset).stream().map(t -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", t.getId());
             m.put("taskNo", t.getTaskNo());
@@ -635,9 +618,7 @@ public class AiAnalysisService {
         List<CommentAnalysis> analyses = new ArrayList<>();
         for (int i = 0; i < ids.size(); i += 500) {
             List<Long> slice = ids.subList(i, Math.min(i + 500, ids.size()));
-            analyses.addAll(commentAnalysisMapper.selectList(new LambdaQueryWrapper<CommentAnalysis>()
-                    .in(CommentAnalysis::getCommentId, slice)
-                    .orderByDesc(CommentAnalysis::getId)));
+            analyses.addAll(commentAnalysisMapper.selectByCommentIdsDesc(slice));
         }
         // 每条评论只保留最新一条
         Map<Long, CommentAnalysis> latest = new LinkedHashMap<>();
@@ -709,8 +690,7 @@ public class AiAnalysisService {
     // ============================================================ 内部
 
     private AnalysisProfile defaultProfile() {
-        AnalysisProfile p = profileMapper.selectOne(new LambdaQueryWrapper<AnalysisProfile>()
-                .eq(AnalysisProfile::getProfileKey, "ap_default_v1").last("LIMIT 1"));
+        AnalysisProfile p = profileMapper.selectByProfileKey("ap_default_v1");
         if (p == null) {
             throw new IllegalStateException("默认分析档案缺失，请检查数据库迁移是否执行");
         }

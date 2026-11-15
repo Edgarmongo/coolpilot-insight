@@ -3,7 +3,6 @@ package com.coolskyai.coolpilot.insight.service;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.coolskyai.coolpilot.insight.entity.Video;
 import com.coolskyai.coolpilot.insight.entity.VideoInsight;
 import com.coolskyai.coolpilot.insight.mapper.CommentMapper;
@@ -62,9 +61,7 @@ public class CompareService {
             row.put("totalComments", sum == null ? 0 : sum.get("total"));
             row.put("totalLikes", sum == null ? 0 : sum.get("likes"));
 
-            VideoInsight insight = insightMapper.selectOne(new LambdaQueryWrapper<VideoInsight>()
-                    .eq(VideoInsight::getVideoId, vid)
-                    .orderByDesc(VideoInsight::getId).last("LIMIT 1"));
+            VideoInsight insight = insightMapper.selectLatestByVideoId(vid);
             if (insight == null) {
                 row.put("hasInsight", false);
                 row.put("needs", Collections.emptyList());

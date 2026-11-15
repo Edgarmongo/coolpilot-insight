@@ -1,16 +1,11 @@
 package com.coolskyai.coolpilot.insight.entity;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
 
 @Data
-@TableName("video")
 public class Video {
-    @TableId(type = IdType.AUTO)
     private Long id;
     private String platform;
     /** 平台视频 ID（抖音 aweme_id） */
