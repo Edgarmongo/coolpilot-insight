@@ -213,6 +213,7 @@ public final class RegistrySnapshotParser {
 
         // 6) 能力文档
         List<CapabilityDocument> documents = new ArrayList<>();
+        java.util.Set<String> seenDocuments = new java.util.HashSet<>();
         for (JsonNode n : capNodes) {
             CapabilityDocument doc;
             try {
@@ -245,6 +246,14 @@ public final class RegistrySnapshotParser {
                             "能力 " + item.code() + " 缺少 adapterFunction");
                 }
             }
+            // 重复 connectorCode 必须拒绝：核对器 findConnector() 取**第一条**文档，
+            // 而镜像校验按 connectorCode 建索引（后写覆盖）。两份取的不是同一条时，
+            // 镜像校验与真实判定会看不同数据，等于给分叉留了暗门。
+            if (seenDocuments.contains(doc.connectorCode())) {
+                return Result.failure(Failure.BROKEN_CAPABILITY,
+                        "capabilities 中存在重复的 connectorCode: " + doc.connectorCode());
+            }
+            seenDocuments.add(doc.connectorCode());
             documents.add(doc);
         }
 
@@ -330,24 +339,23 @@ public final class RegistrySnapshotParser {
                 return "Adapter " + a.connectorCode()
                         + " 标记为真实平台接入，但 capabilities 中没有对应文档";
             }
-            Map<String, String> fromAdapter = new LinkedHashMap<>();
+            Map<String, CapabilityItem> fromAdapter = new LinkedHashMap<>();
             for (CapabilityItem c : a.capabilities()) {
-                fromAdapter.put(c.code(), c.implementationStatus());
+                fromAdapter.put(c.code(), c);
             }
-            Map<String, String> fromDoc = new LinkedHashMap<>();
+            Map<String, CapabilityItem> fromDoc = new LinkedHashMap<>();
             for (CapabilityItem c : doc.capabilities()) {
-                fromDoc.put(c.code(), c.implementationStatus());
+                fromDoc.put(c.code(), c);
             }
-            for (Map.Entry<String, String> e : fromAdapter.entrySet()) {
-                if (!fromDoc.containsKey(e.getKey())) {
+            for (Map.Entry<String, CapabilityItem> e : fromAdapter.entrySet()) {
+                CapabilityItem docCap = fromDoc.get(e.getKey());
+                if (docCap == null) {
                     return "能力 " + a.connectorCode() + "/" + e.getKey()
                             + " 出现在 adapters[].capabilities，但不在 capabilities[] 文档中";
                 }
-                String docStatus = fromDoc.get(e.getKey());
-                if (!java.util.Objects.equals(e.getValue(), docStatus)) {
-                    return "能力 " + a.connectorCode() + "/" + e.getKey()
-                            + " 的 implementationStatus 两份副本不一致: adapters=" + e.getValue()
-                            + "，capabilities=" + docStatus;
+                String diff = describeMirrorDiff(e.getValue(), docCap);
+                if (diff != null) {
+                    return "能力 " + a.connectorCode() + "/" + e.getKey() + " " + diff;
                 }
             }
             for (String code : fromDoc.keySet()) {
@@ -358,6 +366,67 @@ public final class RegistrySnapshotParser {
             }
         }
         return null;
+    }
+
+    /**
+     * 比较两份副本中**参与 Effective 推导**的字段。
+     *
+     * <p>比较范围（M1 裁决）：
+     * <ul>
+     *   <li>{@code implementationStatus} —— 决定第 ⑮~⑳ 步；</li>
+     *   <li>{@code accessModes} —— 决定第 ⑭ 步（按集合比较，顺序无语义）；</li>
+     *   <li>{@code evidence} —— 决定第 ⑮~⑰ 步，比较
+     *       {@code accepted} / {@code rejectionReason} / {@code contentHash} / {@code verifiedAt}。
+     *       前两者直接决定原因码，后两者标识"是不是同一份证据记录"。</li>
+     * </ul>
+     *
+     * <p><b>边界：{@code adapterFunction} 不参与比较</b>。它在解析期只用于
+     * {@code hasBoundFunction()} 的存在性校验，不进入 Effective 推导；两份不同不会
+     * 改变任何判定结果。若将来它参与判定，必须同步加入这里。
+     *
+     * @return {@code null} 表示一致；否则返回人类可读的差异说明
+     */
+    private static String describeMirrorDiff(CapabilityItem adapterCap, CapabilityItem docCap) {
+        if (!java.util.Objects.equals(adapterCap.implementationStatus(),
+                docCap.implementationStatus())) {
+            return "的 implementationStatus 两份副本不一致: adapters="
+                    + adapterCap.implementationStatus() + "，capabilities="
+                    + docCap.implementationStatus();
+        }
+        List<String> adapterModes = normalizedModes(adapterCap.accessModes());
+        List<String> docModes = normalizedModes(docCap.accessModes());
+        if (!adapterModes.equals(docModes)) {
+            return "的 accessModes 两份副本不一致: adapters=" + adapterModes
+                    + "，capabilities=" + docModes;
+        }
+        String adapterEvidence = evidenceFingerprint(adapterCap.evidence());
+        String docEvidence = evidenceFingerprint(docCap.evidence());
+        if (!adapterEvidence.equals(docEvidence)) {
+            return "的 evidence 两份副本不一致: adapters=" + adapterEvidence
+                    + "，capabilities=" + docEvidence;
+        }
+        return null;
+    }
+
+    /** accessModes 是**集合**语义，排序后比较，避免顺序差异被当成不一致。 */
+    private static List<String> normalizedModes(List<String> modes) {
+        if (modes == null) {
+            return List.of();
+        }
+        List<String> out = new ArrayList<>(modes);
+        out.sort(String::compareTo);
+        return out;
+    }
+
+    /** 证据指纹：只取影响判定与记录身份的四项。 */
+    private static String evidenceFingerprint(CapabilityItem.Evidence ev) {
+        if (ev == null) {
+            return "<none>";
+        }
+        return "accepted=" + ev.accepted()
+                + ",rejectionReason=" + ev.rejectionReason()
+                + ",contentHash=" + ev.contentHash()
+                + ",verifiedAt=" + ev.verifiedAt();
     }
 
     /** 诊断用标签：优先 connectorCode，退回 sourceCode。 */

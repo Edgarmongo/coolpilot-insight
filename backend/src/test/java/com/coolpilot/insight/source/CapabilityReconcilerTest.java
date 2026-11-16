@@ -563,22 +563,97 @@ class CapabilityReconcilerTest {
     }
 
     @Test
-    @DisplayName("F1-3 DEGRADED + 证据不合格的 reason：构造期就拒绝 executable=true")
-    void degradedWithBadReasonCannotBeConstructedExecutable() {
-        // 即使有人手工拼一个 DEGRADED + EVIDENCE_INVALID，也不允许标成可执行
+    @DisplayName("L1 status×reason 合法组合表：非法组合连 executable=false 也拒绝")
+    void illegalCombinationRejectedEvenWhenNotExecutable() {
+        // FIX-04 评审 L1：executable 一致性不能替代 status/reason 的语义一致性。
+        //
+        // 注意这条比 F1-3 当时的裁决更严：当时允许"DEGRADED + 坏 reason + false"
+        // 作为诊断记录保留；但按契约，DEGRADED 只允许配 DEGRADED，
+        // "降级但证据失效"的正确表达是 UNKNOWN + EVIDENCE_*（证据闸门在降级之前）。
+        // 因此本轮按组合表拒绝，F1-3 的那条放宽被收回。
         for (String bad : List.of(EffectiveReason.EVIDENCE_INVALID,
-                EffectiveReason.EVIDENCE_EXPIRED, EffectiveReason.VERIFICATION_REQUIRED)) {
-            org.assertj.core.api.Assertions.assertThatThrownBy(() ->
-                    new EffectiveCapability("COMMENT", "COMMENT", EffectiveStatus.DEGRADED,
-                            bad, true, "非法"))
-                    .as("DEGRADED + %s + executable=true 必须构造失败", bad)
-                    .isInstanceOf(IllegalArgumentException.class);
-
-            // 标成不可执行则是合法的——允许存在"降级但已失效"的记录供诊断
-            var cap = new EffectiveCapability("COMMENT", "COMMENT",
-                    EffectiveStatus.DEGRADED, bad, false, "已失效的降级记录");
-            assertThat(cap.executable()).isFalse();
+                EffectiveReason.EVIDENCE_EXPIRED, EffectiveReason.VERIFICATION_REQUIRED,
+                EffectiveReason.NONE, EffectiveReason.ACCOUNT_REQUIRED)) {
+            for (boolean exec : new boolean[]{true, false}) {
+                org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                        new EffectiveCapability("COMMENT", "COMMENT", EffectiveStatus.DEGRADED,
+                                bad, exec, "非法组合"))
+                        .as("DEGRADED + %s + executable=%s 必须构造失败", bad, exec)
+                        .isInstanceOf(IllegalArgumentException.class)
+                        .hasMessageContaining("非法的 (status, reason) 组合");
+            }
         }
+
+        // 合法的"非执行诊断记录"仍然允许：UNKNOWN + EVIDENCE_* + false
+        for (String ok : List.of(EffectiveReason.EVIDENCE_INVALID, EffectiveReason.EVIDENCE_EXPIRED)) {
+            var cap = new EffectiveCapability("COMMENT", "COMMENT",
+                    EffectiveStatus.UNKNOWN, ok, false, "证据不合格的诊断记录");
+            assertThat(cap.executable()).isFalse();
+            assertThat(cap.effectiveStatus()).isEqualTo(EffectiveStatus.UNKNOWN);
+        }
+
+        // 同一组合标成可执行则拒绝（executable 与准入计算不一致）
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                new EffectiveCapability("COMMENT", "COMMENT", EffectiveStatus.UNKNOWN,
+                        EffectiveReason.EVIDENCE_INVALID, true, "非法"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("L1 合法组合表：核对器可能产出的每一组都能构造，且只有该组的准入结论成立")
+    void everyLegalCombinationIsConstructible() {
+        // 这份清单直接对应 SOURCE-04-04-TASKCARD §3.2 的 20 步判定表。
+        // 若有人往枚举里加值却忘了更新组合表，本用例会失败。
+        record Pair(String status, String reason) {
+        }
+        List<Pair> legal = List.of(
+                new Pair(EffectiveStatus.AVAILABLE, EffectiveReason.NONE),
+                new Pair(EffectiveStatus.SOURCE_DISABLED, EffectiveReason.SOURCE_DISABLED),
+                new Pair(EffectiveStatus.ADAPTER_MISSING, EffectiveReason.ADAPTER_NOT_LOADED),
+                new Pair(EffectiveStatus.VERSION_MISMATCH, EffectiveReason.CONNECTOR_VERSION_MISMATCH),
+                new Pair(EffectiveStatus.VERSION_MISMATCH, EffectiveReason.CONTRACT_VERSION_MISMATCH),
+                new Pair(EffectiveStatus.ACCOUNT_REQUIRED, EffectiveReason.ACCOUNT_REQUIRED),
+                new Pair(EffectiveStatus.DEGRADED, EffectiveReason.DEGRADED),
+                new Pair(EffectiveStatus.UNREGISTERED, EffectiveReason.NOT_DECLARED),
+                new Pair(EffectiveStatus.UNREGISTERED, EffectiveReason.CAPABILITY_NOT_REGISTERED),
+                new Pair(EffectiveStatus.UNREGISTERED, EffectiveReason.FUNCTION_UNRESOLVED),
+                new Pair(EffectiveStatus.UNREGISTERED, EffectiveReason.FUNCTION_NOT_CALLABLE),
+                new Pair(EffectiveStatus.UNREGISTERED, EffectiveReason.CAPABILITY_DISABLED),
+                new Pair(EffectiveStatus.UNREGISTERED, EffectiveReason.PLATFORM_UNSUPPORTED),
+                new Pair(EffectiveStatus.UNREGISTERED, EffectiveReason.ACCESS_MODE_UNSUPPORTED),
+                new Pair(EffectiveStatus.UNKNOWN, EffectiveReason.REGISTRY_UNREACHABLE),
+                new Pair(EffectiveStatus.UNKNOWN, EffectiveReason.SCHEMA_UNSUPPORTED),
+                new Pair(EffectiveStatus.UNKNOWN, EffectiveReason.OBSERVED_STALE),
+                new Pair(EffectiveStatus.UNKNOWN, EffectiveReason.DESIRED_UNPARSEABLE),
+                new Pair(EffectiveStatus.UNKNOWN, EffectiveReason.VERIFICATION_REQUIRED),
+                new Pair(EffectiveStatus.UNKNOWN, EffectiveReason.EVIDENCE_EXPIRED),
+                new Pair(EffectiveStatus.UNKNOWN, EffectiveReason.EVIDENCE_INVALID));
+
+        for (Pair p : legal) {
+            boolean exec = EffectiveStatus.allowsExecution(p.status(), p.reason());
+            // 用"允许的那个标志值"构造必须成功
+            var cap = new EffectiveCapability("C", "COMMENT", p.status(), p.reason(),
+                    exec, "组合矩阵");
+            assertThat(cap.executable()).isEqualTo(exec);
+            // 反过来那个标志值必须被拒（不能靠 executable 绕过配对校验）
+            org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                    new EffectiveCapability("C", "COMMENT", p.status(), p.reason(),
+                            !exec, "组合矩阵"))
+                    .as("%s/%s 用 executable=%s 构造应被拒", p.status(), p.reason(), !exec)
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        // 表里的组合数必须与枚举规模相符：8 状态 × 21 reason = 168 种，
+        // 其中只有 21 种合法 —— 其余 147 种都必须被拒。
+        int legalCount = 0;
+        for (String st : EffectiveStatus.ALL) {
+            legalCount += EffectiveStatus.legalReasonsOf(st).size();
+        }
+        assertThat(legalCount)
+                .as("合法组合总数应与 §3.2 判定表一致")
+                .isEqualTo(legal.size());
+        assertThat(EffectiveStatus.ALL).hasSize(8);
+        assertThat(EffectiveReason.ALL).hasSize(21);
     }
 
     @Test

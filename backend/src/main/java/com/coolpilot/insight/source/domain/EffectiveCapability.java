@@ -33,18 +33,29 @@ public record EffectiveCapability(
      * 不依赖调用方自觉。
      */
     public EffectiveCapability {
+        // 顺序有意为之：先判"这条事实本身是否成立"，再判"执行标志是否与之一致"。
+        // 反过来的话，一个非法组合可能被报成"executable 不一致"，掩盖真正的问题。
+        if (!EffectiveStatus.ALL.contains(effectiveStatus)) {
+            throw new IllegalArgumentException("非法的 effectiveStatus: " + effectiveStatus);
+        }
+        if (!EffectiveReason.ALL.contains(effectiveReason)) {
+            throw new IllegalArgumentException("非法的 effectiveReason: " + effectiveReason);
+        }
+        // 状态与原因必须说得通（FIX-04 评审 L1）。
+        // 只校验 executable 不够：AVAILABLE + EVIDENCE_INVALID + false 这种记录
+        // 执行标志是"对的"，但它同时声称"可用"和"证据无效"，展示出来就是矛盾。
+        if (!EffectiveStatus.isLegalCombination(effectiveStatus, effectiveReason)) {
+            throw new IllegalArgumentException(
+                    "非法的 (status, reason) 组合: " + effectiveStatus + " / " + effectiveReason
+                            + "，该状态允许的 reason: "
+                            + EffectiveStatus.legalReasonsOf(effectiveStatus));
+        }
         boolean allowed = EffectiveStatus.allowsExecution(effectiveStatus, effectiveReason);
         if (executable != allowed) {
             throw new IllegalArgumentException(
                     "executable 与 (status, reason) 不一致: "
                             + effectiveStatus + "/" + effectiveReason
                             + " 期望 executable=" + allowed + "，实际=" + executable);
-        }
-        if (!EffectiveStatus.ALL.contains(effectiveStatus)) {
-            throw new IllegalArgumentException("非法的 effectiveStatus: " + effectiveStatus);
-        }
-        if (!EffectiveReason.ALL.contains(effectiveReason)) {
-            throw new IllegalArgumentException("非法的 effectiveReason: " + effectiveReason);
         }
     }
 

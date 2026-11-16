@@ -366,6 +366,47 @@ Python 的 `/v1/capabilities` 只输出 Observed，**从不输出** `effectiveSt
 > 无需扩充 `effectiveStatus`（八值冻结），也无需把它误归为 `UNREGISTERED`
 > ——它确实注册了。
 
+### 3.2.2 `status × reason` 合法性表（构造期强制）
+
+`executable == allowsExecution(status, reason)` 只保证"执行标志与准入计算一致"，
+**不保证状态与原因本身说得通**。因此实现另有一张白名单表，
+在 `EffectiveCapability` 构造期校验（`EffectiveStatus.isLegalCombination`）：
+
+| `effectiveStatus` | 允许的 `effectiveReason` |
+|---|---|
+| `AVAILABLE` | `NONE` |
+| `SOURCE_DISABLED` | `SOURCE_DISABLED` |
+| `ADAPTER_MISSING` | `ADAPTER_NOT_LOADED` |
+| `VERSION_MISMATCH` | `CONNECTOR_VERSION_MISMATCH` / `CONTRACT_VERSION_MISMATCH` |
+| `ACCOUNT_REQUIRED` | `ACCOUNT_REQUIRED` |
+| `DEGRADED` | `DEGRADED` |
+| `UNREGISTERED` | `NOT_DECLARED` / `CAPABILITY_NOT_REGISTERED` / `FUNCTION_UNRESOLVED` / `FUNCTION_NOT_CALLABLE` / `CAPABILITY_DISABLED` / `PLATFORM_UNSUPPORTED` / `ACCESS_MODE_UNSUPPORTED` |
+| `UNKNOWN` | `REGISTRY_UNREACHABLE` / `SCHEMA_UNSUPPORTED` / `OBSERVED_STALE` / `DESIRED_UNPARSEABLE` / `VERIFICATION_REQUIRED` / `EVIDENCE_EXPIRED` / `EVIDENCE_INVALID` |
+
+合计 **21 组合法 / 147 组非法**（8 × 21 = 168）。表与 §3.2 的 20 步判定表一一对应：
+核对器能产出的每一组都在表内，表内每一组都有对应的推导步骤。
+
+> **`DEGRADED` 只允许配 `DEGRADED`**：能力即使降级，其状态描述也必须是"可用但受限"。
+> "降级了但证据失效"这类事实的正确表达是 `UNKNOWN` + `EVIDENCE_*`
+> ——证据闸门（第 ⑮~⑰ 步）在降级（第 ⑲ 步）之前，根本走不到降级判定。
+
+### 3.2.3 两份 capabilities 副本的镜像校验范围
+
+`adapters[].capabilities` 与 `capabilities[]`（文档）是同一份声明的两个视图，
+Java 同时消费（候选取前者、状态查后者），因此解析期断言两者互为镜像：
+
+| 字段 | 是否比较 | 理由 |
+|---|---|---|
+| `code` | ✅ 双向比较 | 集合不一致意味着"清单来自 A、状态查自 B" |
+| `implementationStatus` | ✅ | 直接决定第 ⑮~⑳ 步 |
+| `accessModes` | ✅（集合语义，顺序无关） | 直接决定第 ⑭ 步 |
+| `evidence`（`accepted` / `rejectionReason` / `contentHash` / `verifiedAt`） | ✅ | 直接决定第 ⑮~⑰ 步；后两项标识"是否同一份证据记录" |
+| `adapterFunction` | ❌ **不比较** | 解析期只用于 `hasBoundFunction()` 的存在性校验，不进入 Effective 推导；两份不同不改变任何判定结果。若将来它参与判定，必须同步加入比较 |
+
+任一项不一致 → 拒绝整份快照（`BROKEN_CAPABILITY`），**不取交集、不静默跳过**。
+另外 `capabilities[]` 中出现重复 `connectorCode` 也直接拒绝——核对器 `findConnector()`
+取第一条、镜像索引后写覆盖，重复时两者看的不是同一份文档。
+
 ### 3.3 `effectiveReason` 枚举（21 值，Java 内部模型）
 
 `NONE` / `SOURCE_DISABLED` / `REGISTRY_UNREACHABLE` / `SCHEMA_UNSUPPORTED` /

@@ -113,6 +113,11 @@ class SourceQueryServiceTest {
                 .as("Registry 故障必须仍然可见")
                 .isEqualTo("UNAVAILABLE");
         assertThat(view.getSnapshotDetail()).isNotBlank();
+
+        // 直接断言，不依赖 D 用例间接覆盖（FIX-04 评审 OBS2）
+        assertThat(view.getEffective())
+                .as("两边都没有能力码来源时，Effective 必须为空")
+                .isEmpty();
     }
 
     @Test

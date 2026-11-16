@@ -243,6 +243,13 @@ boolean executable = ("AVAILABLE".equals(effectiveStatus)
 **不得**写成语义反转的形式（如 `!"UNREGISTERED".equals(status)`），
 那会把 `UNKNOWN` 及未来新增的状态默认放行——这是最危险的一类缺陷。
 
+> **补一层：`status × reason` 组合合法性（2026-11-16，FIX-04 M1/L1）**
+> 白名单只回答"能不能执行"，不回答"这两个字段放在一起说不说得通"。
+> 缺了后者，`AVAILABLE + EVIDENCE_INVALID + executable=false` 这种自相矛盾的记录
+> 也能构造出来。因此 `EffectiveCapability` 构造期另有一张组合白名单
+> （见 `SOURCE-04-04-TASKCARD.md` §3.2.2：21 组合法 / 147 组非法）。
+> 两个校验分工明确、互不替代：**组合合法 ≠ 可执行，可执行必然组合合法**。
+
 ### 4.3.1 证据闸门不因实现状态而豁免（2026-11-16 增补）
 
 白名单解决的是"**结论**能否执行"，还有一个更前置的问题：**结论本身怎么得出**。

@@ -276,6 +276,83 @@ class RegistrySnapshotParserTest {
     }
 
     @Test
+    @DisplayName("M1 evidence 不一致 → BROKEN_CAPABILITY（状态相同也不放过）")
+    void rejectsMirrorEvidenceMismatch() {
+        // 两份能力码与 implementationStatus 完全一致，只有 evidence 不同：
+        // evidence.accepted 决定第 ⑮~⑰ 步，是判定输入，不能被镜像校验忽略
+        String body = inDoc(minimal(VALID_ID, "1.1"),
+                "\"semantics\":\"READ\"}]}],",
+                "\"semantics\":\"READ\",\"evidence\":{\"accepted\":true,"
+                        + "\"verifiedAt\":\"2026-11-16T00:00:00Z\","
+                        + "\"method\":\"REAL_PLATFORM_RUN\",\"contentHash\":\"h\"}}]}],");
+
+        var result = RegistrySnapshotParser.parse(body);
+        assertThat(result.ok()).isFalse();
+        assertThat(result.error().failure()).isEqualTo(RegistrySnapshotParser.Failure.BROKEN_CAPABILITY);
+        assertThat(result.error().message())
+                .contains("X/COMMENT").contains("evidence")
+                .contains("<none>").contains("accepted=true");
+    }
+
+    @Test
+    @DisplayName("M1 accessModes 不一致 → BROKEN_CAPABILITY（决定第 ⑭ 步）")
+    void rejectsMirrorAccessModesMismatch() {
+        String body = inDoc(minimal(VALID_ID, "1.1"),
+                "\"accessModes\":[\"PUBLIC\"]",
+                "\"accessModes\":[\"PUBLIC\",\"AUTHENTICATED\"]");
+
+        var result = RegistrySnapshotParser.parse(body);
+        assertThat(result.ok()).isFalse();
+        assertThat(result.error().message())
+                .contains("X/COMMENT").contains("accessModes").contains("AUTHENTICATED");
+    }
+
+    @Test
+    @DisplayName("M1 accessModes 顺序不同但元素相同 → 接受（集合语义）")
+    void acceptsDifferentAccessModesOrder() {
+        String body = inAdapter(minimal(VALID_ID, "1.1"),
+                "\"accessModes\":[\"PUBLIC\"]",
+                "\"accessModes\":[\"PUBLIC\"]");
+        // 两侧同为 PUBLIC：基线
+        assertThat(RegistrySnapshotParser.parse(body).ok()).isTrue();
+
+        // 两侧都是 PUBLIC+AUTHENTICATED，只是顺序相反
+        String both = inAdapter(minimal(VALID_ID, "1.1"),
+                "\"accessModes\":[\"PUBLIC\"]",
+                "\"accessModes\":[\"AUTHENTICATED\",\"PUBLIC\"]");
+        both = inDoc(both, "\"accessModes\":[\"PUBLIC\"]",
+                "\"accessModes\":[\"PUBLIC\",\"AUTHENTICATED\"]");
+        assertThat(RegistrySnapshotParser.parse(both).ok())
+                .as("accessModes 是集合，顺序不同不应判为镜像不一致")
+                .isTrue();
+    }
+
+    @Test
+    @DisplayName("M1 capabilities 中重复 connectorCode → BROKEN_CAPABILITY")
+    void rejectsDuplicateConnectorDocument() {
+        // findConnector() 取第一条文档，镜像索引却是后写覆盖；
+        // 重复时两者看的不是同一份，必须直接拒绝
+        String dupDoc = "{\"schemaVersion\":\"1.1\",\"sourceCode\":\"DOUYIN\","
+                + "\"connectorCode\":\"X\",\"connectorVersion\":\"1.0.0\","
+                + "\"capabilities\":[{\"code\":\"COMMENT\",\"category\":\"COMMENT\","
+                + "\"accessModes\":[\"PUBLIC\"],\"implementationStatus\":\"UNVERIFIED\","
+                + "\"contractVersion\":\"1.0\",\"adapterFunction\":\"app.x.y\","
+                + "\"semantics\":\"READ\"}]}";
+
+        // 原文档尾部是 "semantics":"READ"}]}],
+        // 拆成：闭合本条 → 逗号 → 第二份文档 → 闭合数组
+        String body = inDoc(minimal(VALID_ID, "1.1"),
+                "\"semantics\":\"READ\"}]}],",
+                "\"semantics\":\"READ\"}]}," + dupDoc + "],");
+
+        var result = RegistrySnapshotParser.parse(body);
+        assertThat(result.ok())
+                .as("构造的 JSON 本身必须合法，否则测不到重复逻辑")
+                .isFalse();
+        assertThat(result.error().message()).contains("重复的 connectorCode");
+    }
+
+    @Test
     @DisplayName("O1 STUB（platformScoped=false）的能力不参与镜像比较")
     void stubCapabilitiesExcludedFromMirror() {
         // STUB 在文档侧本来就没有条目，把它的能力拿来比较会导致"正常的快照被判非法"
