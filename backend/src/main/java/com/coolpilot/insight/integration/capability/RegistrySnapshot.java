@@ -37,17 +37,35 @@ public record RegistrySnapshot(
     /**
      * 一个 Adapter（接入实现）的注册状态。
      *
+     * <p><b>必须完整映射 Python 的 {@code AdapterMetadata.to_v1()}</b>：
+     * 丢弃任何字段都会让上层失去一个结构化判断依据，只能退化为靠
+     * {@code sourceCode} 或能力数量推断——那是巧合，不是契约。
+     *
      * @param connectorCode     接入实现标识
      * @param sourceCode        平台标识
      * @param connectorVersion  接入实现版本
      * @param loadStatus        {@code LOADED} / {@code FAILED}
+     * @param module            Python 模块路径（诊断与定位用）
+     * @param platformScoped    <b>关键</b>：是否为真实平台接入。
+     *                          {@code false} 表示链路验证替身，04-03 必须排除它，
+     *                          不得靠 {@code sourceCode == "STUB"} 或能力数量推断
      * @param capabilityCount   已兑现能力数
+     * @param errorCode         加载失败时的错误码
+     * @param errorMessage      加载失败时的说明
+     * @param capabilities      该接入下的能力（Adapter 视角，与顶层平台文档互为冗余）
      */
     public record AdapterView(String connectorCode, String sourceCode, String connectorVersion,
-                              String loadStatus, Integer capabilityCount) {
+                              String loadStatus, String module, Boolean platformScoped,
+                              Integer capabilityCount, String errorCode, String errorMessage,
+                              List<CapabilityItem> capabilities) {
 
         public boolean isLoaded() {
             return "LOADED".equals(loadStatus);
+        }
+
+        /** 是否真实平台接入。缺失该字段时按 {@code true} 处理（保守：不误排除）。 */
+        public boolean isPlatformScoped() {
+            return platformScoped == null || Boolean.TRUE.equals(platformScoped);
         }
     }
 
@@ -104,6 +122,19 @@ public record RegistrySnapshot(
             }
         }
         return null;
+    }
+
+    /**
+     * 只保留**真实平台接入**，排除链路验证替身。
+     *
+     * <p>04-03 的核对必须用这个视图，而不是直接用 {@link #adapters()}——
+     * 否则 STUB 之类的替身会混入 Desired/Observed 比对。
+     */
+    public List<AdapterView> platformScopedAdapters() {
+        if (adapters == null) {
+            return List.of();
+        }
+        return adapters.stream().filter(AdapterView::isPlatformScoped).toList();
     }
 
     /** 某接入下某能力的诊断；没有返回 {@code null}。 */

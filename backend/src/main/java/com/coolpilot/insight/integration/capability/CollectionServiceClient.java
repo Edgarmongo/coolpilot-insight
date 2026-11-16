@@ -85,16 +85,31 @@ public class CollectionServiceClient implements SnapshotProvider {
 
         RegistrySnapshotParser.Result parsed = RegistrySnapshotParser.parse(body);
         if (!parsed.ok()) {
-            String first = parsed.errors().isEmpty() ? "未知解析错误" : parsed.errors().get(0);
-            FetchResult.Kind kind = first.contains("主版本") || first.contains("schemaVersion")
-                    ? FetchResult.Kind.SCHEMA_UNSUPPORTED
-                    : first.contains("不一致")
-                    ? FetchResult.Kind.INCONSISTENT
-                    : FetchResult.Kind.UNPARSEABLE;
-            log.warn("[capability] 快照被拒绝（{}）: {}", kind, first);
-            return FetchResult.failure(kind, first);
+            // 机器分派**只读结构化原因码**，message 只进日志。
+            // 改措辞、改语言都不会影响分类（见 SOURCE-04-02 评审 H1）。
+            RegistrySnapshotParser.Failure failure = parsed.error().failure();
+            FetchResult.Kind kind = mapFailure(failure);
+            log.warn("[capability] 快照被拒绝（{} / {}）: {}",
+                    kind, failure, parsed.error().message());
+            return FetchResult.failure(kind, parsed.error().message());
         }
         return new FetchResult(parsed.snapshot(), FetchResult.Kind.OK, null);
+    }
+
+    /**
+     * 解析失败码 → 传输层失败分类。
+     *
+     * <p>这是一张**穷举**映射表（switch 表达式，新增 {@code Failure} 会编译报错），
+     * 不是 if-else 兜底——新增原因码时强制要求显式决定如何分类。
+     */
+    static FetchResult.Kind mapFailure(RegistrySnapshotParser.Failure failure) {
+        return switch (failure) {
+            case UNSUPPORTED_SCHEMA -> FetchResult.Kind.SCHEMA_UNSUPPORTED;
+            case UNSUPPORTED_CONTRACT -> FetchResult.Kind.CONTRACT_UNSUPPORTED;
+            case INCONSISTENT -> FetchResult.Kind.INCONSISTENT;
+            case MALFORMED_BODY, MISSING_SNAPSHOT_ID, MALFORMED_SNAPSHOT_ID,
+                 MISSING_ARRAY, BROKEN_CAPABILITY -> FetchResult.Kind.MALFORMED_RESPONSE;
+        };
     }
 
     public String baseUrl() {
@@ -117,10 +132,12 @@ public class CollectionServiceClient implements SnapshotProvider {
             UNREACHABLE,
             /** 非 200 */
             HTTP_ERROR,
-            /** 非法 JSON 或缺必需字段 */
-            UNPARSEABLE,
+            /** 非法 JSON / 缺必需字段 / 快照 ID 格式非法 */
+            MALFORMED_RESPONSE,
             /** Schema 主版本不支持 */
             SCHEMA_UNSUPPORTED,
+            /** 快照契约主版本不支持 */
+            CONTRACT_UNSUPPORTED,
             /** 能力清单与诊断互相矛盾 */
             INCONSISTENT
         }

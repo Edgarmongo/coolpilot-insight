@@ -2,9 +2,9 @@
   "code": 0,
   "msg": "ok",
   "data": {
-    "snapshotId": "sha256:06e258abbffcd2d2b1ab8a367a5e9f5ee1cd9d35072eb4c313155c363ee5933d",
-    "generatedAt": "2026-11-16T12:57:27Z",
-    "contractVersion": "1.1",
+    "snapshotId": "sha256:f37f934b2fc4436dc05aad2dbf353d9f3126d127e204dd87bbacb542363f3ffa",
+    "generatedAt": "2026-11-16T13:25:46Z",
+    "contractVersion": "1.0",
     "schemaVersion": "1.1",
     "adapters": [
       {

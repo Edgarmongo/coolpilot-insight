@@ -15,8 +15,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>样本 {@code registry-snapshot-sample.json} 是从**真实运行的**
  * {@code cpi-collection} 容器导出的响应，不是手写的。
  *
- * <p>断言重点：**只接受完整、合法、内部自洽的快照**。
- * 任何一项不满足就整体拒绝——不做局部接受，因为局部接受等于自己制造混合快照。
+ * <p>断言重点：
+ *
+ * <ul>
+ *   <li>**只接受完整、合法、内部自洽的快照**；</li>
+ *   <li>失败时断言**结构化错误码**（{@link RegistrySnapshotParser.Failure}），
+ *       不断言 message 文本——改措辞不应让测试变红，也不应改变分类；</li>
+ *   <li>{@code schemaVersion} 与 {@code contractVersion} **独立校验**。</li>
+ * </ul>
  */
 class RegistrySnapshotParserTest {
 
@@ -29,15 +35,17 @@ class RegistrySnapshotParserTest {
     }
 
     /** 构造一个最小合法快照 JSON。 */
-    private static String minimal(String snapshotId, String schemaVersion) {
+    private static String minimal(String snapshotId, String schemaVersion, String contractVersion) {
         return """
                 {"code":0,"data":{
                   "snapshotId":"%s",
-                  "contractVersion":"1.1",
+                  "contractVersion":"%s",
                   "schemaVersion":"%s",
                   "generatedAt":"2026-11-16T12:00:00Z",
                   "adapters":[{"connectorCode":"X","sourceCode":"DOUYIN",
-                               "connectorVersion":"1.0.0","loadStatus":"LOADED","capabilityCount":1}],
+                               "connectorVersion":"1.0.0","loadStatus":"LOADED",
+                               "module":"app.x.adapter","platformScoped":true,"capabilityCount":1,
+                               "capabilities":[{"code":"COMMENT","adapterFunction":"app.x.y"}]}],
                   "capabilities":[{"schemaVersion":"1.1","sourceCode":"DOUYIN","connectorCode":"X",
                                    "connectorVersion":"1.0.0",
                                    "capabilities":[{"code":"COMMENT","category":"COMMENT",
@@ -46,23 +54,63 @@ class RegistrySnapshotParserTest {
                                      "adapterFunction":"app.x.y","semantics":"READ"}]}],
                   "diagnostics":[]
                 }}
-                """.formatted(snapshotId, schemaVersion);
+                """.formatted(snapshotId, contractVersion, schemaVersion);
+    }
+
+    private static String minimal(String snapshotId, String schemaVersion) {
+        return minimal(snapshotId, schemaVersion, "1.0");
     }
 
     private static final String VALID_ID = "sha256:" + "a".repeat(64);
 
+    // ------------------------------------------------------------------
+    // 正常路径
+    // ------------------------------------------------------------------
     @Test
     @DisplayName("能解析真实采集服务返回的快照")
     void parsesRealSnapshot() throws IOException {
         var result = RegistrySnapshotParser.parse(sample());
 
         assertThat(result.ok()).isTrue();
+        assertThat(result.error()).isNull();
         RegistrySnapshot snap = result.snapshot();
         assertThat(snap.snapshotId()).startsWith("sha256:");
         assertThat(snap.schemaVersion()).startsWith("1.");
+        assertThat(snap.contractVersion()).isNotBlank();
         assertThat(snap.adapters()).isNotEmpty();
         assertThat(snap.capabilities()).isNotEmpty();
         assertThat(snap.diagnostics()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Adapter 的 platformScoped 与 module 必须被完整保留")
+    void preservesPlatformScopedAndModule() throws IOException {
+        RegistrySnapshot snap = RegistrySnapshotParser.parse(sample()).snapshot();
+
+        var stub = snap.findAdapter("STUB_PUBLIC");
+        assertThat(stub).as("真实快照应包含 STUB_PUBLIC").isNotNull();
+        assertThat(stub.platformScoped())
+                .as("platformScoped 不得丢——04-03 靠它排除链路验证替身")
+                .isEqualTo(Boolean.FALSE);
+        assertThat(stub.isPlatformScoped()).isFalse();
+        assertThat(stub.module()).isEqualTo("app.adapters.stub");
+
+        var douyin = snap.findAdapter("DOUYIN_PUBLIC");
+        assertThat(douyin).isNotNull();
+        assertThat(douyin.platformScoped()).isTrue();
+        assertThat(douyin.isPlatformScoped()).isTrue();
+        assertThat(douyin.module()).contains("douyin");
+    }
+
+    @Test
+    @DisplayName("platformScopedAdapters 排除替身，只留真实平台接入")
+    void platformScopedAdaptersExcludesStubs() throws IOException {
+        RegistrySnapshot snap = RegistrySnapshotParser.parse(sample()).snapshot();
+
+        assertThat(snap.adapters()).hasSizeGreaterThan(1);
+        assertThat(snap.platformScopedAdapters())
+                .extracting(RegistrySnapshot.AdapterView::connectorCode)
+                .containsExactly("DOUYIN_PUBLIC");
     }
 
     @Test
@@ -76,94 +124,128 @@ class RegistrySnapshotParserTest {
         assertThat(snap.findConnector("DOUYIN_PUBLIC").find("COMMENT")).isNotNull();
     }
 
+    // ------------------------------------------------------------------
+    // 结构化错误码
+    // ------------------------------------------------------------------
     @Test
-    @DisplayName("缺少 snapshotId → 拒绝")
+    @DisplayName("空响应 / 非 JSON → MALFORMED_BODY")
+    void rejectsEmptyOrBrokenBody() {
+        assertThat(RegistrySnapshotParser.parse("").error().failure())
+                .isEqualTo(RegistrySnapshotParser.Failure.MALFORMED_BODY);
+        assertThat(RegistrySnapshotParser.parse("{not json").error().failure())
+                .isEqualTo(RegistrySnapshotParser.Failure.MALFORMED_BODY);
+        assertThat(RegistrySnapshotParser.parse("[]").error().failure())
+                .isEqualTo(RegistrySnapshotParser.Failure.MALFORMED_BODY);
+    }
+
+    @Test
+    @DisplayName("缺少 snapshotId → MISSING_SNAPSHOT_ID")
     void rejectsMissingSnapshotId() {
         String body = minimal("", "1.1").replace("\"snapshotId\":\"\"", "\"x\":1");
-        var result = RegistrySnapshotParser.parse(body);
-        assertThat(result.ok()).isFalse();
+        assertThat(RegistrySnapshotParser.parse(body).error().failure())
+                .isEqualTo(RegistrySnapshotParser.Failure.MISSING_SNAPSHOT_ID);
     }
 
     @Test
-    @DisplayName("snapshotId 用时间戳而非内容哈希 → 拒绝")
+    @DisplayName("snapshotId 用时间戳 → MALFORMED_SNAPSHOT_ID")
     void rejectsTimestampAsSnapshotId() {
         var result = RegistrySnapshotParser.parse(minimal("2026-11-16T12:00:00Z", "1.1"));
-        assertThat(result.ok()).isFalse();
-        assertThat(result.errors().get(0)).contains("snapshotId");
+        assertThat(result.error().failure())
+                .isEqualTo(RegistrySnapshotParser.Failure.MALFORMED_SNAPSHOT_ID);
     }
 
     @Test
-    @DisplayName("Schema 主版本不支持 → 拒绝并标记（不静默忽略）")
+    @DisplayName("Schema 主版本不支持 → UNSUPPORTED_SCHEMA")
     void rejectsUnsupportedSchemaMajor() {
         var result = RegistrySnapshotParser.parse(minimal(VALID_ID, "2.0"));
-        assertThat(result.ok()).isFalse();
-        assertThat(result.errors().get(0)).contains("主版本");
+        assertThat(result.error().failure())
+                .isEqualTo(RegistrySnapshotParser.Failure.UNSUPPORTED_SCHEMA);
     }
 
     @Test
-    @DisplayName("Schema 次版本高于 1.0 仍接受（主版本一致）")
-    void acceptsMinorVersionBump() {
-        assertThat(RegistrySnapshotParser.parse(minimal(VALID_ID, "1.9")).ok()).isTrue();
+    @DisplayName("Contract 主版本不支持 → UNSUPPORTED_CONTRACT（与 Schema 独立）")
+    void rejectsUnsupportedContractMajor() {
+        // Schema 合法（1.1），但 Contract 是 2.0 —— 必须单独被拒
+        var result = RegistrySnapshotParser.parse(minimal(VALID_ID, "1.1", "2.0"));
+        assertThat(result.error().failure())
+                .as("Schema 正常不代表 Contract 正常，两者必须独立校验")
+                .isEqualTo(RegistrySnapshotParser.Failure.UNSUPPORTED_CONTRACT);
     }
 
     @Test
-    @DisplayName("缺少 capabilities / diagnostics / adapters 任一数组 → 拒绝")
+    @DisplayName("缺少 contractVersion → UNSUPPORTED_CONTRACT")
+    void rejectsMissingContractVersion() {
+        String body = minimal(VALID_ID, "1.1").replace("\"contractVersion\":\"1.0\",", "");
+        assertThat(RegistrySnapshotParser.parse(body).error().failure())
+                .isEqualTo(RegistrySnapshotParser.Failure.UNSUPPORTED_CONTRACT);
+    }
+
+    @Test
+    @DisplayName("Schema 与 Contract 主版本一致时接受（次版本可不同）")
+    void acceptsDifferentMinorVersions() {
+        // schema 1.9 + contract 1.7 —— 主版本都是 1，应接受
+        assertThat(RegistrySnapshotParser.parse(minimal(VALID_ID, "1.9", "1.7")).ok()).isTrue();
+    }
+
+    @Test
+    @DisplayName("缺少 capabilities / diagnostics / adapters 任一数组 → MISSING_ARRAY")
     void rejectsMissingArrays() {
         assertThat(RegistrySnapshotParser.parse(
-                minimal(VALID_ID, "1.1").replace("\"diagnostics\":[]", "\"x\":1")).ok())
-                .isFalse();
+                minimal(VALID_ID, "1.1").replace("\"diagnostics\":[]", "\"x\":1"))
+                .error().failure())
+                .isEqualTo(RegistrySnapshotParser.Failure.MISSING_ARRAY);
         assertThat(RegistrySnapshotParser.parse(
-                minimal(VALID_ID, "1.1").replace("\"adapters\":[", "\"y\":[")).ok())
-                .isFalse();
+                minimal(VALID_ID, "1.1").replace("\"adapters\":[", "\"y\":["))
+                .error().failure())
+                .isEqualTo(RegistrySnapshotParser.Failure.MISSING_ARRAY);
     }
 
     @Test
-    @DisplayName("空响应 / 非 JSON → 拒绝")
-    void rejectsEmptyOrBrokenBody() {
-        assertThat(RegistrySnapshotParser.parse("").ok()).isFalse();
-        assertThat(RegistrySnapshotParser.parse("{not json").ok()).isFalse();
-        assertThat(RegistrySnapshotParser.parse("[]").ok()).isFalse();
+    @DisplayName("能力缺少 adapterFunction → BROKEN_CAPABILITY")
+    void rejectsCapabilityWithoutFunction() {
+        String body = minimal(VALID_ID, "1.1")
+                .replace("\"adapterFunction\":\"app.x.y\",\"semantics\":\"READ\"",
+                         "\"semantics\":\"READ\"");
+        assertThat(RegistrySnapshotParser.parse(body).error().failure())
+                .isEqualTo(RegistrySnapshotParser.Failure.BROKEN_CAPABILITY);
     }
 
     // ------------------------------------------------------------------
-    // 内部一致性（本机制的核心）
+    // 内部一致性
     // ------------------------------------------------------------------
     @Test
-    @DisplayName("诊断为函数不可用，但能力仍出现在清单里 → 拒绝（不一致）")
+    @DisplayName("诊断为函数不可用，但能力仍出现在清单里 → INCONSISTENT")
     void rejectsInconsistentFunctionDiagnostic() {
         String body = minimal(VALID_ID, "1.1").replace("\"diagnostics\":[]", """
                 "diagnostics":[{"connectorCode":"X","capabilityCode":"COMMENT",
                                 "reason":"INVALID_IMPLEMENTATION","detail":"坏函数",
                                 "adapterFunction":"app.x.y"}]
                 """);
-        var result = RegistrySnapshotParser.parse(body);
-        assertThat(result.ok()).isFalse();
-        assertThat(result.errors().get(0)).contains("不一致");
+        assertThat(RegistrySnapshotParser.parse(body).error().failure())
+                .isEqualTo(RegistrySnapshotParser.Failure.INCONSISTENT);
     }
 
     @Test
-    @DisplayName("证据类诊断，但能力不在清单里 → 拒绝（不一致）")
+    @DisplayName("证据类诊断，但能力不在清单里 → INCONSISTENT")
     void rejectsInconsistentEvidenceDiagnostic() {
         String body = minimal(VALID_ID, "1.1").replace("\"diagnostics\":[]", """
                 "diagnostics":[{"connectorCode":"X","capabilityCode":"MEDIA_DOWNLOAD",
                                 "reason":"EVIDENCE_EXPIRED","detail":"证据过期",
                                 "adapterFunction":"app.x.y"}]
                 """);
-        var result = RegistrySnapshotParser.parse(body);
-        assertThat(result.ok()).isFalse();
-        assertThat(result.errors().get(0)).contains("不一致");
+        assertThat(RegistrySnapshotParser.parse(body).error().failure())
+                .isEqualTo(RegistrySnapshotParser.Failure.INCONSISTENT);
     }
 
     @Test
-    @DisplayName("证据类诊断且能力在清单里 → 接受（这是合法组合）")
+    @DisplayName("证据类诊断且能力在清单里 → 接受（合法组合）")
     void acceptsEvidenceDiagnosticWithObservedCapability() {
         String body = minimal(VALID_ID, "1.1").replace("\"diagnostics\":[]", """
                 "diagnostics":[{"connectorCode":"X","capabilityCode":"COMMENT",
                                 "reason":"EVIDENCE_EXPIRED","detail":"证据过期",
                                 "adapterFunction":"app.x.y"}]
                 """);
-        var result = RegistrySnapshotParser.parse(body);
-        assertThat(result.ok())
+        assertThat(RegistrySnapshotParser.parse(body).ok())
                 .as("能力兑现了但证据过期，是合法组合，不应被拒")
                 .isTrue();
     }
@@ -179,13 +261,21 @@ class RegistrySnapshotParserTest {
         assertThat(RegistrySnapshotParser.parse(body).ok()).isTrue();
     }
 
+    // ------------------------------------------------------------------
+    // 分类不依赖文本
+    // ------------------------------------------------------------------
     @Test
-    @DisplayName("能力缺少 adapterFunction → 拒绝")
-    void rejectsCapabilityWithoutFunction() {
-        String body = minimal(VALID_ID, "1.1")
-                .replace("\"adapterFunction\":\"app.x.y\",\"semantics\":\"READ\"",
-                         "\"semantics\":\"READ\"");
-        var result = RegistrySnapshotParser.parse(body);
-        assertThat(result.ok()).isFalse();
+    @DisplayName("错误分类与 message 措辞无关（改文案不影响 Failure）")
+    void classificationIsIndependentOfMessageWording() {
+        // 同一个结构问题（缺 contractVersion），无论 message 长什么样，
+        // Failure 都必须是 UNSUPPORTED_CONTRACT —— 因为 message 根本不参与判断。
+        String missingContract = minimal(VALID_ID, "1.1")
+                .replace("\"contractVersion\":\"1.0\",", "");
+        var first = RegistrySnapshotParser.parse(missingContract);
+        var second = RegistrySnapshotParser.parse(missingContract.replace(" ", ""));
+
+        assertThat(first.error().failure()).isEqualTo(second.error().failure());
+        assertThat(first.error().failure())
+                .isEqualTo(RegistrySnapshotParser.Failure.UNSUPPORTED_CONTRACT);
     }
 }

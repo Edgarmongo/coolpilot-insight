@@ -38,8 +38,13 @@ from app.registry.evidence import (
 EVIDENCE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                               "verification_evidence.json")
 
-#: 统一快照的契约版本（与 SOURCE-02 Schema 对齐，独立于 Python 包版本）。
-SNAPSHOT_CONTRACT_VERSION = SCHEMA_VERSION
+#: 统一快照**协议自身**的契约版本。
+#:
+#: **独立于** :data:`SCHEMA_VERSION`——Schema 1.1 不代表快照契约必然是 1.1。
+#: 两者按各自节奏演进：快照协议加字段（如新增 ``adapters``）只升 contractVersion；
+#: 能力文档结构变化才升 schemaVersion。混成一个常量会让
+#: 「Schema 没变但快照协议变了」这种情况无法被 Java 检出。
+SNAPSHOT_CONTRACT_VERSION = "1.0"
 
 
 def _utc_now() -> str:
@@ -323,6 +328,15 @@ class CollectionRegistry:
           内容不变则 id 不变，任一变化（Adapter 加载状态 / 能力 / 证据 / 诊断）
           都会换 id；
         * ``generatedAt`` **不参与** id 计算，只用于观察与排障。
+
+        **数组顺序参与哈希且具有语义**：``adapters`` 按注册顺序、``capabilities``
+        按声明顺序、``diagnostics`` 按声明顺序 + 固定追加顺序。不要为了展示需要
+        对这些列表排序后再计算 ID——那会让 ID 变化而内容其实没变。
+
+        **线程安全前提**：本方法只读。``declare()`` / ``register_loader()``
+        仅在 :func:`build_registry` 启动期调用，运行期不修改注册表。
+        若将来支持运行期热加载，必须在此加锁，否则遍历 ``_specs`` 期间
+        可能遇到 ``RuntimeError: list changed size during iteration``。
         """
         evaluation = self.capabilities.evaluate_all()
 

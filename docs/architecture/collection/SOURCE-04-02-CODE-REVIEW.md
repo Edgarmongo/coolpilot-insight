@@ -557,3 +557,76 @@ M7（测试环境假设）、M8（Python 并发假设需文档化）、L1~L4。
 
 > 再次强调：04-02 交付的是**可靠的 Observed 快照获取能力**。
 > 它不表示 Desired/Observed/Effective 已完成核对——那属于 04-03。
+
+---
+
+# 附：第二轮评审结论（修复后复核）
+
+> 复核对象：本轮修复提交（基于 `61150cc` 的修复）
+> 复核性质：**只读复核**，未修改实现。
+
+## 一、缺陷闭环
+
+| 编号 | 原等级 | 复核结果 | 证据 |
+|---|---|---|---|
+| **H1** | HIGH | ✅ **已修复** | `RegistrySnapshotParser.Failure` 八值枚举；`CollectionServiceClient.mapFailure()` 为穷举 `switch` 表达式（新增值会编译报错）；全文已无 `contains`；测试只断言 `Failure` |
+| **H2** | HIGH | ✅ **已修复** | `AdapterView` 10 字段完整映射（含 `platformScoped` / `module` / `errorCode` / `errorMessage` / `capabilities`）；新增 `platformScopedAdapters()` 供 04-03 排除替身；测试断言 STUB 的 `platformScoped=false` |
+| **M1** | MEDIUM→HIGH | ✅ **已修复** | Single-flight：`inFlight` 单飞 + 等待者 `join()`。测试 `concurrentFirstFetchIssuesSingleHttpCall` 断言 20 线程 → HTTP 恰好 1 次 |
+| **M2** | MEDIUM | ✅ **已修复** | `performRefresh()` 开头二次检查 `withinBackoff()`；新增 `manualRefreshIsAlsoThrottled` 固化"主动刷新也受退避约束" |
+| **M3** | MEDIUM | ✅ **已修复** | `contractVersion` 独立校验，独立 `Failure.UNSUPPORTED_CONTRACT`；`rejectsUnsupportedContractMajor` 用"Schema 合法 + Contract 2.0"证明两者未合并 |
+| **M4** | MEDIUM | ✅ **已修复** | `SnapshotCacheState { FRESH, STALE, UNAVAILABLE }`；`usableForExecution` 由其派生；compact constructor 强制三条不变量 |
+| **M5** | MEDIUM | ✅ **已修复** | Python `SNAPSHOT_CONTRACT_VERSION = "1.0"` 与 `SCHEMA_VERSION = "1.1"` 独立；真实快照已体现差异 |
+| **M6** | MEDIUM | ✅ **已修复** | 7 条并发测试全部落地（首次/过期刷新/失败一致性/退避/退避结束/刷新中读旧快照/读不被阻塞） |
+| **M7** | MEDIUM | ✅ **已修复** | 令牌测试改为本地 `HttpServer` 记录请求头，断言"空不发、非空发"，不再依赖环境 |
+| **M8** | MEDIUM | ✅ **已修复** | `snapshot()` docstring 明确运行期只读前提与热加载需加锁 |
+| **L1** | LOW | ✅ **已修复** | `Entry` 删除死字段 `lastFailureAt` |
+| **L2** | LOW | ⚠️ **未修（已记录）** | `canonical_json` 的 `default=str` 保留，当前无此类型输入 |
+| **L3** | LOW | ✅ **已修复** | `snapshot()` docstring 明确数组顺序参与哈希且有语义 |
+| **L4** | LOW | ⚠️ **未修（已记录）** | `CapabilityEvaluation` 仍 `frozen` + 可变 list，仅内部传递 |
+
+**BLOCKER 0 / HIGH 0 / 未闭环 MEDIUM 0 / 未闭环 LOW 2（均已记录理由）。**
+
+## 二、用户五项重点复核
+
+| # | 重点 | 复核结论 | 依据 |
+|---|---|---|---|
+| 1 | 错误分类完全不依赖自由文本 | ✅ **成立** | `grep contains` 在 `CollectionServiceClient` 已无匹配；分类走枚举 `switch`；测试 `classificationIsIndependentOfMessageWording` 证明改措辞不影响结果 |
+| 2 | `platformScoped` 不再丢失 | ✅ **成立** | DTO 完整映射 + `platformScopedAdapters()` 过滤；真实样本断言 STUB=`false`、DOUYIN=`true` |
+| 3 | 并发刷新确实只有一次 HTTP | ✅ **成立** | `concurrentFirstFetchIssuesSingleHttpCall` / `concurrentRefreshOfStaleCacheIssuesSingleHttpCall` / `concurrentFailureYieldsConsistentResult` 三处，均断言调用计数为 1 |
+| 4 | Schema 与 Contract 独立校验 | ✅ **成立** | 两个 `Failure` 码 + 两条独立测试（`rejectsUnsupportedSchemaMajor` / `rejectsUnsupportedContractMajor`）+ Python 侧版本常量解绑 |
+| 5 | 缓存历史数据不能被误认为当前有效能力 | ✅ **成立** | `state` 枚举 + `usableForExecution` 由其派生 + compact constructor 拒绝"非 FRESH 却标记可执行" |
+
+## 三、并发测试的辨别力说明
+
+这些测试不是"跑通即通过"的形式断言，它们对实现有辨别力：
+
+- `concurrentFirstFetchIssuesSingleHttpCall` 若 Single-flight 失效，20 个线程会各自请求，
+  `calls` 会是 20 而非 1，测试立刻变红；
+- `concurrentFailureYieldsConsistentResult` 若失败结果不共享，等待线程会各自重试，
+  `calls` 同样会远大于 1；
+- `readDuringRefreshSeesCompleteOldSnapshot` 若替换不是整体的，
+  读线程会看到新旧混合的 snapshotId，断言失败。
+
+`SnapshotCacheTest` 中 7 条并发用例合计耗时约 5.4s（主要来自 TTL/刷新窗口的 sleep），
+在可接受范围内。
+
+## 四、遗留观察（不阻塞验收）
+
+| 观察 | 说明 | 建议 |
+|---|---|---|
+| `SnapshotCache` 仍无业务调用方 | 符合 04-02 边界。`usableForExecution` 的强制力要到 04-03 才真正生效 | 04-03 接入时必须用 `usableForExecution` 或 `state == FRESH`，**不得**用 `snapshot != null` |
+| Python 侧 `SnapshotCache` 无对应实现 | Java 是唯一消费者，合理 | 无 |
+| `Contract` 版本仅有主版本校验 | 与 `Schema` 策略一致，符合 SOURCE-04-04 §4.2 | 若要精确锁版本，属后续议题 |
+
+## 五、第二轮复核结论
+
+**通过。**
+
+原 2 个 HIGH 均已修复并有测试锁定；8 个 MEDIUM 全部闭环；4 个 LOW 中 2 个已修、
+2 个按理由保留。用户设定的五项重点全部成立。
+
+**可以进入 SOURCE-04-03**（Desired / Observed / Effective 核对），
+前置条件是把 Desired v2 结构与状态语义（`SOURCE-04-04-TASKCARD.md`）作为实现依据。
+
+> 仍需重申：04-02 交付的是**可靠的 Observed 快照获取能力**。
+> 它不表示三态核对已完成——那正是 04-03 的工作。

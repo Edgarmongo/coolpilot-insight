@@ -53,7 +53,11 @@ def test_snapshot_has_required_fields():
                 "generatedAt", "adapters", "capabilities", "diagnostics"):
         assert key in snap, f"快照缺少必需字段: {key}"
     assert snap["schemaVersion"] == SCHEMA_VERSION
-    assert snap["contractVersion"] == SCHEMA_VERSION
+    # contractVersion 与 schemaVersion **独立演进**，不得断言二者相等。
+    # 之前 `SNAPSHOT_CONTRACT_VERSION = SCHEMA_VERSION` 的写法会让
+    # "Schema 没变但快照协议变了" 无法被 Java 检出（SOURCE-04-02 评审 M5）。
+    assert snap["contractVersion"] != ""
+    assert "." in snap["contractVersion"]
     assert isinstance(snap["adapters"], list)
     assert isinstance(snap["capabilities"], list)
     assert isinstance(snap["diagnostics"], list)

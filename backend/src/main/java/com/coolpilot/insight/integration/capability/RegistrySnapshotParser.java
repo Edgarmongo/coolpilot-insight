@@ -16,17 +16,10 @@ import java.util.Set;
  * 任何一项不满足就整体拒绝，<b>不做局部接受</b>——
  * 局部接受等于自己制造了一个混合快照，正是本机制要消除的东西。
  *
- * <p>不接受的六种情况（对应验收 A07）：
- *
- * <ol>
- *   <li>响应为空 / 非 JSON / 非 object；</li>
- *   <li>缺 {@code snapshotId}，或格式不是 {@code sha256:<64 hex>}；</li>
- *   <li>缺 {@code schemaVersion}，或主版本超出 {@link CapabilityContractParser#SUPPORTED_SCHEMA_MAJOR}；</li>
- *   <li>缺 {@code capabilities} / {@code diagnostics} / {@code adapters} 任一数组；</li>
- *   <li>某条能力文档无法解析（缺 {@code code} / {@code adapterFunction} 等必需字段）；</li>
- *   <li><b>内部不自洽</b>：诊断与能力清单互相矛盾——见 {@link #INVALID_IMPLEMENTATION}
- *       与 {@code EVIDENCE_*} 的相反要求。</li>
- * </ol>
+ * <h3>错误必须结构化</h3>
+ * <p>失败原因以 {@link Failure} 枚举表达，**调用方只读这个枚举做机器分派**；
+ * {@link Error#message()} 只用于日志与人工诊断，<b>不得</b>用于判断。
+ * 这样改措辞、改语言都不会影响分类。
  */
 public final class RegistrySnapshotParser {
 
@@ -35,25 +28,62 @@ public final class RegistrySnapshotParser {
     /** 证据类诊断前缀：该能力**应当**出现在 Observed 清单里（能力兑现了，只是证据无效）。 */
     private static final String EVIDENCE_PREFIX = "EVIDENCE_";
 
+    /** Java 认识的最高快照契约主版本。**与 Schema 主版本独立。** */
+    public static final int SUPPORTED_CONTRACT_MAJOR = 1;
+
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private RegistrySnapshotParser() {
     }
 
     /**
+     * 失败原因码。**这是机器判断依据。**
+     *
+     * <p>每个值对应一处明确的校验失败点，不允许多个点共用一个码，
+     * 也不允许为了少加枚举而把两种情况混在一起。
+     */
+    public enum Failure {
+        /** 响应为空 / 非 JSON / 非 object */
+        MALFORMED_BODY,
+        /** 缺少 snapshotId */
+        MISSING_SNAPSHOT_ID,
+        /** snapshotId 不是内容哈希（例如时间戳） */
+        MALFORMED_SNAPSHOT_ID,
+        /** 缺少 schemaVersion 或主版本超出支持范围 */
+        UNSUPPORTED_SCHEMA,
+        /** 缺少 contractVersion 或主版本超出支持范围 */
+        UNSUPPORTED_CONTRACT,
+        /** 缺少 capabilities / diagnostics / adapters 任一数组 */
+        MISSING_ARRAY,
+        /** 某条能力文档结构非法（缺 code / 缺 adapterFunction） */
+        BROKEN_CAPABILITY,
+        /** 能力清单与诊断互相矛盾 */
+        INCONSISTENT
+    }
+
+    /**
+     * 一条解析错误。
+     *
+     * @param failure 结构化原因码 —— **机器只读这个**
+     * @param message 人类可读说明 —— 只进日志，不参与判断
+     */
+    public record Error(Failure failure, String message) {
+    }
+
+    /**
      * 解析结果。
      *
      * @param snapshot 成功时的快照；失败为 {@code null}
-     * @param errors   失败原因（人类可读，**不用于机器判断**）
+     * @param error    失败时的结构化错误；成功为 {@code null}
      */
-    public record Result(RegistrySnapshot snapshot, List<String> errors) {
+    public record Result(RegistrySnapshot snapshot, Error error) {
 
         public boolean ok() {
-            return snapshot != null;
+            return snapshot != null && error == null;
         }
 
-        public static Result failure(String error) {
-            return new Result(null, List.of(error));
+        public static Result failure(Failure failure, String message) {
+            return new Result(null, new Error(failure, message));
         }
     }
 
@@ -64,19 +94,20 @@ public final class RegistrySnapshotParser {
      */
     public static Result parse(String body) {
         if (body == null || body.isBlank()) {
-            return Result.failure("快照响应为空");
+            return Result.failure(Failure.MALFORMED_BODY, "快照响应为空");
         }
         JsonNode root;
         try {
             root = JSON.readTree(body);
         } catch (Exception e) {
-            return Result.failure("快照响应无法解析为 JSON: " + e.getMessage());
+            return Result.failure(Failure.MALFORMED_BODY,
+                    "快照响应无法解析为 JSON: " + e.getMessage());
         }
         if (root == null || !root.isObject()) {
-            return Result.failure("快照响应结构非法，按 UNKNOWN 处理");
+            return Result.failure(Failure.MALFORMED_BODY, "快照响应结构非法（非 JSON 对象）");
         }
 
-        // 兼容统一信封 {code,msg,data}：优先取 data
+        // 兼容统一信封 {code,msg,data}
         JsonNode payload = root;
         if (!root.has("snapshotId") && root.has("data") && root.get("data").isObject()) {
             JsonNode data = root.get("data");
@@ -88,70 +119,99 @@ public final class RegistrySnapshotParser {
         // 1) snapshotId
         String snapshotId = CapabilityContractParser.text(payload, "snapshotId");
         if (snapshotId == null || snapshotId.isBlank()) {
-            return Result.failure("快照缺少 snapshotId，无法确认一致性");
+            return Result.failure(Failure.MISSING_SNAPSHOT_ID,
+                    "快照缺少 snapshotId，无法确认一致性");
         }
         if (!isContentAddressedId(snapshotId)) {
-            return Result.failure("snapshotId 格式非法（应为 sha256:<64 hex>）: " + snapshotId);
+            return Result.failure(Failure.MALFORMED_SNAPSHOT_ID,
+                    "snapshotId 格式非法（应为 sha256:<64 hex>）");
         }
 
-        // 2) schemaVersion
+        // 2) schemaVersion（独立校验）
         String schemaVersion = CapabilityContractParser.text(payload, "schemaVersion");
-        int major = majorOf(schemaVersion);
-        if (major <= 0) {
-            return Result.failure("快照缺少 schemaVersion 或格式非法");
+        int schemaMajor = majorOf(schemaVersion);
+        if (schemaMajor <= 0) {
+            return Result.failure(Failure.UNSUPPORTED_SCHEMA,
+                    "快照缺少 schemaVersion 或格式非法");
         }
-        if (major > CapabilityContractParser.SUPPORTED_SCHEMA_MAJOR) {
-            return Result.failure("不认识的 schemaVersion 主版本: " + schemaVersion
-                    + "（支持 " + CapabilityContractParser.SUPPORTED_SCHEMA_MAJOR + ".x）");
+        if (schemaMajor > CapabilityContractParser.SUPPORTED_SCHEMA_MAJOR) {
+            return Result.failure(Failure.UNSUPPORTED_SCHEMA,
+                    "不认识的 schemaVersion 主版本: " + schemaVersion);
         }
 
-        // 3) 三个必需数组
+        // 3) contractVersion（独立校验，**不得**与 schemaVersion 合并）
+        String contractVersion = CapabilityContractParser.text(payload, "contractVersion");
+        int contractMajor = majorOf(contractVersion);
+        if (contractMajor <= 0) {
+            return Result.failure(Failure.UNSUPPORTED_CONTRACT,
+                    "快照缺少 contractVersion 或格式非法");
+        }
+        if (contractMajor > SUPPORTED_CONTRACT_MAJOR) {
+            return Result.failure(Failure.UNSUPPORTED_CONTRACT,
+                    "不认识的 contractVersion 主版本: " + contractVersion);
+        }
+
+        // 4) 三个必需数组
         JsonNode capNodes = payload.get("capabilities");
         JsonNode diagNodes = payload.get("diagnostics");
         JsonNode adapterNodes = payload.get("adapters");
         if (capNodes == null || !capNodes.isArray()) {
-            return Result.failure("快照缺少 capabilities 数组");
+            return Result.failure(Failure.MISSING_ARRAY, "快照缺少 capabilities 数组");
         }
         if (diagNodes == null || !diagNodes.isArray()) {
-            return Result.failure("快照缺少 diagnostics 数组");
+            return Result.failure(Failure.MISSING_ARRAY, "快照缺少 diagnostics 数组");
         }
         if (adapterNodes == null || !adapterNodes.isArray()) {
-            return Result.failure("快照缺少 adapters 数组");
+            return Result.failure(Failure.MISSING_ARRAY, "快照缺少 adapters 数组");
         }
 
-        // 4) 解析 adapters
+        // 5) adapters（完整字段映射）
         List<RegistrySnapshot.AdapterView> adapters = new ArrayList<>();
         for (JsonNode n : adapterNodes) {
+            List<CapabilityItem> caps = new ArrayList<>();
+            JsonNode inner = n.get("capabilities");
+            if (inner != null && inner.isArray()) {
+                for (JsonNode c : inner) {
+                    caps.add(CapabilityContractParser.parseItem(c));
+                }
+            }
             adapters.add(new RegistrySnapshot.AdapterView(
                     CapabilityContractParser.text(n, "connectorCode"),
                     CapabilityContractParser.text(n, "sourceCode"),
                     CapabilityContractParser.text(n, "connectorVersion"),
                     CapabilityContractParser.text(n, "loadStatus"),
-                    n.hasNonNull("capabilityCount") ? n.get("capabilityCount").asInt() : null));
+                    CapabilityContractParser.text(n, "module"),
+                    n.hasNonNull("platformScoped") ? n.get("platformScoped").asBoolean() : null,
+                    n.hasNonNull("capabilityCount") ? n.get("capabilityCount").asInt() : null,
+                    CapabilityContractParser.text(n, "errorCode"),
+                    CapabilityContractParser.text(n, "errorMessage"),
+                    List.copyOf(caps)));
         }
 
-        // 5) 解析能力文档
+        // 6) 能力文档
         List<CapabilityDocument> documents = new ArrayList<>();
         for (JsonNode n : capNodes) {
             CapabilityDocument doc;
             try {
                 doc = CapabilityContractParser.parseDocument(n);
             } catch (Exception e) {
-                return Result.failure("能力文档解析失败: " + e.getMessage());
+                return Result.failure(Failure.BROKEN_CAPABILITY,
+                        "能力文档解析失败: " + e.getMessage());
             }
             for (CapabilityItem item : doc.capabilities()) {
                 if (item.code() == null || item.code().isBlank()) {
-                    return Result.failure("快照中存在缺少 code 的能力条目");
+                    return Result.failure(Failure.BROKEN_CAPABILITY,
+                            "快照中存在缺少 code 的能力条目");
                 }
                 if (!item.hasBoundFunction()) {
-                    // Observed 清单里的能力必须绑定真实函数；没有函数说明 Python 侧输出异常
-                    return Result.failure("能力 " + item.code() + " 缺少 adapterFunction");
+                    return Result.failure(Failure.BROKEN_CAPABILITY,
+                            "能力 " + item.code() + " 缺少 adapterFunction");
                 }
             }
             documents.add(doc);
         }
 
-        // 6) 解析诊断
+        // 7) 诊断
         List<RegistrySnapshot.Diagnostic> diagnostics = new ArrayList<>();
         for (JsonNode n : diagNodes) {
             diagnostics.add(new RegistrySnapshot.Diagnostic(
@@ -162,26 +222,27 @@ public final class RegistrySnapshotParser {
                     CapabilityContractParser.text(n, "adapterFunction")));
         }
 
-        // 7) 内部自洽性（关键）
+        // 8) 内部自洽性
         String inconsistency = checkConsistency(documents, diagnostics);
         if (inconsistency != null) {
-            return Result.failure("快照内部不一致，拒绝接受: " + inconsistency);
+            return Result.failure(Failure.INCONSISTENT,
+                    "快照内部不一致: " + inconsistency);
         }
 
         return new Result(new RegistrySnapshot(
                 snapshotId,
-                CapabilityContractParser.text(payload, "contractVersion"),
+                contractVersion,
                 schemaVersion,
                 CapabilityContractParser.text(payload, "generatedAt"),
                 List.copyOf(adapters),
                 List.copyOf(documents),
-                List.copyOf(diagnostics)), List.of());
+                List.copyOf(diagnostics)), null);
     }
 
     /**
      * 一致性校验。
      *
-     * <p>两类诊断对能力清单有**相反**的要求，这是本校验的核心：
+     * <p>两类诊断对能力清单有**相反**的要求：
      *
      * <table border="1">
      *   <tr><th>诊断原因</th><th>该能力是否应出现在 Observed 清单</th></tr>
@@ -219,7 +280,6 @@ public final class RegistrySnapshotParser {
                     reported.add(k + " 有证据类诊断，却不在能力清单里");
                 }
             }
-            // NOT_LOADED / 其它原因：不强制要求，跳过
         }
         return reported.isEmpty() ? null : String.join("; ", reported);
     }

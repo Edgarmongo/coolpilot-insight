@@ -272,3 +272,154 @@ ID 不同时整体替换，断言替换后是完整的新快照而非混合。
 
 **测试资源**
 - 新增 `backend/src/test/resources/registry-snapshot-sample.json`（从真实容器导出）
+
+---
+
+# 附：第二轮修复（评审 H1/H2 + M1~M8）
+
+> 触发：`SOURCE-04-02-CODE-REVIEW.md` 结论为不通过（HIGH 2 / MEDIUM 8 / LOW 4）。
+> 本轮按用户裁决修复，分四个小阶段推进，未混成一个大改动。
+
+## F1 结构化错误模型（H1）
+
+**问题**：`CollectionServiceClient` 用 `message.contains("主版本")` 之类做机器分派，
+违反项目「机器只看 code，message 只进日志」的原则，且改措辞即失效。
+
+**修复**：
+
+| 变更 | 内容 |
+|---|---|
+| 新增 `RegistrySnapshotParser.Failure` 枚举 | `MALFORMED_BODY` / `MISSING_SNAPSHOT_ID` / `MALFORMED_SNAPSHOT_ID` / `UNSUPPORTED_SCHEMA` / `UNSUPPORTED_CONTRACT` / `MISSING_ARRAY` / `BROKEN_CAPABILITY` / `INCONSISTENT` |
+| `Result` 结构 | `record Result(RegistrySnapshot snapshot, Error error)`，`Error(Failure failure, String message)` |
+| 分类改为穷举 switch | `CollectionServiceClient.mapFailure()` 用 switch 表达式，新增 `Failure` 值会**编译报错**，强制显式决定分类 |
+| 删除全部 `contains` | 全文已无文本匹配 |
+
+`FetchResult.Kind` 同步调整：`UNPARSEABLE` → `MALFORMED_RESPONSE`，新增 `CONTRACT_UNSUPPORTED`。
+
+**测试**：18 条（原 13 + 5），全部断言 `Failure` 枚举值，不再断言 message 文本。
+新增 `classificationIsIndependentOfMessageWording`：同一结构问题、不同措辞，`Failure` 必须相同。
+
+## F2 AdapterView 字段完整性（H2）
+
+**问题**：只映射 5 字段，丢弃 `platformScoped` / `module` / `errorCode` / `errorMessage` / `capabilities`。
+
+**修复**：`AdapterView` 扩展为 10 字段完整映射，并新增：
+
+```java
+public boolean isPlatformScoped()              // 缺失时按 true（保守，不误排除）
+public List<AdapterView> platformScopedAdapters()   // 04-03 必须用它
+```
+
+`RegistrySnapshot.platformScopedAdapters()` 是 04-03 排除链路验证替身的**唯一结构化入口**，
+不再依赖 `sourceCode == "STUB"` 或能力数量推断。
+
+**测试**：`preservesPlatformScopedAndModule` 断言 STUB 的 `platformScoped=false`、
+`module="app.adapters.stub"`；`platformScopedAdaptersExcludesStubs` 断言过滤结果只剩 `DOUYIN_PUBLIC`。
+
+## F3 Single-flight 并发协调（M1 升级为 HIGH / M2 / M6）
+
+**问题**：`synchronized refresh()` 不构成请求合并——第二个线程拿到锁后不复查，仍会再发一次。
+`MIN_RETRY_SECONDS` 只在 `get()` 入口判断，并发排队时失效。且零并发测试。
+
+**修复**：改为 Single-flight（`CompletableFuture` 协调）：
+
+```java
+private final Object flightLock = new Object();
+private CompletableFuture<SnapshotRead> inFlight;
+
+// 锁内只决定"谁是 owner"
+synchronized (flightLock) {
+    if (inFlight == null) { inFlight = new CompletableFuture<>(); owner = true; }
+    else { future = inFlight; owner = false; }
+}
+// 锁外：仅 owner 发请求；等待者 join 共享结果
+```
+
+六条语义保证：
+
+| # | 保证 | 实现 |
+|---|---|---|
+| 1 | 同一时刻最多一次 HTTP | `inFlight` 单飞 |
+| 2 | 等待者共享结果 | `future.join()` |
+| 3 | 成功后所有线程同一快照 | 共享同一个 `SnapshotRead` |
+| 4 | 失败后结果一致 | owner 把失败结果写入 future；异常转成 `UNREACHABLE` 再 complete |
+| 5 | 网络不占全局锁 | 请求在 `flightLock` **之外**执行 |
+| 6 | 退避在发请求前检查 | `performRefresh()` 开头二次检查 `withinBackoff()` |
+
+**退避语义明确化**：`refresh()` 同样受退避约束。否则"主动刷新"会成为绕过退避的后门。
+新增 `manualRefreshIsAlsoThrottled` 固化这一点。
+
+**构造器**：新增包级 `SnapshotCache(provider, ttl, minRetrySeconds)`，让测试能缩短退避而不用 sleep 5 秒。
+
+**并发测试（7 条，全部用 `CountDownLatch` 起跑 + `CopyOnWriteArrayList` 收集）**：
+
+| 测试 | 断言 |
+|---|---|
+| `concurrentFirstFetchIssuesSingleHttpCall` | 20 线程首次获取 → HTTP 恰好 **1** 次，全部拿到同一 snapshotId |
+| `concurrentRefreshOfStaleCacheIssuesSingleHttpCall` | 20 线程刷新过期缓存 → 增量 HTTP **1** 次 |
+| `concurrentFailureYieldsConsistentResult` | 20 线程同时失败 → HTTP **1** 次，全部 `UNAVAILABLE` 且不可执行 |
+| `doesNotRetryWithinBackoff` | 退避期内重复 `get()` 不产生请求 |
+| `allowsRetryAfterBackoff` | 退避结束后允许再试 |
+| `readDuringRefreshSeesCompleteOldSnapshot` | 刷新阻塞在网络时，读线程看到**完整旧快照**，不是新旧混合 |
+| `concurrentReadNotBlockedByRefresh` | 刷新占用网络时，`read()` 在 500ms 内返回 |
+
+## F4 缓存三态 + 独立版本校验（M3 / M4 / M5）
+
+**M4 三态模型**：新增 `SnapshotCacheState { FRESH, STALE, UNAVAILABLE }`。
+`SnapshotRead` 携带 `state`，`usableForExecution` 由它派生，不再单独维护。
+
+`SnapshotRead` 的 compact constructor 强制三条不变量（违反即抛 `IllegalArgumentException`）：
+
+```java
+非 FRESH 不得标记可执行
+UNAVAILABLE 不得携带快照
+FRESH / STALE 必须携带快照
+```
+
+这样"只看 `snapshot != null` 就以为可用"的误用路径被堵住。
+
+**M3 + M5 版本独立**：
+
+| 侧 | 修复 |
+|---|---|
+| Python | `SNAPSHOT_CONTRACT_VERSION = "1.0"`，**不再是** `= SCHEMA_VERSION`。两者按各自节奏演进 |
+| Java | 新增 `SUPPORTED_CONTRACT_MAJOR = 1`，`contractVersion` 与 `schemaVersion` **分别校验**，各自有独立 `Failure` 码 |
+
+真实快照现状已体现独立性：`contractVersion=1.0`、`schemaVersion=1.1`。
+
+测试 `rejectsUnsupportedContractMajor`：Schema 合法（1.1）+ Contract 2.0 → 必须报 `UNSUPPORTED_CONTRACT`，
+证明两者没有合并判断。`acceptsDifferentMinorVersions`：schema 1.9 + contract 1.7 均接受。
+
+## F5 其余项（M7 / M8 / L1 / L3）
+
+| 编号 | 修复 |
+|---|---|
+| M7 | `tokenHandling` 改为启动本地 `HttpServer` 记录请求头，断言"空令牌不发头、非空令牌发头"。不再依赖"服务恰好未配 token"的环境假设 |
+| M8 | Python `snapshot()` docstring 明确写出线程安全前提：运行期只读；若支持热加载必须加锁 |
+| L1 | `Entry` 删除死字段 `lastFailureAt`（`read()` 用的是实例字段） |
+| L3 | `snapshot()` docstring 明确"数组顺序参与哈希且具有语义，不得为展示排序后再算 ID" |
+| L2 | **未修**。`canonical_json` 的 `default=str` 兜底仍在，当前无此类型输入 |
+| L4 | **未修**。`CapabilityEvaluation` 仍为 `frozen` + 可变 list，仅作内部传递 |
+
+## 修复后测试结果
+
+| 套件 | 修复前 | 修复后 |
+|---|---|---|
+| `RegistrySnapshotParserTest` | 13 | **18**（+5：Contract 独立校验、platformScoped、platformScopedAdapters、分类不依赖文本、缺 contractVersion） |
+| `SnapshotCacheTest` | 9 | **17**（+8：三态 5 条 + 并发 7 条 - 合并重复） |
+| `CollectionSnapshotClientTest` | 5 | **10**（+5：令牌头确定性、500/非法 JSON/Schema/Contract 分类、不可达） |
+| Python `test_snapshot.py` | 17 | **17**（contractVersion 断言改为"独立于 schemaVersion"） |
+| **Java 合计** | 174 | **192** |
+| **Python 合计** | 73 | **73** |
+
+## 第二轮未做的事
+
+| 项目 | 状态 |
+|---|---|
+| MySQL / Flyway | ❌ 未改（仍停 V30） |
+| `SOURCE-02-capability-schema.json` | ❌ 未改 |
+| 账号 / Task-Run 状态机 | ❌ 未改 |
+| 前端 | ❌ 未改 |
+| SOURCE-04-03 Effective 推导 | ❌ 未启动 |
+| Observed 回写 Desired | ❌ 未做 |
+| L2 / L4 | ❌ 未修（已在 §F5 记录理由） |

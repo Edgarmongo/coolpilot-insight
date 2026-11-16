@@ -1,5 +1,46 @@
 # 2026-11-16 工作日志
 
+## SOURCE-04-02 第二轮修复（评审 H1/H2 + M1~M8）
+
+第一轮评审不通过（HIGH 2），本轮按四阶段修复。
+
+### F1 结构化错误（H1）
+`RegistrySnapshotParser.Failure` 八值枚举 + `Error(Failure, message)`；
+`CollectionServiceClient.mapFailure()` 用**穷举 switch**（新增值编译报错），
+删除全部 `message.contains`。测试只断言 Failure，不断言文本。
+
+### F2 AdapterView 完整性（H2）
+从 5 字段扩到 10 字段（补 platformScoped/module/errorCode/errorMessage/capabilities）；
+新增 `platformScopedAdapters()` —— 04-03 排除链路验证替身的唯一结构化入口。
+
+### F3 Single-flight（M1 升级 HIGH / M2 / M6）
+`synchronized refresh()` 不构成请求合并（第二线程拿到锁不复查）。
+改为 CompletableFuture 协调：锁内只决定 owner，锁外发请求，等待者 join 共享结果。
+退避在 `performRefresh()` 开头二次检查。
+**明确 `refresh()` 同样受退避约束**——否则主动刷新成了绕过后门。
+7 条并发测试：20 线程首次/过期刷新/失败一致性均断言 HTTP 恰好 1 次。
+
+### F4 三态 + 版本独立（M3/M4/M5）
+`SnapshotCacheState { FRESH, STALE, UNAVAILABLE }`，usableForExecution 由其派生；
+compact constructor 强制三条不变量（非 FRESH 不得标记可执行等）。
+Python `SNAPSHOT_CONTRACT_VERSION = "1.0"` 与 `SCHEMA_VERSION = "1.1"` 解绑；
+Java `SUPPORTED_CONTRACT_MAJOR` 独立校验。
+真实快照现为 contractVersion=1.0 / schemaVersion=1.1，独立性可观测。
+
+### F5 其余
+M7 token 测试改本地 HttpServer 验证请求头（确定性）；
+M8 Python snapshot() 写明运行期只读前提；
+L1 删 Entry 死字段；L3 文档化数组顺序语义。
+L2（default=str）/ L4（frozen+可变list）未修，已记录理由。
+
+### 结果
+Java **192/192**（原 174 + 解析器 5 + 缓存 8 + 客户端 5）
+Python **73/73**
+5 容器 healthy；backend→collection 实测 contractVersion=1.0 / schemaVersion=1.1。
+
+零改动：库/Flyway(V30)/Schema 枚举/前端/账号/状态机全部未动；未启动 04-03。
+
+
 ## SOURCE-04-02 实施完成（方案 A：统一 Registry 快照）
 
 用户批准方案 A，进入代码实施。范围严格限定：Snapshot 获取/校验/缓存/Observed 转换，
