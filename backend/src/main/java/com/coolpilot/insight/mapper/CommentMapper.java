@@ -107,6 +107,28 @@ public interface CommentMapper extends BaseCrudMapper<Comment> {
             + "WHERE c.video_id = #{videoId} ORDER BY c.publish_time ASC, c.id ASC")
     List<Map<String, Object>> commentRowsWithSentiment(@Param("videoId") Long videoId);
 
+    /**
+     * 跨次去重记忆（U1 A-API）：按视频分页取已入库的 cid 与指纹。
+     *
+     * <p>为什么两列都要取：`dedup_strategy='CID'` 的行用 cid 判重，
+     * `FINGERPRINT` 的行 cid 为空、键在 `dedup_key`（sha256 前 40 位）。
+     * 只回填 cid 会让指纹类历史全部失效（见设计文档 §5.6）。
+     *
+     * <p>排序用 `id`（`publish_time` 可空，不能做稳定游标）。
+     */
+    @Select("SELECT cid, dedup_key AS dedupKey, dedup_strategy AS dedupStrategy "
+            + "FROM comment WHERE video_id = #{videoId} "
+            + "AND (cid IS NOT NULL OR dedup_strategy = 'FINGERPRINT') "
+            + "ORDER BY id LIMIT #{limit} OFFSET #{offset}")
+    List<Map<String, Object>> selectDedupPage(@Param("videoId") Long videoId,
+                                              @Param("offset") int offset,
+                                              @Param("limit") int limit);
+
+    /** 该视频可用于去重的记录总数（用于 truncated 判定与游标收尾）。 */
+    @Select("SELECT COUNT(*) FROM comment WHERE video_id = #{videoId} "
+            + "AND (cid IS NOT NULL OR dedup_strategy = 'FINGERPRINT')")
+    long countDedupRecords(@Param("videoId") Long videoId);
+
     /** 按情感聚合（从 comment_analysis 取最新一条） */
     @Select("SELECT ca.sentiment AS sentiment, COUNT(*) AS count FROM comment c "
             + "JOIN comment_analysis ca ON ca.id = ("
