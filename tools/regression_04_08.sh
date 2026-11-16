@@ -112,6 +112,14 @@ else
   record "能力接口未登录必须 401" fail "http=$API_CODE"
 fi
 
+# SPA 深链接：刷新 /sources 必须回 index.html，否则页面只在"从菜单点进去"时能用
+DEEP=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:5173/sources)
+if [ "$DEEP" = "200" ]; then
+  record "前端深链接 /sources" ok "http=200（Nginx fallback 生效）"
+else
+  record "前端深链接 /sources" fail "http=$DEEP（刷新会 404）"
+fi
+
 echo
 echo "=========== 5. 生产采集链路（不发起真实采集） ==========="
 # 只验证模块可导入、CSV 落盘目录是共享挂载。

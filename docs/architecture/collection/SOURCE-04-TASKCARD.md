@@ -405,7 +405,7 @@ cd backend && mvn -s ../deploy/docker/maven-settings.xml -o test
 ### SOURCE-04-04：Desired v2 结构与状态语义定稿（P0）
 
 > **2026-11-16 修订**：本卡的设计已冻结为 `SOURCE-04-04-TASKCARD.md`（v2 修订版），
-> 状态语义部分另立 `ADR-008`，20 个 `effectiveReason` 的完整定义表与重复语义审查
+> 状态语义部分另立 `ADR-008`，21 个 `effectiveReason`（20 可达 + 1 预留）的完整定义表与重复语义审查
 > 见 `SOURCE-04-04-EFFECTIVE-REASON.md`。下面是**执行阶段**要点，设计细节以专项文档为准。
 >
 > **评审裁决（2026-11-16 二次）**：20 值暂不精简，但已完成定义表 / 触发条件 /

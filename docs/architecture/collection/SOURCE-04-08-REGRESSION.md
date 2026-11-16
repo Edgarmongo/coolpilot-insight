@@ -1,7 +1,7 @@
 # SOURCE-04-08 · 集成测试与回归
 
 > 状态：**已执行**（一项明确未执行，见 §5）
-> 复现：`bash tools/regression_04_08.sh`（一条命令，10 项检查）
+> 复现：`bash tools/regression_04_08.sh`（一条命令，11 项检查）
 > 关联：`SOURCE-04-TASKCARD.md` §SOURCE-04-08、`SOURCE-04-06-IMPLEMENTATION.md`、`SOURCE-04-07-IMPLEMENTATION.md`
 
 ---
@@ -14,7 +14,7 @@
 | Java 全量回归 | ✅ 315 / 315 |
 | Python 全量回归 | ✅ 76 / 76 |
 | 生产链路不回归 | 🟡 **部分**：可导入 + 产出格式（BOM/13 列）实证；**真实采集未跑**（§5） |
-| 部署回归（容器全部 healthy） | 🟡 四个带 healthcheck 的容器 healthy；frontend 无 healthcheck，只验"在跑" |
+| 部署回归（容器全部 healthy） | 🟡 四个带 healthcheck 的容器 healthy；frontend 无 healthcheck，只验"在跑" + 深链接 200 |
 | 至少一条测试真的发出 HTTP | ✅ 两处：`SourceCapabilityApiTest`（→ 应用）、`CollectionSnapshotClientTest`（→ collection 容器） |
 | 跨服务测试失败不得退化为跳过 | ✅ 容器不可达时测试**失败**而非 skip |
 | 更新 `SOURCE-03-AUDIT.md` 遗留清单 | ✅ 03-01-F 表已按实际状态改写 |
@@ -39,9 +39,10 @@ mvn test                                ok  Tests run: 315, Failures: 0, Errors:
 pytest                                  ok  76 passed in 0.85s
 backend → collection 快照               ok  http=200 snapshotId=sha256:f37f934b2fc44
 能力接口未登录必须 401                  ok  http=401
+前端深链接 /sources                     ok  http=200（Nginx fallback 生效）
 采集链路可导入                          ok  SAVE_DIR=/app/collection-service/datas
 CSV 产出格式（BOM + 13 列）             ok  BOM=yes COLS=13
-通过 10 / 失败 0
+通过 11 / 失败 0
 ```
 
 脚本存在的理由：这些检查此前散落在手工命令里，换个人就复现不出来，

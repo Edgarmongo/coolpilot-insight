@@ -9,7 +9,7 @@
 >
 > 关联：`SOURCE-02-CONTRACT.md`、`SOURCE-02-capability-schema.json`（v1.1，本次**未改动**）、
 > `ADR-006`（三态模型）、`ADR-008`（Effective 状态与诊断原因分离）、
-> `SOURCE-04-04-EFFECTIVE-REASON.md`（20 个 `effectiveReason` 的完整定义表与重复语义审查）、
+> `SOURCE-04-04-EFFECTIVE-REASON.md`（21 个 `effectiveReason` 的完整定义表与重复语义审查）、
 > `SOURCE-03-SUPPLEMENT-REVIEW.md`（证据可信化）。
 
 ---
@@ -657,7 +657,7 @@ Observed 缓存允许存在，但必须带 TTL 与 stale 标记。
 | 3 | `connectorCode` 位置 | **采纳**：每能力对象内 | §1.4 |
 | 4 | 字段命名 | **采纳**：`desiredStatus` | §1.3 |
 | 5 | UNVERIFIED 投影 | **通过**：`UNKNOWN` + `VERIFICATION_REQUIRED` | §3.2 + `ADR-008` |
-| 6 | `effectiveReason` 20 值是否精简 | **暂不精简**；但须补齐定义表与重复审查 | `SOURCE-04-04-EFFECTIVE-REASON.md` |
+| 6 | `effectiveReason` 21 值是否精简 | **暂不精简**；但须补齐定义表与重复审查 | `SOURCE-04-04-EFFECTIVE-REASON.md` |
 | 7 | Q5 两端点快照一致性 | **必须纳入 04-02**，优先方案 A，必要时 B；不得用 `generatedAt` 判一致性 | `SOURCE-04-TASKCARD.md` 04-02 §B |
 | 8 | `UNKNOWN` 是否允许执行 | **绝不允许**；准入用白名单；API 与前端必须同时展示状态与原因 | `ADR-008` §4.3 / §4.4 |
 | 9 | SOURCE-02 是否新增 `UNVERIFIED` | **本轮不动**，保留 Q1 单独评估 | §7 Q1 |
@@ -673,7 +673,7 @@ Observed 缓存允许存在，但必须带 TTL 与 stale 标记。
 
 | # | 前置 | 状态 |
 |---|---|---|
-| 1 | 20 个 `effectiveReason` 的完整定义表、触发条件、状态映射 | ✅ `SOURCE-04-04-EFFECTIVE-REASON.md` |
+| 1 | 21 个 `effectiveReason`（20 可达 + 1 预留）的完整定义表、触发条件、状态映射 | ✅ `SOURCE-04-04-EFFECTIVE-REASON.md` |
 | 2 | 重复语义审查（含"数据源能否区分"） | ✅ 同上 §3（发现 1 处不可达） |
 | 3 | 每个 Reason 至少一个正向测试设计 | ✅ 同上 §5 |
 | 4 | 04-02 的快照一致性方案定稿（A 或 B） | ⏳ **待 04-02 实施前确认** |

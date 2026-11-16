@@ -150,7 +150,7 @@ effectiveReason  = VERIFICATION_REQUIRED
 > 这些是**诊断原因**，不是状态。它们**不进入** `implementationStatus` /
 > `effectiveStatus` 枚举，与 SOURCE-03 的 `DiagnosticReason` 保持同一治理原则。
 
-> **完整定义表见 `SOURCE-04-04-EFFECTIVE-REASON.md`**：20 个值逐一给出含义、
+> **完整定义表见 `SOURCE-04-04-EFFECTIVE-REASON.md`**：21 个值逐一给出含义、
 > 判定条件、数据来源、`effectiveStatus` 映射、正向测试构造方式，
 > 并完成重复语义交叉审查。其中 `FUNCTION_NOT_CALLABLE` 因 Python 侧
 > 只有单一诊断码 `INVALID_IMPLEMENTATION`（靠自由文本区分）而**当前不可达**，
