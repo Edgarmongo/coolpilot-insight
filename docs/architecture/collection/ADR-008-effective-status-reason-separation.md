@@ -235,6 +235,39 @@ boolean executable = "AVAILABLE".equals(effectiveStatus)
 **不得**写成语义反转的形式（如 `!"UNREGISTERED".equals(status)`），
 那会把 `UNKNOWN` 及未来新增的状态默认放行——这是最危险的一类缺陷。
 
+### 4.3.1 证据闸门不因实现状态而豁免（2026-11-16 增补）
+
+白名单解决的是"**结论**能否执行"，还有一个更前置的问题：**结论本身怎么得出**。
+
+`implementationStatus` 是 Schema 允许的**六值**枚举。首版实现只在
+`UNVERIFIED` / `VERIFIED` 时校验验证证据，其余值直接跳过，于是：
+
+| 状态 | 证据 | 首版结果 | 问题 |
+|---|---|---|---|
+| `IMPLEMENTED` | 无 | `AVAILABLE` + 可执行 | 本地测试通过被当成真实平台验证 |
+| `IMPLEMENTED` | 被拒 | `AVAILABLE` + 可执行 | 证据校验整段被跳过 |
+| `DEGRADED` | 被拒 | `DEGRADED` + 可执行 | 同上 |
+
+这不是白名单能拦住的——白名单看到的已经是一个错误的 `AVAILABLE`。
+
+**裁定**：
+
+1. **证据闸门对所有未被 `DISABLED` / `UNSUPPORTED` 拦下的状态一律生效**，
+   不存在"某个状态可以跳过证据校验"。
+2. **`IMPLEMENTED` 永不产出 `AVAILABLE`**，归入
+   `UNKNOWN` + `VERIFICATION_REQUIRED`（该 reason 的冻结定义即"已注册且函数可用，
+   但从未获得有效验证证据"，精确匹配）。
+3. **`evidence.accepted=false` 一律不可执行**，与状态无关。
+4. `DEGRADED` 必须有已接受证据才能降级执行——"降级"是性能/限流语义，
+   不是"证据无效也能跑"的许可证。
+
+完整矩阵见 `SOURCE-04-04-TASKCARD.md` §3.2.1。
+
+> **一般性教训**：对"枚举允许的取值"做准入推导时，**必须穷举全部取值**。
+> 只处理常见两值、其余"默认落到最后一步"，等价于给未列举的值开了一条
+> 通往 `AVAILABLE` 的暗门。这与 §4.3 反对黑名单是同一个道理的两个面：
+> 黑名单漏掉新状态，穷举不全漏掉旧状态。
+
 ### 4.4 展示层不得只显示状态（评审强调）
 
 `effectiveStatus` 相同**不代表事实相同**（§3.4）。因此：

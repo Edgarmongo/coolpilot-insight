@@ -1,6 +1,7 @@
 package com.coolpilot.insight.source.application;
 
 import com.coolpilot.insight.integration.capability.CapabilityItem;
+import com.coolpilot.insight.integration.capability.CapabilityStatus;
 import com.coolpilot.insight.integration.capability.RegistrySnapshot;
 import com.coolpilot.insight.integration.capability.SnapshotCache;
 import com.coolpilot.insight.integration.capability.SnapshotFailure;
@@ -28,6 +29,11 @@ import java.util.Map;
  *       不产出 {@code AVAILABLE}。禁止用 {@code snapshot != null} 判断可用性。</li>
  *   <li><b>白名单准入</b>（N7-5）：见 {@link EffectiveStatus#allowsExecution}。</li>
  * </ol>
+ *
+ * <h3>证据闸门</h3>
+ * 第 ⑭~⑯ 步对**所有未被 ⑪⑫ 拦下的实现状态**生效，`IMPLEMENTED` 与 `DEGRADED`
+ * 不例外（`SOURCE-04-04-TASKCARD.md` §3.2.1）。`IMPLEMENTED` 表示"本地测试通过"，
+ * 与 `VERIFIED`（真实平台运行验证）不是同一件事，因此**永不产出** {@code AVAILABLE}。
  *
  * <h3>判定顺序</h3>
  * 严格按 `SOURCE-04-04-EFFECTIVE-REASON.md` §4 自上而下短路，<b>不得为实现方便调整</b>。
@@ -218,22 +224,34 @@ public class CapabilityReconciler {
                     "Desired 要求 " + dc.accessModes() + "，Observed 仅支持 " + observed.accessModes());
         }
 
-        // ⑭⑮⑯ 验证证据
-        if ("UNVERIFIED".equals(impl) || "VERIFIED".equals(impl)) {
-            CapabilityItem.Evidence ev = observed.evidence();
-            if (ev == null) {
-                return EffectiveCapability.of(c.code, c.category,
-                        EffectiveStatus.UNKNOWN, EffectiveReason.VERIFICATION_REQUIRED,
-                        "能力已注册但从未获得验证证据");
-            }
-            if (!Boolean.TRUE.equals(ev.accepted())) {
-                String reason = EVIDENCE_EXPIRED.equals(ev.rejectionReason())
-                        ? EffectiveReason.EVIDENCE_EXPIRED
-                        : EffectiveReason.EVIDENCE_INVALID;
-                return EffectiveCapability.of(c.code, c.category,
-                        EffectiveStatus.UNKNOWN, reason,
-                        "验证证据不被接受: " + ev.rejectionReason() + " " + ev.rejectionDetail());
-            }
+        // ⑭⑮⑯ 验证证据 —— **对所有未被 ⑪⑫ 拦下的状态一律生效**
+        //
+        // 首版只在 UNVERIFIED / VERIFIED 时校验，导致 IMPLEMENTED 与 DEGRADED
+        // 整段跳过证据校验，落入第 ⑲ 步判 AVAILABLE；`evidence.accepted=false`
+        // 也被静默放行——这是失败开放（SOURCE-04-03 评审 H1）。
+        //
+        // 裁定见 SOURCE-04-04-TASKCARD §3.2.1「实现状态 × 证据矩阵」：
+        // 不存在"某个实现状态可以豁免证据校验"。
+        CapabilityItem.Evidence ev = observed.evidence();
+        if (ev == null) {
+            return EffectiveCapability.of(c.code, c.category,
+                    EffectiveStatus.UNKNOWN, EffectiveReason.VERIFICATION_REQUIRED,
+                    missingEvidenceDetail(impl));
+        }
+        if (!Boolean.TRUE.equals(ev.accepted())) {
+            String reason = EVIDENCE_EXPIRED.equals(ev.rejectionReason())
+                    ? EffectiveReason.EVIDENCE_EXPIRED
+                    : EffectiveReason.EVIDENCE_INVALID;
+            return EffectiveCapability.of(c.code, c.category,
+                    EffectiveStatus.UNKNOWN, reason,
+                    "验证证据不被接受: " + ev.rejectionReason() + " " + ev.rejectionDetail());
+        }
+        // 证据有效，但实现状态只到"本地测试通过"：
+        // 本地测试 ≠ 真实平台验证，因此仍不产出 AVAILABLE（§3.2.1 铁律 2）。
+        if (CapabilityStatus.IMPLEMENTED.equals(impl)) {
+            return EffectiveCapability.of(c.code, c.category,
+                    EffectiveStatus.UNKNOWN, EffectiveReason.VERIFICATION_REQUIRED,
+                    "实现状态为 IMPLEMENTED（本地测试通过），尚未取得真实平台验证");
         }
 
         // ⑰ 需要认证但无可用账号（仅当没有 PUBLIC 可用时的确无法执行）
@@ -320,6 +338,23 @@ public class CapabilityReconciler {
 
     private static String key(String connectorCode, String code) {
         return (connectorCode == null ? "" : connectorCode) + "/" + code;
+    }
+
+    /**
+     * 证据缺失时的说明。
+     *
+     * <p>`VERIFIED` 却没有证据属于**协议异常**（Python 侧证据被接受才升 `VERIFIED`），
+     * 单独点明，避免和"从未验证"混为一谈——两者都是 `VERIFICATION_REQUIRED`，
+     * 但排查方向完全不同。
+     */
+    private static String missingEvidenceDetail(String impl) {
+        if (CapabilityStatus.VERIFIED.equals(impl)) {
+            return "实现状态为 VERIFIED 但缺少验证证据（协议异常，应检查采集服务证据链路）";
+        }
+        if (CapabilityStatus.DEGRADED.equals(impl)) {
+            return "降级能力缺少验证证据，未经验证不得降级执行";
+        }
+        return "能力已注册但从未获得有效验证证据";
     }
 
     private static int majorOf(String version) {

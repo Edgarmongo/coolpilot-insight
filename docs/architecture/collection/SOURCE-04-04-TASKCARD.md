@@ -310,12 +310,48 @@ Python 的 `/v1/capabilities` 只输出 Observed，**从不输出** `effectiveSt
 | 11 | 能力被 Python 显式禁用 | `implementationStatus=DISABLED` | `UNREGISTERED` | `CAPABILITY_DISABLED` | ❌ |
 | 12 | 平台不支持 | `implementationStatus=UNSUPPORTED` | `UNREGISTERED` | `PLATFORM_UNSUPPORTED` | ❌ |
 | 13 | 访问模式不覆盖 | Observed `accessModes` 不含 Desired 要求的模式 | `UNREGISTERED` | `ACCESS_MODE_UNSUPPORTED` | ❌ |
-| 14 | **已注册但从未验证** | `implementationStatus=UNVERIFIED` | `UNKNOWN` | `VERIFICATION_REQUIRED` | ❌ |
-| 15 | **证据已过期** | `UNVERIFIED` + `evidence.rejectionReason=EVIDENCE_EXPIRED` | `UNKNOWN` | `EVIDENCE_EXPIRED` | ❌ |
-| 16 | **证据被判无效** | `UNVERIFIED` + `rejectionReason ∈ {EVIDENCE_TAMPERED, EVIDENCE_STALE, EVIDENCE_VERSION_MISMATCH, EVIDENCE_SCOPE_MISMATCH, EVIDENCE_MALFORMED}` | `UNKNOWN` | `EVIDENCE_INVALID` | ❌ |
+| 14 | **已注册但未获真实平台验证** | `implementationStatus ∈ {UNVERIFIED, IMPLEMENTED}`（见 §3.2.1） | `UNKNOWN` | `VERIFICATION_REQUIRED` | ❌ |
+| 15 | **证据已过期** | 任意状态 + `evidence.rejectionReason=EVIDENCE_EXPIRED` | `UNKNOWN` | `EVIDENCE_EXPIRED` | ❌ |
+| 16 | **证据被判无效** | 任意状态 + `rejectionReason ∈ {EVIDENCE_TAMPERED, EVIDENCE_STALE, EVIDENCE_VERSION_MISMATCH, EVIDENCE_SCOPE_MISMATCH, EVIDENCE_MALFORMED}` | `UNKNOWN` | `EVIDENCE_INVALID` | ❌ |
 | 17 | 需要账号但无可用账号 | 只支持 AUTHENTICATED，无 `isUsable` 账号 | `ACCOUNT_REQUIRED` | `ACCOUNT_REQUIRED` | ❌ |
-| 18 | 可用但受限 | `implementationStatus=DEGRADED` | `DEGRADED` | `DEGRADED` | ⚠️ 降级执行 |
-| 19 | 正常可用 | `∈ {VERIFIED, IMPLEMENTED}` 且上述全通过 | `AVAILABLE` | `NONE` | ✅ |
+| 18 | 可用但受限 | `implementationStatus=DEGRADED` **且持有已接受证据** | `DEGRADED` | `DEGRADED` | ⚠️ 降级执行 |
+| 19 | 正常可用 | `implementationStatus=VERIFIED` **且** 证据已接受 且上述全通过 | `AVAILABLE` | `NONE` | ✅ |
+
+> **2026-11-16 修订（SOURCE-04-03-FIX-01，H1）**：原第 19 行写作
+> `∈ {VERIFIED, IMPLEMENTED}`，把 `IMPLEMENTED`（本地测试通过）与 `VERIFIED`
+> （真实平台运行验证）等同，导致**未上过真实平台的实现被直接判为可执行**。
+> 同一缺陷还有第二个入口：原第 14~16 步把证据校验写成"仅当 `UNVERIFIED` / `VERIFIED`
+> 才执行"，于是 `IMPLEMENTED` 与 `DEGRADED` 完全跳过证据校验，
+> `evidence.accepted=false` 也会被放行——**失败开放**。
+> 本次修订同时关闭这两个入口，裁决依据见 §3.2.1。
+
+### 3.2.1 实现状态 × 证据矩阵（穷举，不得只覆盖常见两值）
+
+`implementationStatus` 是 Schema 允许的**六值**枚举。准入推导必须对**全部六值**有明确结论，
+不能只处理 `UNVERIFIED` / `VERIFIED` 就把其余留给"默认通过"。
+
+| `implementationStatus` | 证据 `accepted=true` | 证据缺失（`null`） | 证据被拒（`accepted=false`） |
+|---|---|---|---|
+| `UNVERIFIED` | ⚠️ 不可能（证据接受即升 `VERIFIED`）；若出现按**不可执行**处理 | `UNKNOWN` + `VERIFICATION_REQUIRED` | `UNKNOWN` + `EVIDENCE_EXPIRED` / `EVIDENCE_INVALID` |
+| `IMPLEMENTED` | **`UNKNOWN` + `VERIFICATION_REQUIRED`**（本地测试通过 ≠ 真实平台验证） | `UNKNOWN` + `VERIFICATION_REQUIRED` | `UNKNOWN` + `EVIDENCE_EXPIRED` / `EVIDENCE_INVALID` |
+| `VERIFIED` | 继续第 17~19 步（可判 `AVAILABLE`） | `UNKNOWN` + `VERIFICATION_REQUIRED`（协议异常：`VERIFIED` 必须带证据） | `UNKNOWN` + `EVIDENCE_EXPIRED` / `EVIDENCE_INVALID` |
+| `DEGRADED` | `DEGRADED` + `DEGRADED`（降级执行） | `UNKNOWN` + `VERIFICATION_REQUIRED` | `UNKNOWN` + `EVIDENCE_EXPIRED` / `EVIDENCE_INVALID` |
+| `DISABLED` | 第 11 步已返回，不进本矩阵 | 同左 | 同左 |
+| `UNSUPPORTED` | 第 12 步已返回，不进本矩阵 | 同左 | 同左 |
+
+**三条铁律**：
+
+1. **证据闸门对所有未被第 11/12 步拦下的状态一律生效**。不存在"某个状态可以跳过证据校验"。
+   `DEGRADED` 尤其不能例外——"降级"是性能/限流语义，不是"证据无效也可以跑"的许可证。
+2. **`IMPLEMENTED` 永不产出 `AVAILABLE`**。它表示"代码写好、本地测过"，与
+   "在真实平台跑通并留下证据"是两件事。Schema 的 `VERIFIED` 才对应后者。
+3. **`evidence.accepted=false` 一律不可执行**，与状态无关。这是 04-02 阶段
+   `platformScoped` 失败的教训：准入判断里任何"默认通过"的分支都是缺陷。
+
+> **为什么归入 `VERIFICATION_REQUIRED` 而不是新增状态**：该 reason 的冻结定义就是
+> "能力已注册且函数可用，但从未获得有效验证证据"，`IMPLEMENTED` 精确落在这个定义里。
+> 无需扩充 `effectiveStatus`（八值冻结），也无需把它误归为 `UNREGISTERED`
+> ——它确实注册了。
 
 ### 3.3 `effectiveReason` 枚举（20 值，Java 内部模型）
 

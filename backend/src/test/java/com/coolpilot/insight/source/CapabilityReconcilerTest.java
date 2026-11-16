@@ -413,15 +413,127 @@ class CapabilityReconcilerTest {
     }
 
     @Test
-    @DisplayName("⑳ DEGRADED —— 可用但受限，允许降级执行")
+    @DisplayName("⑳ DEGRADED —— 持有已接受证据时可用但受限，允许降级执行")
     void reasonDegraded() {
-        var r = one(commentDesired(), fresh(snapshotWith(cap("COMMENT", "DEGRADED", null))));
+        // DEGRADED 也必须有已接受证据：降级是性能/限流语义，
+        // 不是"证据无效也能跑"的许可证（04-04 §3.2.1 铁律 1）。
+        var r = one(commentDesired(),
+                fresh(snapshotWith(cap("COMMENT", "DEGRADED", goodEvidence()))));
 
         assertThat(r.effectiveStatus()).isEqualTo(EffectiveStatus.DEGRADED);
         assertThat(r.effectiveReason()).isEqualTo(EffectiveReason.DEGRADED);
         assertThat(r.executable())
                 .as("DEGRADED 是唯一在非 AVAILABLE 状态下仍允许执行的情形")
                 .isTrue();
+
+        // 对照：同样 DEGRADED，但没有证据 → 不得降级执行
+        var without = one(commentDesired(),
+                fresh(snapshotWith(cap("COMMENT", "DEGRADED", null))));
+        assertThat(without.effectiveStatus()).isEqualTo(EffectiveStatus.UNKNOWN);
+        assertThat(without.effectiveReason()).isEqualTo(EffectiveReason.VERIFICATION_REQUIRED);
+        assertThat(without.executable()).isFalse();
+    }
+
+    // ==================================================================
+    // 证据闸门：实现状态 × 证据 的完整矩阵（H1 回归）
+    //
+    // 首版只在 UNVERIFIED / VERIFIED 时校验证据，IMPLEMENTED / DEGRADED
+    // 直接跳过，导致本地测试通过即被放行、证据被拒也被放行。
+    // 以下用例逐格锁定 04-04 §3.2.1 的矩阵。
+    // ==================================================================
+    @Test
+    @DisplayName("H1 IMPLEMENTED + 无证据 → UNKNOWN / VERIFICATION_REQUIRED / 不可执行")
+    void implWithoutEvidence() {
+        var r = one(commentDesired(), fresh(snapshotWith(cap("COMMENT", "IMPLEMENTED", null))));
+        assertThat(r.effectiveStatus()).isEqualTo(EffectiveStatus.UNKNOWN);
+        assertThat(r.effectiveReason()).isEqualTo(EffectiveReason.VERIFICATION_REQUIRED);
+        assertThat(r.executable()).isFalse();
+    }
+
+    @Test
+    @DisplayName("H1 IMPLEMENTED + 证据被拒 → UNKNOWN / EVIDENCE_INVALID / 不可执行")
+    void implWithRejectedEvidence() {
+        var r = one(commentDesired(), fresh(snapshotWith(
+                cap("COMMENT", "IMPLEMENTED", rejectedEvidence("EVIDENCE_TAMPERED")))));
+        assertThat(r.effectiveStatus()).isEqualTo(EffectiveStatus.UNKNOWN);
+        assertThat(r.effectiveReason()).isEqualTo(EffectiveReason.EVIDENCE_INVALID);
+        assertThat(r.executable()).isFalse();
+    }
+
+    @Test
+    @DisplayName("H1 IMPLEMENTED + 证据有效 → 仍判 VERIFICATION_REQUIRED（本地测试≠真实平台验证）")
+    void implWithAcceptedEvidenceStillNotAvailable() {
+        var r = one(commentDesired(), fresh(snapshotWith(
+                cap("COMMENT", "IMPLEMENTED", goodEvidence()))));
+
+        assertThat(r.effectiveStatus())
+                .as("IMPLEMENTED 永不产出 AVAILABLE —— 这是本次评审 H1 的核心裁定")
+                .isEqualTo(EffectiveStatus.UNKNOWN);
+        assertThat(r.effectiveReason()).isEqualTo(EffectiveReason.VERIFICATION_REQUIRED);
+        assertThat(r.executable()).isFalse();
+        // 断言"由 IMPLEMENTED 判定产生"，而不是被前面某个分支意外拦下：
+        // 证据是有效的，若走的是"证据缺失"分支，detail 会是"从未获得有效验证证据"。
+        assertThat(r.detail()).contains("IMPLEMENTED");
+    }
+
+    @Test
+    @DisplayName("H1 DEGRADED + 证据被拒 → UNKNOWN / EVIDENCE_INVALID，不得降级执行")
+    void degradedWithRejectedEvidence() {
+        var r = one(commentDesired(), fresh(snapshotWith(
+                cap("COMMENT", "DEGRADED", rejectedEvidence("EVIDENCE_EXPIRED")))));
+        assertThat(r.effectiveStatus()).isEqualTo(EffectiveStatus.UNKNOWN);
+        assertThat(r.effectiveReason())
+                .as("过期与其它拒绝原因分开，但都不可执行")
+                .isEqualTo(EffectiveReason.EVIDENCE_EXPIRED);
+        assertThat(r.executable()).isFalse();
+    }
+
+    @Test
+    @DisplayName("H1 VERIFIED + 证据缺失 → UNKNOWN（协议异常，不是正常业务态）")
+    void verifiedWithoutEvidence() {
+        var r = one(commentDesired(), fresh(snapshotWith(cap("COMMENT", "VERIFIED", null))));
+        assertThat(r.effectiveStatus()).isEqualTo(EffectiveStatus.UNKNOWN);
+        assertThat(r.effectiveReason()).isEqualTo(EffectiveReason.VERIFICATION_REQUIRED);
+        assertThat(r.executable()).isFalse();
+        assertThat(r.detail()).contains("协议异常");
+    }
+
+    @Test
+    @DisplayName("H1 VERIFIED + 证据被篡改 → EVIDENCE_INVALID（不新增 TAMPERED 语义）")
+    void verifiedWithTamperedEvidence() {
+        // 冻结的 04-04 §3.3 明确把 EVIDENCE_TAMPERED 合并进 EVIDENCE_INVALID，
+        // 因此这里断言的仍是 EVIDENCE_INVALID——不为了让用例好看而新造 reason。
+        var r = one(commentDesired(), fresh(snapshotWith(
+                cap("COMMENT", "VERIFIED", rejectedEvidence("EVIDENCE_TAMPERED")))));
+        assertThat(r.effectiveStatus()).isEqualTo(EffectiveStatus.UNKNOWN);
+        assertThat(r.effectiveReason()).isEqualTo(EffectiveReason.EVIDENCE_INVALID);
+        assertThat(r.executable()).isFalse();
+        assertThat(r.detail()).contains("EVIDENCE_TAMPERED");
+    }
+
+    @Test
+    @DisplayName("H1 全矩阵：任何『证据被拒』组合都不可执行")
+    void rejectedEvidenceNeverExecutable() {
+        // 穷举 Schema 允许的六值 —— 若将来新增状态，本用例会因 statuses 清单
+        // 与 CapabilityStatus.ALL 不一致而暴露（见下一个断言）。
+        var statuses = List.of("UNVERIFIED", "IMPLEMENTED", "VERIFIED", "DEGRADED");
+
+        for (String st : statuses) {
+            var r = one(commentDesired(), fresh(snapshotWith(
+                    cap("COMMENT", st, rejectedEvidence("EVIDENCE_TAMPERED")))));
+            assertThat(r.executable())
+                    .as("%s + 证据被拒 必须不可执行", st)
+                    .isFalse();
+            assertThat(r.effectiveStatus())
+                    .as("%s + 证据被拒 必须为 UNKNOWN", st)
+                    .isEqualTo(EffectiveStatus.UNKNOWN);
+        }
+
+        // 防漏：Schema 的六个合法值必须都被上面的清单覆盖（DISABLED/UNSUPPORTED
+        // 在第 11/12 步已返回，单独由 reasonCapabilityDisabled 等用例覆盖）。
+        assertThat(List.of("UNVERIFIED", "IMPLEMENTED", "VERIFIED", "DEGRADED", "DISABLED", "UNSUPPORTED"))
+                .containsExactlyInAnyOrderElementsOf(
+                        com.coolpilot.insight.integration.capability.CapabilityStatus.ALL);
     }
 
     // ==================================================================

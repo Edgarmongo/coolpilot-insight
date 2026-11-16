@@ -248,3 +248,17 @@ snapshot: UNAVAILABLE | 无可用快照
 | L2 | `ACCOUNT_REQUIRED` 只按"仅 AUTHENTICATED 且无账号"判定 | 若能力同时支持 PUBLIC，则不要求账号（可用 PUBLIC 执行）。这是有意的：不该因为没账号就否掉匿名可做的能力 |
 | L3 | 无缓存 Effective | 每次查询实时计算，代价极低，避免缓存一致性问题（04-04 §5.3） |
 | L4 | `DataSourceView` 同时返回旧 `capability` 与新三态 | 兼容期设计，04-07 前端切换后可移除旧字段 |
+
+---
+
+## 附：评审后的修订
+
+| 任务 | 内容 | 文档 |
+|---|---|---|
+| `SOURCE-04-03-FIX-01` | H1：`IMPLEMENTED` / `DEGRADED` 证据准入修复（契约 + 代码 + 矩阵测试） | `SOURCE-04-03-FIX01-REPORT.md` |
+| `SOURCE-04-03-FIX-02` | M1：Desired 故障分类与优先级；M2：重复能力拒绝 | 待执行 |
+
+> 本文档描述的是 `4e534a8` 的实施状态。**证据闸门的行为已由 FIX-01 修订**：
+> 原始实现只在 `UNVERIFIED` / `VERIFIED` 时校验证据，`IMPLEMENTED` / `DEGRADED`
+> 会被放行到 `AVAILABLE`（见评审 H1）。请以 FIX-01 报告与
+> `SOURCE-04-04-TASKCARD.md` §3.2.1 为准。
