@@ -131,3 +131,16 @@ export const configApi = {
   list: () => request.get('/v1/system/configs'),
   update: (key, value) => request.put('/v1/system/configs/' + key, { value }),
 }
+
+export const accountApi = {
+  list: () => request.get('/v1/source/accounts'),
+  detail: (id) => request.get(`/v1/source/accounts/${id}`),
+  create: (data) => request.post('/v1/source/accounts', data),
+  update: (id, data) => request.put(`/v1/source/accounts/${id}`, data),
+  setStatus: (id, status) => request.patch(`/v1/source/accounts/${id}/status`, { status }),
+  usage: (id) => request.get(`/v1/source/accounts/${id}/usage`),
+}
+
+export const sourceApi = {
+  list: () => request.get('/v1/source/sources'),
+}
