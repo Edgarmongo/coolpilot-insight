@@ -1,5 +1,46 @@
 # 2026-11-16 工作日志
 
+## SOURCE-04-04 二次评审闭环（纯文档，仍不改代码）
+
+评审裁决三项，全部落地：
+
+**裁决 1：`effectiveReason` 20 值暂不精简，但须补定义表 + 重复审查**
+新增 `SOURCE-04-04-EFFECTIVE-REASON.md`：
+- 20 值逐一定义（含义/判定条件/数据来源/effectiveStatus 映射）
+- 逐对交叉语义审查（12 组对比 + 6 组边界说明）
+- 判定顺序 19 步（顺序即优先级）
+- 每值至少 1 个正向测试构造方式
+- 扩展规则 E1~E5 防语义漂移
+
+**审查发现 1 处真实缺陷（不是语义重复，是数据源不可区分）**：
+`FUNCTION_UNRESOLVED` 与 `FUNCTION_NOT_CALLABLE` 在 Python 侧共用同一诊断码
+`INVALID_IMPLEMENTATION`（capability_registry.py:150），只靠 `detail` 自由文本区分
+（"属性不存在或模块无法导入" vs "引用指向的对象不可调用"）。而 SOURCE-03 已定
+「禁止用自由文本做机器判据」→ `FUNCTION_NOT_CALLABLE` **当前不可达**，违反
+"每值至少一正向测试"要求。
+处置：保留两值（语义确实不同），标注 NOT_CALLABLE 为预留，短期统一映射为
+FUNCTION_UNRESOLVED，记 Q9（需 Python 拆子码）。
+
+**裁决 2：Q5 快照一致性必须纳入 04-02**
+04-02 任务卡新增 §A（必须同时消费 capabilities + diagnostics）与 §B（快照一致性）：
+- 方案 A（统一快照接口 /v1/registry/snapshot）为首选
+- 方案 B（双端点 + registrySnapshotId 比对）为退路
+- 方案 C（读了就合并）**明确不接受**
+- **禁止用 generatedAt 判一致性**，必须用内容哈希或单调版本号
+- id 不一致 → 重试 1 次 → 仍不同判 UNKNOWN + OBSERVED_STALE，**禁止合并数据**
+- 缓存单位改为**快照**，不是每个端点一份
+
+**裁决 3：UNKNOWN 绝不允许执行**
+ADR-008 新增 §4.3：准入用**白名单**（AVAILABLE + NONE / DEGRADED），
+禁止写 `!"UNREGISTERED".equals(status)` 这类反转形式（会把 UNKNOWN 和未来新状态默认放行）。
+§4.4：API 与前端**必须同时返回/展示** status + reason，不得只给一个 UNKNOWN。
+
+04-03 验收标准同步：20 个 reason 逐条正向用例、判定顺序不得调整、
+断言 UNKNOWN 不可执行、断言只用单一快照。
+
+零改动验证：代码/库/Flyway/Schema 全部未动（Flyway 仍 V30，
+`capability_json` 仍是 v1 原值）。未启用 04-02/04-03。
+
 ## SOURCE-04-04 v2 修订（评审修订指令，仍是纯设计）
 
 评审裁决四项全部采纳：迁移方案 A；Schema/Contract 主版本兼容（Adapter 锁定时精确匹配）；

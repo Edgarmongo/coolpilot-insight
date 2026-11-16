@@ -8,7 +8,8 @@
 > 不改变 Task/Run/Execution/Item 状态机、不启动 SOURCE-04-02 / 04-03。**
 >
 > 关联：`SOURCE-02-CONTRACT.md`、`SOURCE-02-capability-schema.json`（v1.1，本次**未改动**）、
-> `ADR-006`（三态模型）、`ADR-008`（Effective 状态与诊断原因分离，本次新增）、
+> `ADR-006`（三态模型）、`ADR-008`（Effective 状态与诊断原因分离）、
+> `SOURCE-04-04-EFFECTIVE-REASON.md`（20 个 `effectiveReason` 的完整定义表与重复语义审查）、
 > `SOURCE-03-SUPPLEMENT-REVIEW.md`（证据可信化）。
 
 ---
@@ -524,7 +525,7 @@ Observed 缓存允许存在，但必须带 TTL 与 stale 标记。
 | Q2 | 证据过期/更新无推送机制，只能靠 TTL 自然失效 | 最长滞后一个 TTL | SOURCE-09 或后续 Registry 版本管理 |
 | Q3 | Adapter 版本是否需要 semver range（而非精确匹配） | 影响升级策略 | 后续议题 |
 | Q4 | `implementationHash` 只覆盖目标函数源码，未覆盖 Adapter 基类、关键解析器、请求执行实现等影响行为的依赖 | 底层实现变化时旧证据可能被错误复用 | SOURCE-09（用户已在 SOURCE-03 审查中提出） |
-| Q5 | Java 需同时读 `/v1/capabilities` 与 `/v1/adapters` 才能区分函数问题，两个端点的**一致性**（同一次请求内的快照是否一致）未定义 | 极端情况下两端口径不一致 | 04-02 设计时明确（建议同一 traceId 内只读一次快照） |
+| Q5 | Java 需同时读 `/v1/capabilities` 与 `/v1/adapters` 才能区分函数问题，两个端点的**一致性**（同一次请求内的快照是否一致）未定义 | 极端情况下两端口径不一致 | ✅ **已纳入 04-02 硬约束**（优先统一快照接口，方案 A；退路方案 B + `registrySnapshotId`） |
 | Q6 | 一个 Source 多 Connector 时，Desired 里同一 `code` 出现在不同 Connector 下，唯一标识需含 connectorCode | 当前设计已支持（四元组），但**未在 DB 层加约束** | 04-06 落库时校验 |
 | Q7 | `MEDIA_DOWNLOAD` / `AUTHOR_PROFILE` / `AUTHOR_POSTS` 在 Desired 里尚无实际数据 | 迁移后这些能力为空，需人工补声明 | 04-06 管理界面或后续数据补录 |
 | Q8 | 迁移时 `accessModes` 的保守默认值可能比业务真实意图窄，导致误判 `ACCESS_MODE_UNSUPPORTED` | 可能压低可用能力数 | 迁移后由运营复核（04-07 展示差异） |
@@ -553,14 +554,32 @@ Observed 缓存允许存在，但必须带 TTL 与 stale 标记。
 
 ---
 
-## 9. 待最终确认（阻塞 04-02 / 04-03）
+## 9. 评审裁决闭环（2026-11-16 二次评审）
 
-| # | 事项 | 当前结论 |
+| # | 事项 | 裁决 | 落点 |
+|---|---|---|---|
+| 1 | 迁移方案 | **A 通过**；迁移实施独立立项 | §2 |
+| 2 | 版本匹配深度 | **有条件通过**；Adapter 锁定时精确匹配 | §4.3 |
+| 3 | `connectorCode` 位置 | **采纳**：每能力对象内 | §1.4 |
+| 4 | 字段命名 | **采纳**：`desiredStatus` | §1.3 |
+| 5 | UNVERIFIED 投影 | **通过**：`UNKNOWN` + `VERIFICATION_REQUIRED` | §3.2 + `ADR-008` |
+| 6 | `effectiveReason` 20 值是否精简 | **暂不精简**；但须补齐定义表与重复审查 | `SOURCE-04-04-EFFECTIVE-REASON.md` |
+| 7 | Q5 两端点快照一致性 | **必须纳入 04-02**，优先方案 A，必要时 B；不得用 `generatedAt` 判一致性 | `SOURCE-04-TASKCARD.md` 04-02 §B |
+| 8 | `UNKNOWN` 是否允许执行 | **绝不允许**；准入用白名单；API 与前端必须同时展示状态与原因 | `ADR-008` §4.3 / §4.4 |
+| 9 | SOURCE-02 是否新增 `UNVERIFIED` | **本轮不动**，保留 Q1 单独评估 | §7 Q1 |
+
+### 9.1 评审后新增的两条硬约束（本文档已同步）
+
+| 约束 | 出处 |
+|---|---|
+| `effectiveStatus` × `effectiveReason` 必须**成对返回**，不得只给其一 | `ADR-008` §4.4 |
+| 一次 Effective 计算只能使用**单一 Observed 快照**，禁止跨端点混用 | `SOURCE-04-TASKCARD.md` 04-02 §B / 04-03 |
+
+### 9.2 进入 04-03 之前必须先完成
+
+| # | 前置 | 状态 |
 |---|---|---|
-| 1 | 迁移方案 | **A**（已裁决通过）；迁移实施独立立项 |
-| 2 | 版本匹配深度 | 主版本兼容 + Adapter 锁定时精确匹配（已裁决通过） |
-| 3 | `connectorCode` 位置 | 每能力对象内（已裁决采纳） |
-| 4 | 字段命名 | `desiredStatus`（已裁决采纳） |
-| 5 | UNVERIFIED 投影 | `UNKNOWN` + `VERIFICATION_REQUIRED`（本次修订） |
-| 6 | `effectiveReason` 20 值枚举是否需要再精简 | **待确认** |
-| 7 | §7 的 Q5（两端点快照一致性）是否在 04-02 一并处理 | **待确认** |
+| 1 | 20 个 `effectiveReason` 的完整定义表、触发条件、状态映射 | ✅ `SOURCE-04-04-EFFECTIVE-REASON.md` |
+| 2 | 重复语义审查（含"数据源能否区分"） | ✅ 同上 §3（发现 1 处不可达） |
+| 3 | 每个 Reason 至少一个正向测试设计 | ✅ 同上 §5 |
+| 4 | 04-02 的快照一致性方案定稿（A 或 B） | ⏳ **待 04-02 实施前确认** |

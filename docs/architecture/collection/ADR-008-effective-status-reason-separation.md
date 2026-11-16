@@ -150,6 +150,12 @@ effectiveReason  = VERIFICATION_REQUIRED
 > 这些是**诊断原因**，不是状态。它们**不进入** `implementationStatus` /
 > `effectiveStatus` 枚举，与 SOURCE-03 的 `DiagnosticReason` 保持同一治理原则。
 
+> **完整定义表见 `SOURCE-04-04-EFFECTIVE-REASON.md`**：20 个值逐一给出含义、
+> 判定条件、数据来源、`effectiveStatus` 映射、正向测试构造方式，
+> 并完成重复语义交叉审查。其中 `FUNCTION_NOT_CALLABLE` 因 Python 侧
+> 只有单一诊断码 `INVALID_IMPLEMENTATION`（靠自由文本区分）而**当前不可达**，
+> 短期映射规则为统一归入 `FUNCTION_UNRESOLVED`，已记为该文档 Q9。
+
 ## 四、九种情况的完整映射（用户点名的检查清单）
 
 判定顺序自上而下**短路**（命中即停）。
@@ -199,6 +205,58 @@ effectiveReason  = VERIFICATION_REQUIRED
 
 **铁律**：Collection Service 暂时不可达，不代表所有平台能力都失效。
 不可达只能判 `UNKNOWN` + `REGISTRY_UNREACHABLE`，且**不得**把 Desired 或 Observed 缓存清空。
+
+### 4.3 执行准入的唯一判据（评审强调的边界）
+
+> **`UNKNOWN` 绝不能被下游理解为「允许执行」。**
+
+首期采取**白名单**策略，而不是黑名单：
+
+| `effectiveStatus` | 是否允许进入执行流程 |
+|---|---|
+| `AVAILABLE` | ✅ 允许 |
+| `DEGRADED` | ⚠️ 允许但需降级标注 |
+| `ADAPTER_MISSING` | ❌ 拒绝 |
+| `VERSION_MISMATCH` | ❌ 拒绝 |
+| `ACCOUNT_REQUIRED` | ❌ 拒绝 |
+| `SOURCE_DISABLED` | ❌ 拒绝 |
+| `UNREGISTERED` | ❌ 拒绝 |
+| **`UNKNOWN`** | ❌ **拒绝** |
+
+实现要求：
+
+```java
+// 唯一允许执行的判据：白名单 + reason 必须为 NONE
+boolean executable = "AVAILABLE".equals(effectiveStatus)
+                  && "NONE".equals(effectiveReason)
+                  || "DEGRADED".equals(effectiveStatus);
+```
+
+**不得**写成语义反转的形式（如 `!"UNREGISTERED".equals(status)`），
+那会把 `UNKNOWN` 及未来新增的状态默认放行——这是最危险的一类缺陷。
+
+### 4.4 展示层不得只显示状态（评审强调）
+
+`effectiveStatus` 相同**不代表事实相同**（§3.4）。因此：
+
+| 层 | 强制要求 |
+|---|---|
+| API 响应 | `effectiveStatus` 与 `effectiveReason` **必须同时返回**，不得只给其一 |
+| 前端展示（04-07） | 必须同时显示状态与原因的中文说明，**不得**只显示一个 `UNKNOWN` 或一个红点 |
+| 日志 / 诊断 | 两者都要记录，且原因要能映射到 §3.3 的枚举值而非自由文本 |
+
+反例（禁止）：
+
+```
+能力状态：UNKNOWN          ← 运营无法判断是"服务挂了"还是"没验证"
+```
+
+正例：
+
+```
+能力状态：不可执行
+原因：已注册但从未验证（VERIFICATION_REQUIRED）
+```
 
 ## 五、对 04-02 的接口要求（本 ADR 的直接后果）
 

@@ -31,9 +31,9 @@
 | 任务 | 内容 | 优先级 | 状态 |
 |---|---|---|---|
 | SOURCE-04-01 | 修正 `AccountVerificationService` 探活目标 | P0 | ✅ **已完成**（补充审查中） |
-| SOURCE-04-02 | Java 消费 Python `/v1/capabilities` | P0 | 待执行 |
+| SOURCE-04-02 | Java 消费 Python Registry（**含快照一致性**） | P0 | 待执行（任务卡已修订，含方案 A/B 裁决） |
 | SOURCE-04-03 | Desired / Observed / Effective 核对 | P0 | 待执行 |
-| SOURCE-04-04 | Desired v2 结构与状态语义定稿（原「修正 `PENDING` 枚举不一致」） | P0 | 🟡 **设计已冻结 v2，待最终评审**（`SOURCE-04-04-TASKCARD.md` + `ADR-008`） |
+| SOURCE-04-04 | Desired v2 结构与状态语义定稿 | P0 | 🟡 **设计已冻结 v2，评审通过**（`SOURCE-04-04-TASKCARD.md` + `ADR-008` + `SOURCE-04-04-EFFECTIVE-REASON.md`） |
 | SOURCE-04-05 | Collection Service 部署架构决策 | P0 | ✅ **已完成**（ADR-007） |
 | SOURCE-04-06 | Java 数据源管理 API | P1 | 待执行 |
 | SOURCE-04-07 | 数据源管理前端 | P1 | **推迟**（用户明确要求本轮不做前端） |
@@ -70,37 +70,135 @@ Python 侧 **56/56**（`test_registry.py` 23 + `test_server.py` 17 + `test_evide
 
 ---
 
-### SOURCE-04-02：Java 消费 Python `/v1/capabilities` （P0）
+### SOURCE-04-02：Java 消费 Python Registry（含快照一致性）（P0）
 
 **目标**：Java 侧能**实际**查询 Python 的 Registry，而不是只读自己的 `capability_json`。
+并且必须保证「一次 Effective 计算用的是**同一份** Observed 快照」。
 
-**文件范围**
+> **2026-11-16 修订（评审裁决）**：原卡只要求读 `/v1/capabilities`，这是不完整的。
+> 必须同时消费 `diagnostics`，且两个端点的数据必须来自**同一份不可变快照**。
+> 以下 §A / §B 是本次新增的硬约束。
+
+#### A. 必须同时消费 capabilities 与 diagnostics
+
+`SOURCE-04-04-TASKCARD.md` §3.2 的 #8（能力未注册）与 #9（函数解析不到）
+在 `/v1/capabilities` 的 Observed 清单里**表现完全相同**——都只是"没有这条能力"。
+
+要区分它们，必须读 `diagnostics`：
+
+| 端点 | 提供 | 用途 |
+|---|---|---|
+| `GET /v1/capabilities` | Observed 能力清单（`implementationStatus`、`evidence`、`accessModes`…） | 判断是否注册、实现状态、证据有效性 |
+| `GET /v1/adapters`（或 `/{connectorCode}`） | `loadStatus` + `diagnostics[]`（含 `reason=INVALID_IMPLEMENTATION`、`adapterFunction`） | 判断 Adapter 是否加载、函数是否解析失败 |
+
+**只读 `/v1/capabilities` 会在 #8 与 #9 之间失明**，导致把"函数写错了"误报成"没注册"。
+
+#### B. 快照一致性（硬约束，不可降级为后续优化）
+
+**问题**：两个端点分别调用，Registry 可能在两次请求之间变化。
+
+```
+t1  Java → GET /v1/capabilities  → 能力 A 已注册
+t2  Python 侧 Adapter 重载，能力 A 的函数失效
+t3  Java → GET /v1/adapters      → 诊断显示 A 函数解析失败
+t4  Java 合并 t1 与 t3 的结果 → 生成一个「从未同时存在过」的事实
+```
+
+**这类跨版本混合数据必须被禁止**，不能当作完整快照使用。
+
+**方案对比（评审给定，本节确认）**
+
+| 方案 | 设计 | 评价 | 裁决 |
+|---|---|---|---|
+| **A** | 新增统一快照接口，**一次返回** capabilities + diagnostics + 快照标识 | 原子性最好 | ✅ **首选** |
+| B | 两个端点各自返回相同的 `registrySnapshotId`，Java 比对后接受或重试 | 可行，但需 Python 保证同一标识的语义 | ⚠️ 退路 |
+| C | Java 连续读两个接口，不做任何版本校验 | 无法保证一致性 | ❌ **不接受** |
+
+**裁决：优先方案 A**。若为保持 SOURCE-03 已冻结的接口契约而暂时不能新增端点，
+则采用方案 B，但必须先补齐快照标识的定义与一致性规则。
+
+**方案 A 的接口形状（建议，待实施时定稿）**
+
+```
+GET /v1/registry/snapshot
+{
+  "code": 0,
+  "data": {
+    "snapshotId": "sha256:3f9a...",      // 不可变快照标识
+    "generatedAt": "2026-11-16T12:00:00Z",
+    "schemaVersion": "1.1",
+    "adapters": [ ... ],                  // 同 /v1/adapters 内容
+    "connectors": [ ... ],                // 同 /v1/capabilities 的 connectors
+    "diagnostics": [ ... ]
+  }
+}
+```
+
+**`snapshotId` 的语义要求**（关键，不能用时间戳替代）：
+
+| 要求 | 说明 |
+|---|---|
+| 标识**内容**而非**时间** | 必须由 Registry 内容的哈希（或单调递增版本号）生成 |
+| 同一份内容 → 同一 id | 内容不变时重复请求返回相同 id |
+| 内容变化 → 新 id | 任一 Adapter 加载状态/能力/诊断变化都必须换 id |
+| **不得**用 `generatedAt` 判断一致性 | 时间戳相同不代表内容相同；时间戳不同也不一定内容不同 |
+
+**方案 B 的一致性规则**（若走退路）：
+
+1. 两个端点响应都带 `registrySnapshotId`；
+2. Java 读取两次后比对：相同 → 接受；不同 → **重试一次**，仍不同则判 `UNKNOWN` + `OBSERVED_STALE`；
+3. 重试上限 1 次，避免在 Registry 高频变化时形成忙等；
+4. **不得**在 id 不一致时"取交集"或"取并集"——那仍是混合数据。
+
+**禁止的做法**
+
+- ❌ 只依赖 `generatedAt` 时间戳比对；
+- ❌ id 不一致时仍合并使用；
+- ❌ 把两次读取的结果分别缓存后按需拼装。
+
+#### C. 文件范围
+
 - 新增 `backend/src/main/java/com/coolpilot/insight/integration/capability/CollectionServiceClient.java`
   —— HTTP 客户端（复用 `ServiceHealthProbe` 的超时策略；带 `X-Internal-Token`）。
+- 新增 `backend/src/main/java/com/coolpilot/insight/integration/capability/RegistrySnapshot.java`
+  —— 一次请求拿到的**不可变快照**（capabilities + diagnostics + snapshotId）。
 - 新增 `backend/src/main/java/com/coolpilot/insight/integration/capability/ObservedCapabilityCache.java`
-  —— 缓存 Observed 快照（TTL 可配，默认可设 60s；查询失败时**保留上一次成功结果并标记 stale**，
-  绝不返回空集合冒充"没有能力"）。
-- 扩展 `backend/src/main/java/com/coolpilot/insight/integration/capability/CapabilityContractParser.java`
-  —— 解析 Schema 1.1 新增的 `semantics` 与 `evidence` 字段。
-- 扩展 `CapabilityItem.java` / `CapabilityDocument.java`：加 `semantics`、`evidence`。
+  —— 缓存**快照**（不是分别缓存两个端点）；TTL 可配（默认 60s）；
+  查询失败时**保留上一次成功快照并标记 stale**，绝不返回空集合冒充"没有能力"。
+- 扩展 `CapabilityContractParser.java` —— 解析 Schema 1.1 的 `semantics` 与 `evidence`。
+- 扩展 `CapabilityItem.java` / `CapabilityDocument.java`：加 `semantics`、`evidence`（已完成）。
 
-**硬性要求**
-1. 解析失败 / Schema 主版本不支持 → `ObservedCapabilities.schemaSupported=false`，
-   上层按 `UNKNOWN` 处理，**不得**当作"能力不存在"；
+> **若走方案 A**，需在 collection-service 新增 `/v1/registry/snapshot`。
+> 这属于**新增端点**，不删除也不修改既有端点，符合"不擅自删除旧接口"的约束。
+> 但**它属于 Python 代码改动**，需在实施前单独确认范围。
+
+#### D. 硬性要求
+
+1. 解析失败 / Schema 主版本不支持 → `schemaSupported=false`，上层按 `UNKNOWN` 处理，
+   **不得**当作"能力不存在"；
 2. `evidence.accepted=false` 的能力，其 Observed `implementationStatus` **不得**是 `VERIFIED`
-   （Python 侧已保证，Java 侧要再断言一次，防止上游回退）；
+   （Python 侧已保证，Java 侧再断言一次，防上游回退）；
 3. 超时与失败必须可观测（指标 / 日志），不能让查询失败静默降级；
-4. **不得**在此任务里改动 Python 的响应结构。
+4. **不得**在此任务里改动 `implementationStatus` / `effectiveStatus` 枚举；
+5. 缓存单位是**快照**，不是"每个端点一份"——这是快照一致性的落地前提。
 
-**测试命令**
+#### E. 测试命令
+
 ```bash
 cd backend && mvn -s ../deploy/docker/maven-settings.xml -o test
 ```
 
-**验收标准**
+#### F. 验收标准
+
 - 新增 `CapabilityClientTest`：正常解析 / 超时 / 500 / Schema 2.0（未知主版本）
   / `semantics` 与 `evidence` 正确落库；
+- 新增 `SnapshotConsistencyTest`（**本次新增的必测项**）：
+  - 同一快照内 capabilities 与 diagnostics 版本一致；
+  - 模拟两次读取 id 不同 → 触发重试 → 仍不同则 `UNKNOWN` + `OBSERVED_STALE`；
+  - **断言绝不在 id 不一致时合并数据**；
 - 至少一条**真实 HTTP 往返**测试（对 `cpi-collection` 容器），不得再用静态 JSON 样本；
+- 断言"函数解析不到"能被识别为 `FUNCTION_UNRESOLVED` 而非 `CAPABILITY_NOT_REGISTERED`
+  （需 diagnostics 参与）；
 - Java 测试总数 ≥ 150。
 
 ---
@@ -160,7 +258,17 @@ cd backend && mvn -s ../deploy/docker/maven-settings.xml -o test
 **执行准入（与 Effective 并列，不是状态）**
 - Java 未在 Desired 中声明的能力 → Python 可观测，但**不允许执行**；
 - Java 已停用 Source → Python 可能仍加载，**不允许新执行**；
-- Effective ≠ `AVAILABLE` → 一律不允许执行。
+- **`UNKNOWN` 一律不允许执行**（评审强调：不得被下游理解为"允许"）；
+- 准入判据用**白名单**，禁止写成 `!"UNREGISTERED".equals(status)` 这类语义反转形式
+  （那会把 `UNKNOWN` 及未来新增状态默认放行）。
+
+**计算输入必须来自同一份 Observed 快照（评审裁决，硬约束）**
+
+| 要求 | 说明 |
+|---|---|
+| 单一快照 | 一次 Effective 计算只能使用 `RegistrySnapshot` 一个对象，不得分别取 capabilities 与 diagnostics |
+| 版本校验 | 若走方案 B（双端点 + `registrySnapshotId`），id 不一致必须重试或判 `OBSERVED_STALE`，**禁止合并** |
+| 不混用缓存 | 不得把"上一次的 diagnostics"与"这一次的 capabilities"拼装使用 |
 
 **测试命令**
 ```bash
@@ -168,22 +276,26 @@ cd backend && mvn -s ../deploy/docker/maven-settings.xml -o test
 ```
 
 **验收标准**
-- 新增 `CapabilityReconcilerTest`：上表 9 条规则**逐条**有断言（含边界：Source 停用 +
-  能力可用、Registry 失败 + 能力可用）；
-- 一条端到端测试：真实的 `ds_source` 行 + 真实 Observed → Effective；
-- 明确断言「Java 未声明的能力不被执行」。
+- 新增 `CapabilityReconcilerTest`：**20 个 `effectiveReason` 逐条有正向用例**
+  （依据 `SOURCE-04-04-EFFECTIVE-REASON.md` §5；`FUNCTION_NOT_CALLABLE` 因数据源缺失，
+  用手工注入的 `CapabilityItem` 构造并标注为预留）；
+- 判定顺序与 `SOURCE-04-04-EFFECTIVE-REASON.md` §4 逐行一致，**不得为实现方便调整**；
+- 断言 `UNKNOWN` 一律不可执行；断言准入判据是白名单而非反转判断；
+- 一条端到端测试：真实的 `ds_source` 行 + 真实 Observed 快照 → Effective；
+- 明确断言「Java 未声明的能力不被执行」；
+- 明确断言「计算只用单一快照，不混用两个端点的数据」。
 
 ---
 
 ### SOURCE-04-04：Desired v2 结构与状态语义定稿（P0）
 
 > **2026-11-16 修订**：本卡的设计已冻结为 `SOURCE-04-04-TASKCARD.md`（v2 修订版），
-> 状态语义部分另立 `ADR-008`。下面是**执行阶段**要点，设计细节以专项文档为准。
+> 状态语义部分另立 `ADR-008`，20 个 `effectiveReason` 的完整定义表与重复语义审查
+> 见 `SOURCE-04-04-EFFECTIVE-REASON.md`。下面是**执行阶段**要点，设计细节以专项文档为准。
 >
-> **四项评审裁决已采纳**：迁移方案 A；Schema/Contract 主版本兼容（Adapter 锁定时精确匹配）；
-> `connectorCode` 放进每个能力对象；字段改名 `desiredStatus`。
-> **D5 状态语义已修订**：`UNVERIFIED` 不再折叠为 `UNREGISTERED`，
-> 改为 `UNKNOWN` + `VERIFICATION_REQUIRED`（`effectiveStatus` × `effectiveReason` 两层表达）。
+> **评审裁决（2026-11-16 二次）**：20 值暂不精简，但已完成定义表 / 触发条件 /
+> 状态映射 / 重复审查 / 每值正向测试设计；`FUNCTION_NOT_CALLABLE` 因 Python
+> 单一诊断码而当前不可达，已标注为预留（Q9）。
 
 **问题**：库中现值
 
@@ -328,11 +440,11 @@ DOUYIN / DOUYIN_PUBLIC / 1.0.0
 
 ```
 04-01 ✅ ─┐
-04-05 ✅ ─┼─→ 04-02（Java 消费 Observed）
+04-05 ✅ ─┼─→ 04-02（Java 消费 Observed + 快照一致性）
           │        ↓
-          └─→ 04-04（Desired 结构定稿）
+          └─→ 04-04 🟡（Desired 结构定稿，评审通过）
                    ↓
-                04-03（三态核对）
+                04-03（三态核对，必须用单一快照）
                    ↓
                 04-06（管理 API）
                    ↓
@@ -342,8 +454,21 @@ DOUYIN / DOUYIN_PUBLIC / 1.0.0
 ```
 
 **建议执行顺序**：04-04 → 04-02 → 04-03 → 04-06 → 04-08。
-04-04 先做，是因为 Desired 的结构决定了 04-02 / 04-03 的字段映射，
-先做 04-02 会返工。
+
+| 顺序约束 | 理由 |
+|---|---|
+| 04-04 必须在 04-02 之前 | Desired 结构决定 04-02 / 04-03 的字段映射，先做 04-02 会返工 |
+| 04-02 必须在 04-03 之前 | 04-03 依赖 `RegistrySnapshot`（含 diagnostics）；没有一致性快照，核对结果不可信 |
+| 04-02 内部：快照一致性先于缓存 | 缓存单位必须是**快照**，不能先按端点缓存再补一致性 |
+
+**进入代码实施前的门禁**（评审要求，不是授权）：
+
+| 门禁 | 内容 |
+|---|---|
+| G1 | 04-04 设计已通过评审 ✅ |
+| G2 | 04-02 的快照方案（A 或 B）**单独确认**，含是否允许修改 Python 代码 |
+| G3 | 04-02 实施范围与验收标准**单独确认** |
+| G4 | 04-06 的迁移 SQL 单独确认（不得与 04-02 混在一次提交里） |
 
 ---
 
