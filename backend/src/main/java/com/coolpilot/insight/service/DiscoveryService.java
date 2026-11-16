@@ -253,7 +253,7 @@ public class DiscoveryService {
         String output = result.output() == null ? "" : result.output();
 
         List<VideoHit> hits = new ArrayList<>();
-        StringBuilder tail = new StringBuilder();
+        int otherLines = 0;
         {
             for (String line : output.split("\n")) {
                 if (line.startsWith("VIDEO|")) {
@@ -272,16 +272,19 @@ public class DiscoveryService {
                             hits.add(h);
                         }
                     }
-                } else {
-                    tail.append(line).append("\n");
-                    if (tail.length() > 2000) {
-                        tail.delete(0, tail.length() - 1000);
-                    }
+                } else if (!line.isBlank()) {
+                    // 不再把脚本原文拼进异常：它会进 API 响应，而搜索脚本的输出
+                    // 可能带视频标题/作者等平台侧内容（FIX-02 安全边界）。
+                    otherLines++;
                 }
             }
         }
         if (!result.success() && hits.isEmpty()) {
-            throw new BizException(ErrorCode.UPSTREAM_ERROR, "搜索脚本执行失败: " + tail.toString().trim());
+            log.warn("[discovery] 搜索脚本执行失败 keyword={} exitCode={} 非结果行={} 输出字符={}",
+                    keyword, result.exitCode(), otherLines,
+                    output.length());
+            throw new BizException(ErrorCode.UPSTREAM_ERROR,
+                    "搜索脚本执行失败（exitCode=" + result.exitCode() + "，详情见服务端诊断日志）");
         }
         return hits;
     }

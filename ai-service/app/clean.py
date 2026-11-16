@@ -24,6 +24,11 @@ import pymysql
 sys.path.insert(0, os.path.dirname(__file__))
 from analysis_engine import get_analyzer
 
+try:                      # 以脚本方式运行（生产路径）：sys.path[0] 是本目录
+    from redact import error_summary
+except ImportError:       # 以包方式导入（测试/工具）：app.redact
+    from app.redact import error_summary
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATAS_DIR = os.environ.get('PY_DATAS_DIR') or os.path.join(BASE_DIR, 'Datas')
 
@@ -211,7 +216,9 @@ def insert_to_db(aweme_id, rows, source_item_id=None):
                             confidence, 1 if confidence is not None and confidence < 0.5 else 0))
                         text_only += 1
             except Exception as e:
-                print(f"  ⚠️ 单条入库失败（跳过）: {e}")
+                # 只输出异常类型与数据库错误码：消息里可能带 cid / 正文片段，
+                # 而 stdout 最终会进 error_message、task_log 与页面（见 redact.py）
+                print(f"  ⚠️ 单条入库失败（跳过）: {error_summary(e)}")
                 continue
 
             if success % BATCH_SIZE == 0:
@@ -267,7 +274,7 @@ def process_all():
         try:
             process_file(fp)
         except Exception as e:
-            print(f"  处理失败: {e}")
+            print(f"  处理失败: {error_summary(e)}")
     print("\n全部处理完成")
 
 
@@ -278,7 +285,7 @@ def process_by_names(names):
             try:
                 process_file(fp)
             except Exception as e:
-                print(f"  处理失败: {e}")
+                print(f"  处理失败: {error_summary(e)}")
         else:
             print(f"  文件不存在: {name}")
     print("\n全部处理完成")

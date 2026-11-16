@@ -376,7 +376,9 @@ public class CollectServiceImpl implements CollectService {
                             cleanOut == null ? 0 : String.valueOf(cleanOut).length());
                     if (!Boolean.TRUE.equals(cleanResult.get("success"))) {
                         ok = false;
-                        error = "清洗入库失败：" + cleanResult.get("output");
+                        // 只写分类摘要：清洗脚本的原文可能含 cid/正文片段，
+                        // 而 error_message 会进数据库、任务日志与页面（FIX-02）。
+                        error = "清洗入库失败（详见服务端清洗诊断日志）";
                     }
                 }
             } else {

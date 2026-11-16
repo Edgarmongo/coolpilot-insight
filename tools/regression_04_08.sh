@@ -92,6 +92,17 @@ else
   record "pytest" fail "$PY_SUMMARY（日志 $PY_LOG）"
 fi
 
+# 清洗脚本的异常脱敏（FIX-02）：与 collection-service 分开跑，依赖不同
+AI_LOG=$(mktemp)
+( cd ai-service && python -m pytest tests -q ) > "$AI_LOG" 2>&1
+AI_RC=$?
+AI_SUMMARY=$(tail -1 "$AI_LOG")
+if [ $AI_RC -eq 0 ]; then
+  record "pytest (ai-service)" ok "$AI_SUMMARY"
+else
+  record "pytest (ai-service)" fail "$AI_SUMMARY（日志 $AI_LOG）"
+fi
+
 echo
 echo "=========== 4. 跨服务链路 ==========="
 SNAP_CODE=$(docker exec cpi-backend sh -c \
