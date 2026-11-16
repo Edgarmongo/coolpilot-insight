@@ -72,6 +72,20 @@ catch 块向外穿透（catch 块内的异常不会被自身捕获），直接�
 |---|---|
 | `jobId` / `status` / `collected` / `pages` / `finishedReason` / `errorCode` / `durationMs` / `logLines` | 昵称、抖音号、UID、IP 属地、评论正文、Cookie/Token/凭据、原始 logTail |
 
+### 2.3.1 自查中发现并修掉的第三处（INFO 级）
+
+`collect` 编排里还有一行 `log.info("[collect] item={} 清洗结果={}", …, cleanResult.get("output"))`
+（上一轮 C 诊断时我自己加的）。清洗脚本的 stdout 在"逐行入库失败"时会带出整行数据
+（`处理失败: {...}`，含昵称与正文）。虽不是 logTail，但同属"第三方原文进日志"，一并改为
+`success + outputChars`。
+
+### 2.3.2 未处理但需记录的一处（超出本轮授权）
+
+`DiscoveryService.invokeSearch` 在搜索失败时把脚本输出的**非 VIDEO 行**拼进异常消息
+（`搜索脚本执行失败: <tail>`）。该内容来自 `search.py` 的调试输出，理论上不含评论正文，
+但属于"第三方原文进异常"。**未改**：它属于 `KEYWORD_SEARCH` 链路，不在 B-1 授权范围，
+且改动会影响关键词发现的错误提示。建议随 U2（`ProcessRunner` 异常治理）一并处理。
+
 ### 2.4 测试
 
 `logTailIsNotCopiedIntoOutput`：构造含 `绝望的大鼻嘎｜1083262777｜黑龙江｜赞13｜cid=…｜把这视频给俱乐部发过去`

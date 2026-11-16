@@ -369,7 +369,11 @@ public class CollectServiceImpl implements CollectService {
                 } else {
                     Map<String, Object> cleanResult = runCleanAs(
                             task.getOwnerUserId(), awemeId + ".csv");
-                    log.info("[collect] item={} 清洗结果={}", item.getId(), cleanResult.get("output"));
+                    // 同样不打印清洗脚本的原文：异常行可能带出整行评论数据。只留成败与长度。
+                    Object cleanOut = cleanResult.get("output");
+                    log.info("[collect] item={} 清洗 success={} outputChars={}", item.getId(),
+                            cleanResult.get("success"),
+                            cleanOut == null ? 0 : String.valueOf(cleanOut).length());
                     if (!Boolean.TRUE.equals(cleanResult.get("success"))) {
                         ok = false;
                         error = "清洗入库失败：" + cleanResult.get("output");
