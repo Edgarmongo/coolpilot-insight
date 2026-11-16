@@ -1,6 +1,47 @@
 # 2026-11-16 工作日志
 
-## SOURCE-04-04 设计冻结（纯设计，未改代码/库/Flyway）
+## SOURCE-04-04 v2 修订（评审修订指令，仍是纯设计）
+
+评审裁决四项全部采纳：迁移方案 A；Schema/Contract 主版本兼容（Adapter 锁定时精确匹配）；
+`connectorCode` 放进**每个能力对象**（支撑多 Connector）；`desired` → `desiredStatus`。
+
+**D5 状态语义修订（最关键）**：
+原设计把「已声明 + Observed=UNVERIFIED」折叠为 `UNREGISTERED`，是**事实错误**。
+核对 `effectiveStatus` 八值后确认：**没有任何值能表达「已注册但未验证」**——
+这是 SOURCE-02 的既存契约缺口（其"核对结果映射"表本身就缺这一行）。
+
+处置：**不加枚举**，改为两层正交表达：
+- `effectiveStatus` = 准入分类（冻结八值，Schema 零改动）
+- `effectiveReason` = 精确原因（20 值 Java 内部模型，不进 Python 输出）
+
+关键映射修正：
+| 事实 | 修前 | 修后 |
+|---|---|---|
+| 已注册未验证 | `UNREGISTERED` ❌ | `UNKNOWN` + `VERIFICATION_REQUIRED` |
+| 证据过期 | `UNREGISTERED` ❌ | `UNKNOWN` + `EVIDENCE_EXPIRED` |
+| 证据无效 | `UNREGISTERED` ❌ | `UNKNOWN` + `EVIDENCE_INVALID` |
+| 能力未注册 | `UNREGISTERED` ✅ | `UNREGISTERED` + `CAPABILITY_NOT_REGISTERED` |
+| 函数解析不到 | `UNREGISTERED` ⚠️ | `UNREGISTERED` + `FUNCTION_UNRESOLVED` |
+| 服务不可达 | `UNKNOWN` ✅ | `UNKNOWN` + `REGISTRY_UNREACHABLE` |
+
+**铁律**：`effectiveStatus` 相同不代表事实相同，必须同时看 reason。
+展示层只显示 effectiveStatus 会误导（04-07 强制两者都显示）。
+
+**04-02 的接口要求（新发现的约束）**：
+要区分"能力未注册"与"函数解析不到"，Java **必须同时读** `/v1/capabilities`
+（Observed 清单）和 `/v1/adapters`（diagnostics 含 INVALID_IMPLEMENTATION）。
+只读前者会在两者之间**失明**——它们都表现为"没有这条能力"。
+
+产出：
+- 新增 `ADR-008-effective-status-reason-separation.md`
+- 重写 `SOURCE-04-04-TASKCARD.md`（v2）
+- 同步 `SOURCE-04-TASKCARD.md` 的 04-03 推导规则表（16 条，含 reason）
+- `SOURCE-02-CONTRACT.md` 补记录契约缺口（**枚举未改**）
+
+零改动验证：Schema 文件未动、代码未动、库数据未动（`capability_json` 仍是 v1 原值）、
+Flyway 仍停 V30。未启动 04-02 / 04-03。
+
+## SOURCE-04-04 初版设计冻结（已修订，见上）
 
 SOURCE-03 及其补充审查正式标记完成，方案 A 作为部署基线。
 本轮执行 SOURCE-04-04：Desired 数据结构与状态语义定稿，**只审计+设计+冻结**。

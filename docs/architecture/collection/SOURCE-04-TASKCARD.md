@@ -33,7 +33,7 @@
 | SOURCE-04-01 | 修正 `AccountVerificationService` 探活目标 | P0 | ✅ **已完成**（补充审查中） |
 | SOURCE-04-02 | Java 消费 Python `/v1/capabilities` | P0 | 待执行 |
 | SOURCE-04-03 | Desired / Observed / Effective 核对 | P0 | 待执行 |
-| SOURCE-04-04 | 修正 `PENDING` 与 `effectiveStatus` 枚举不一致 | P0 | 🟡 **设计已冻结，待评审**（`SOURCE-04-04-TASKCARD.md`） |
+| SOURCE-04-04 | Desired v2 结构与状态语义定稿（原「修正 `PENDING` 枚举不一致」） | P0 | 🟡 **设计已冻结 v2，待最终评审**（`SOURCE-04-04-TASKCARD.md` + `ADR-008`） |
 | SOURCE-04-05 | Collection Service 部署架构决策 | P0 | ✅ **已完成**（ADR-007） |
 | SOURCE-04-06 | Java 数据源管理 API | P1 | 待执行 |
 | SOURCE-04-07 | 数据源管理前端 | P1 | **推迟**（用户明确要求本轮不做前端） |
@@ -119,21 +119,43 @@ cd backend && mvn -s ../deploy/docker/maven-settings.xml -o test
 
 **Effective 推导规则（必须与 Schema 枚举逐字对应）**
 
-| # | 条件（自上而下短路） | `effectiveStatus` |
-|---|---|---|
-| 1 | Java 侧该 Source 已停用 | `SOURCE_DISABLED` |
-| 2 | Registry 查询失败 / Schema 主版本不支持 | `UNKNOWN` |
-| 3 | Observed 里找不到该 Connector | `ADAPTER_MISSING` |
-| 4 | `connectorVersion` 与 Desired 声明不一致 | `VERSION_MISMATCH` |
-| 5 | 该 Connector 下没有这条能力 | `UNREGISTERED` |
-| 6 | Observed 的 `implementationStatus = DEGRADED` | `DEGRADED` |
-| 7 | 能力只支持 `AUTHENTICATED` 且无可用账号 | `ACCOUNT_REQUIRED` |
-| 8 | Observed 的 `implementationStatus ∈ {VERIFIED, IMPLEMENTED}` 且账号/平台条件满足 | `AVAILABLE` |
-| 9 | 其余（`UNVERIFIED` / `DISABLED` / `UNSUPPORTED`） | `UNREGISTERED` |
+> **2026-11-16 修订**：本表已被 `SOURCE-04-04-TASKCARD.md` §3.2 取代。
+> 原表第 9 条把 `UNVERIFIED` 折叠为 `UNREGISTERED` 是**事实错误**，
+> 已按 `ADR-008` 拆为两层表达（`effectiveStatus` × `effectiveReason`）。
+> 下面是修订后的权威表，**以它为准**。
 
-> **注意**：Schema 的 `effectiveStatus` 枚举里**没有** `UNAVAILABLE`。
+| # | 条件（自上而下短路） | `effectiveStatus` | `effectiveReason` |
+|---|---|---|---|
+| 0 | Java 侧该 Source 已停用 | `SOURCE_DISABLED` | `SOURCE_DISABLED` |
+| 1 | Registry 不可达 | `UNKNOWN` | `REGISTRY_UNREACHABLE` |
+| 2 | Schema 主版本不支持 / 响应非法 | `UNKNOWN` | `SCHEMA_UNSUPPORTED` |
+| 3 | 仅有过期缓存（stale 超 TTL） | `UNKNOWN` | `OBSERVED_STALE` |
+| 4 | Desired 未声明该能力 | `UNREGISTERED` | `NOT_DECLARED` |
+| 5 | Adapter 未加载 | `ADAPTER_MISSING` | `ADAPTER_NOT_LOADED` |
+| 6 | Adapter 版本与锁定要求不符 | `VERSION_MISMATCH` | `CONNECTOR_VERSION_MISMATCH` |
+| 7 | Contract 主版本不兼容 | `VERSION_MISMATCH` | `CONTRACT_VERSION_MISMATCH` |
+| 8 | Capability 未注册（且无相关诊断） | `UNREGISTERED` | `CAPABILITY_NOT_REGISTERED` |
+| 9 | 函数不存在 / 不可调用（诊断 `INVALID_IMPLEMENTATION`） | `UNREGISTERED` | `FUNCTION_UNRESOLVED` / `FUNCTION_NOT_CALLABLE` |
+| 10 | 能力被 Python 禁用 / 平台不支持 | `UNREGISTERED` | `CAPABILITY_DISABLED` / `PLATFORM_UNSUPPORTED` |
+| 11 | 访问模式不覆盖 | `UNREGISTERED` | `ACCESS_MODE_UNSUPPORTED` |
+| 12 | **已注册但从未验证** | `UNKNOWN` | `VERIFICATION_REQUIRED` |
+| 13 | 证据过期 / 无效 | `UNKNOWN` | `EVIDENCE_EXPIRED` / `EVIDENCE_INVALID` |
+| 14 | 需 AUTHENTICATED 且无可用账号 | `ACCOUNT_REQUIRED` | `ACCOUNT_REQUIRED` |
+| 15 | 可用但受限 | `DEGRADED` | `DEGRADED` |
+| 16 | 正常可用 | `AVAILABLE` | `NONE` |
+
+> **注意 1**：Schema 的 `effectiveStatus` 枚举里**没有** `UNAVAILABLE`。
 > 用户示意表里的 `UNAVAILABLE` 对应到正式枚举是 `ADAPTER_MISSING` / `UNREGISTERED`，
 > **不得**为了对齐示意表而扩充枚举。
+>
+> **注意 2**：`effectiveReason` 是 **Java 内部模型**，只在 Java 侧计算与展示，
+> **不进入** Python 的 `/v1/capabilities` 输出，因此**不触碰** SOURCE-02 Schema。
+> 详见 `ADR-008`。
+>
+> **注意 3**：`effectiveStatus` 相同不代表事实相同——
+> `UNREGISTERED` 既可能是"没注册"也可能是"函数解析不到"；
+> `UNKNOWN` 既可能是"服务不可达"也可能是"已注册未验证"。
+> **必须同时看 `effectiveReason`**，只显示 `effectiveStatus` 会误导。
 
 **执行准入（与 Effective 并列，不是状态）**
 - Java 未在 Desired 中声明的能力 → Python 可观测，但**不允许执行**；
@@ -153,11 +175,15 @@ cd backend && mvn -s ../deploy/docker/maven-settings.xml -o test
 
 ---
 
-### SOURCE-04-04：修正 `PENDING` 与 `effectiveStatus` 枚举不一致 （P0）
+### SOURCE-04-04：Desired v2 结构与状态语义定稿（P0）
 
-> **2026-11-16 更新**：本卡的设计部分已单独冻结为 `SOURCE-04-04-TASKCARD.md`，
-> 含六份交付物（真实样本、字段映射、三态转换表、PENDING 裁决、版本规则、八场景测试设计）。
-> 下面是它的**执行阶段**要点，设计细节以专项文档为准。
+> **2026-11-16 修订**：本卡的设计已冻结为 `SOURCE-04-04-TASKCARD.md`（v2 修订版），
+> 状态语义部分另立 `ADR-008`。下面是**执行阶段**要点，设计细节以专项文档为准。
+>
+> **四项评审裁决已采纳**：迁移方案 A；Schema/Contract 主版本兼容（Adapter 锁定时精确匹配）；
+> `connectorCode` 放进每个能力对象；字段改名 `desiredStatus`。
+> **D5 状态语义已修订**：`UNVERIFIED` 不再折叠为 `UNREGISTERED`，
+> 改为 `UNKNOWN` + `VERIFICATION_REQUIRED`（`effectiveStatus` × `effectiveReason` 两层表达）。
 
 **问题**：库中现值
 
@@ -166,31 +192,51 @@ cd backend && mvn -s ../deploy/docker/maven-settings.xml -o test
  "keywordSearch": false, "keywordStatus": "PENDING"}
 ```
 
-`PENDING` **不在** `effectiveStatus` 枚举
-（`AVAILABLE / ADAPTER_MISSING / VERSION_MISMATCH / DEGRADED / ACCOUNT_REQUIRED /
-SOURCE_DISABLED / UNREGISTERED / UNKNOWN`）里。这是 Java 自己定义的历史词表，
-与契约各说各话。
+四个问题：能力码不完整（缺 `COMMENT_REPLY` 等）、结构扁平无能力对象、
+`PENDING` 不在 `effectiveStatus` 枚举内、无 `schemaVersion` 无法识别旧结构。
 
-**处置方案（须在实施前确认走哪条）**
-- **方案 A（推荐）**：`ds_source.capability_json` 升级为**契约形状**
-  （`{capabilities: [{code, desired, ...}]}`），旧字段在兼容期保留并由服务端派生。
-  优点：Desired 与 Observed 用同一套结构，04-03 的核对不需要做字段映射。
-  代价：需要一次数据迁移 + 兼容期双写。
-- **方案 B**：保留旧结构，只把状态词换成契约枚举（`PENDING` → `UNREGISTERED`）。
-  优点：改动小。代价：Desired 与 Observed 仍是两套结构，04-03 要写映射。
+**已冻结的目标结构（v2）**
 
-**文件范围**：`V31__*.sql`（如走方案 A）、`SourceQueryService.java`、
-`CapabilityReconciler.java`、前端（随 04-07 推迟）。
+```json
+{
+  "schemaVersion": "2.0",
+  "capabilities": [
+    {
+      "sourceCode": "DOUYIN",
+      "connectorCode": "DOUYIN_PUBLIC",
+      "code": "COMMENT",
+      "category": "COMMENT",
+      "accessModes": ["PUBLIC", "AUTHENTICATED"],
+      "desiredStatus": "ENABLED"
+    }
+  ]
+}
+```
+
+**执行阶段要做的事（本设计阶段不做）**
+
+| # | 动作 | 说明 |
+|---|---|---|
+| E1 | 写 v1→v2 迁移 SQL | 可重入（`WHERE schemaVersion IS NULL`）；映射失败行保留 v1 并报诊断 |
+| E2 | 升 `SourceQueryService.parseCapability` | 双读兼容（v1 映射 / v2 直解），返回视图同时含旧字段与新结构 |
+| E3 | 旧字段改为派生输出 | `comments` 等由 v2 派生，只读不写 |
+| E4 | 加 `EffectiveCapability` DTO | 含 `effectiveStatus` + `effectiveReason` |
+
+**文件范围**：`V31__*.sql`、`SourceQueryService.java`、`DesiredCapability.java`（新）、
+`EffectiveCapability.java`（新）、前端（随 04-07 推迟）。
 
 **约束**
 - **Flyway 是唯一结构入口**；不手改库；
 - 迁移必须**可重入**：重复执行不报错；
-- 迁移前后跑 `tools/check_schema_drift.py`。
+- 迁移前后跑 `tools/check_schema_drift.py`；
+- **不得**把 Observed 写回 `capability_json`；
+- **不得**扩充 `effectiveStatus` / `implementationStatus` / `capabilityCode` 枚举。
 
 **验收标准**
-- `capability_json` 里出现的每个状态词都属于 `effectiveStatus` 枚举；
-- 一条测试断言：库里所有 Source 的 capability_json 状态词全部合法；
-- 旧字段（`comments` / `keywordSearch` / `commentStatus` / `keywordStatus`）在兼容期仍可用。
+- `capability_json` 里不再出现 `PENDING` 等非契约状态词；
+- 迁移可重入：连跑两次结果一致；
+- 旧字段在兼容期仍可读，且与 v2 派生值一致；
+- 迁移失败的能力有 `DESIRED_MIGRATION_FAILED` 诊断，**不被静默丢弃**。
 
 ---
 

@@ -93,6 +93,17 @@ Effective(capability, accessMode) =
 | 未声明 | 已实现 | `UNREGISTERED`（提示：Python 有、Java 没登记） |
 | 任意 | Python 不可达 | `UNKNOWN`（**不伪造为 UNAVAILABLE**） |
 
+> **已知缺口（2026-11-16 记录，本次不修）**：上表**缺**「已声明 + 已实现但
+> `implementationStatus=UNVERIFIED`」这一行。`effectiveStatus` 八值中
+> **没有任何一个**能精确表达「能力已注册但从未验证」——
+> `UNREGISTERED` 是事实错误（它注册了），`AVAILABLE`/`DEGRADED` 会误导为可执行。
+>
+> 这是 `effectiveStatus` 与 `implementationStatus` 的粒度不对齐造成的既存契约缺口。
+> **处置方式不是加枚举**，而是在 Java 侧增加并列的 `effectiveReason` 字段精确表达原因，
+> 详见 `ADR-008` 与 `SOURCE-04-04-TASKCARD.md` §3。
+>
+> 本契约文件中的 `effectiveStatus` 枚举**未做任何增删改**。
+
 ---
 
 ## 02-03 Capability Schema（最重要交付物）
