@@ -164,7 +164,7 @@ class HttpCollectionClientTest {
     }
 
     @Test
-    @DisplayName("作业 FAILED → 失败，并带上作业的日志尾巴")
+    @DisplayName("作业 FAILED → 失败，带错误码与日志行数（不带日志原文）")
     void failedJobCarriesLogTail() throws IOException {
         Recorder rec = new Recorder();
         HttpServer server = start(rec, 202, "{}", new String[]{
@@ -175,7 +175,9 @@ class HttpCollectionClientTest {
                     .collectComments("123", 10, false, null, null);
 
             assertThat(r.success()).isFalse();
-            assertThat(r.output()).contains("COLLECT_INCOMPLETE").contains("Preflight 失败");
+            // 错误码要保留；logTail 只报行数——原文含个人信息，见 B-1
+            assertThat(r.output()).contains("COLLECT_INCOMPLETE").contains("logLines=1");
+            assertThat(r.output()).doesNotContain("Preflight 失败");
         } finally {
             server.stop(0);
         }
@@ -194,6 +196,33 @@ class HttpCollectionClientTest {
 
             assertThat(r.success()).isFalse();
             assertThat(r.output()).contains("PARTIAL").contains("NO_RESPONSE");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    @DisplayName("B-1：作业日志里的昵称/账号/IP/正文不得进入 Java 侧输出")
+    void logTailIsNotCopiedIntoOutput() throws IOException {
+        Recorder rec = new Recorder();
+        // 采集器的日志行真实形态：昵称｜抖音号｜属地｜赞数｜cid｜正文
+        String sensitive = "绝望的大鼻嘎｜1083262777｜黑龙江｜赞13｜cid=770374991205｜把这视频给俱乐部发过去";
+        String body = "{\"status\":\"SUCCEEDED\",\"collected\":5,\"pages\":1,"
+                + "\"logTail\":[\"" + sensitive + "\",\"浏览器启动成功\"]}";
+        HttpServer server = start(rec, 202, "{}", new String[]{body});
+        try {
+            CommandResult r = new HttpCollectionClient(url(server), "", "DOUYIN_PUBLIC", null, 5)
+                    .collectComments("123", 10, false, null, null);
+
+            assertThat(r.success()).isTrue();
+            // 结构性字段保留
+            assertThat(r.output()).contains("collected=5").contains("pages=1").contains("logLines=2");
+            // 个人信息一个都不能出现
+            assertThat(r.output())
+                    .doesNotContain("绝望的大鼻嘎")
+                    .doesNotContain("1083262777")
+                    .doesNotContain("黑龙江")
+                    .doesNotContain("把这视频给俱乐部发过去");
         } finally {
             server.stop(0);
         }

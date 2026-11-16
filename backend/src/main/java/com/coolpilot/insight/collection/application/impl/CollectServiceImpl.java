@@ -351,7 +351,11 @@ public class CollectServiceImpl implements CollectService {
             // 0 条时能直接看出是"无新增"还是"没抓到"，又不会把生产日志灌满
             log.info("[collect] item={} aweme={} 执行器 success={} 耗时={}ms",
                     item.getId(), awemeId, ok, collected.durationMs());
-            log.debug("[collect] item={} 执行器原文: {}", item.getId(), collected.tail(800));
+            // 不再打印执行器原文：其中含昵称/抖音号/属地/评论正文。
+            // 只留结构性信息；需要正文时按 cid 到库里查（有权限边界）。
+            log.debug("[collect] item={} exitCode={} outputChars={}",
+                    item.getId(), collected.exitCode(),
+                    collected.output() == null ? 0 : collected.output().length());
             if (ok) {
                 File csv = new File(appProperties.getDatasDir(), awemeId + ".csv");
                 long csvLen = csv.exists() ? csv.length() : -1;

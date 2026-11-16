@@ -214,6 +214,17 @@ public class HttpCollectionClient implements CollectionClient {
                 + (message.isEmpty() ? "" : " " + message);
     }
 
+    /**
+     * 作业状态摘要。
+     *
+     * <p><b>只取结构性字段，绝不带 logTail 原文。</b>
+     * 采集器的日志行形如 {@code 昵称｜抖音号｜属地｜赞数｜cid｜评论正文}，
+     * 属于个人信息；它会顺着 {@code CommandResult.output()} 流进
+     * 应用日志、任务日志表、item.error_message —— 三处都不该有它。
+     *
+     * <p>需要看具体内容时，用 {@code GET /v1/jobs/{{id}}} 在采集服务侧查（有令牌边界），
+     * 或按 cid 到库里查（有数据权限）。
+     */
     private String summarize(JsonNode status) {
         StringBuilder sb = new StringBuilder();
         sb.append("status=").append(text(status, "status"))
@@ -227,12 +238,10 @@ public class HttpCollectionClient implements CollectionClient {
         if (!msg.isEmpty()) {
             sb.append(" message=").append(msg);
         }
+        // 只报"有多少行"，不报内容
         JsonNode logs = status.get("logTail");
-        if (logs != null && logs.isArray() && !logs.isEmpty()) {
-            sb.append(" | log: ");
-            for (JsonNode line : logs) {
-                sb.append(line.asText()).append(" / ");
-            }
+        if (logs != null && logs.isArray()) {
+            sb.append(" logLines=").append(logs.size());
         }
         return sb.toString();
     }
