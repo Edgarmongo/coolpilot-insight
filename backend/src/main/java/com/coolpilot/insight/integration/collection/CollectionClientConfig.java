@@ -23,8 +23,13 @@ public class CollectionClientConfig {
 
     private static final Logger log = LoggerFactory.getLogger(CollectionClientConfig.class);
 
-    @Bean
-    public CollectionClient collectionClient(
+    /**
+     * 原始实现（未经准入）。**不要直接注入它**——业务侧应注入
+     * {@code CollectionClient}（由 {@code CollectionClientGateConfig} 提供的装饰器），
+     * 否则就绕过了能力准入（见 FIX-02）。
+     */
+    @Bean("rawCollectionClient")
+    public CollectionClient rawCollectionClient(
             AppProperties props,
             ProcessRunner runner,
             @Value("${app.collection.executor:http}") String executor,
@@ -41,8 +46,7 @@ public class CollectionClientConfig {
         }
 
         log.info("[collection] 采集执行走 HTTP 作业派发（executor=http, connector={}）。"
-                + "关键词搜索仍由子进程执行：该能力尚无真实平台验证证据，"
-                + "不满足作业派发的准入条件。", connector);
+                + "关键词搜索在取得验证证据前会被能力准入拒绝（FIX-02）。", connector);
         return new HttpCollectionClient(baseUrl, internalToken, connector, process);
     }
 }

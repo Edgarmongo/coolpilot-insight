@@ -101,12 +101,14 @@ public class HttpCollectionClient implements CollectionClient {
     /**
      * 关键词发现。
      *
-     * <p><b>仍走子进程</b>：{@code KEYWORD_SEARCH} 至今没有真实平台验证证据
-     * （`SOURCE-01` 已记录"风控行为未知"），把它接进作业派发只会被准入闸门判
-     * {@code NOT_EXECUTABLE}。硬切等于把一个"未验证能力"包装成"可用功能"。
+     * <p><b>当前不可达</b>：{@code KEYWORD_SEARCH} 至今没有真实平台验证证据
+     * （`SOURCE-01` 记录"风控行为未知"）。FIX-02 之后，所有执行入口都先经过
+     * {@code AdmissionGatedCollectionClient}，该能力会在那里被判
+     * {@code NOT_EXECUTABLE} 并拒绝——**本方法根本不会被调用**。
      *
-     * <p>因此这里显式委派给旧实现，**并在启动时打印告警**——这是已知的、
-     * 被记录在案的不一致，不是静默兜底。等该能力拿到证据后并入 HTTP。
+     * <p>保留这段委派是给"证据齐备之后"用的：届时把它换成一个真正的
+     * {@code POST /v1/jobs(capabilityCode=KEYWORD_SEARCH)} 即可，
+     * 闸门的判定逻辑不需要改。
      */
     @Override
     public CommandResult searchByKeyword(String keyword, int max) {
