@@ -299,7 +299,7 @@ class SourceCapabilityServiceTest {
         private String detail;
 
         private RecordingAudit() {
-            super(null, null);
+            super(null, null, null);
         }
 
         @Override

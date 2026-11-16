@@ -62,9 +62,13 @@ public class CollectController {
         String mode = req.getCollectMode() == null ? "online" : req.getCollectMode();
         Map<String, Object> result = collectService.submit(
                 inputs, max, mode, RequestContext.getUserId());
-        auditService.audit("SUBMIT_COLLECTION", "COLLECTION_TASK",
-                result.get("taskId") instanceof Number ? ((Number) result.get("taskId")).longValue() : null,
-                "items=" + result.get("totalItems"));
+        // 详情用结构化对象：`items=1` 这种裸文本会被 JSON 列拒收（见 AuditService 类注释）
+        Long auditTaskId = result.get("taskId") instanceof Number
+                ? ((Number) result.get("taskId")).longValue() : null;
+        auditService.auditStructured("SUBMIT_COLLECTION", "COLLECTION_TASK", auditTaskId,
+                java.util.Map.of(
+                        "taskNo", String.valueOf(result.get("taskNo")),
+                        "totalItems", result.get("totalItems") == null ? 0 : result.get("totalItems")));
         return Result.ok(result);
     }
 
