@@ -108,7 +108,8 @@ public class CollectionServiceClient implements SnapshotProvider {
             case UNSUPPORTED_CONTRACT -> FetchResult.Kind.CONTRACT_UNSUPPORTED;
             case INCONSISTENT -> FetchResult.Kind.INCONSISTENT;
             case MALFORMED_BODY, MISSING_SNAPSHOT_ID, MALFORMED_SNAPSHOT_ID,
-                 MISSING_ARRAY, BROKEN_CAPABILITY -> FetchResult.Kind.MALFORMED_RESPONSE;
+                 MISSING_ARRAY, BROKEN_ADAPTER, BROKEN_CAPABILITY ->
+                    FetchResult.Kind.MALFORMED_RESPONSE;
         };
     }
 

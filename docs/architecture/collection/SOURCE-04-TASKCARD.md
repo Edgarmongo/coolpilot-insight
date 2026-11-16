@@ -43,6 +43,11 @@
 > 仍保留在 SOURCE-08 名下（`ADR-006` + 本卡 04-03 的推导规则表）。
 > 04-03 是它的**实现载体**，不是它的全部。
 
+> **04-03 的启动前置（2026-11-16 裁决）**：SOURCE-04-02 已验收通过，
+> 但 N1（Error 路径 future 未完成）、N2（`platformScoped` 缺失兜底）两项
+> 已在 `SOURCE-04-02-FIX-01` 中关闭。**当时要求：N2、N1 关闭前不进入 04-03 核心实现。**
+> 当前状态见 `SOURCE-04-02-FIX01-REPORT.md`。
+
 ---
 
 ## 二、任务卡明细
@@ -276,20 +281,97 @@ cd backend && mvn -s ../deploy/docker/maven-settings.xml -o test
 | 版本校验 | 若走方案 B（双端点 + `registrySnapshotId`），id 不一致必须重试或判 `OBSERVED_STALE`，**禁止合并** |
 | 不混用缓存 | 不得把"上一次的 diagnostics"与"这一次的 capabilities"拼装使用 |
 
+**快照消费的四条硬约束（N7 冻结，2026-11-16）**
+
+> 这四条来自 SOURCE-04-02 两轮评审的结论。它们不是建议，是**验收条件**——
+> 违反其中任何一条，04-03 不予验收。
+
+**N7-1　必须只遍历真实平台接入**
+
+```java
+// 正确：只看真实平台 Adapter
+for (var adapter : snapshot.platformScopedAdapters()) { ... }
+
+// 禁止：直接遍历全部 Adapter（STUB 会混入真实平台能力准入）
+for (var adapter : snapshot.adapters()) { ... }
+```
+
+`platformScoped=false` 的 STUB（链路验证替身）**不得进入真实平台能力准入**。
+不应靠 `sourceCode == "STUB"` 或 `capabilityCount == 0` 推断——那是巧合，不是契约。
+
+**N7-2　`platformScoped=true` 不等于能力已验证**
+
+它只表示"这是真实平台的接入实现"，与 `implementationStatus` 是两回事。
+`VERIFIED` 与 `platformScoped` 正交：STUB 可能是 `VERIFIED`（如果给它写了证据），
+真实接入也可能是 `UNVERIFIED`。
+
+**N7-3　`VERIFIED` 不等于当前可执行**
+
+`VERIFIED` 只说明"曾经用这一版实现真实跑通过"（见 `ADR-008` §3.3）。
+当前能否执行还取决于：Source 状态、快照新鲜度、账号、访问模式、证据有效期。
+**不得**把 `implementationStatus == VERIFIED` 直接当作可执行。
+
+**N7-4　只有 `FRESH` 快照可以参与当前 Effective 准入**
+
+```java
+var read = snapshotCache.get();
+if (read.state() != SnapshotCache.SnapshotCacheState.FRESH) {
+    // STALE / UNAVAILABLE：一律不得进入 Effective 计算
+    // 正确结果是 UNKNOWN + REGISTRY_UNREACHABLE 或 OBSERVED_STALE
+    return unknown();
+}
+```
+
+| 快照状态 | 参与 Effective 准入 | 对应 `effectiveStatus` |
+|---|---|---|
+| `FRESH` | ✅ 允许 | 按 §3.2 逐条推导 |
+| `STALE` | ❌ **禁止** | `UNKNOWN` + `OBSERVED_STALE` |
+| `UNAVAILABLE` | ❌ **禁止** | `UNKNOWN` + `REGISTRY_UNREACHABLE` |
+| `UNKNOWN`（Effective 结果本身） | ❌ 不可执行 | — |
+
+**禁止**用 `snapshot != null` 判断可用性——`STALE` 也携带快照。
+唯一判据是 `state == FRESH` 或 `usableForExecution`。
+
+**N7-5　准入必须是白名单，不能反向放行**
+
+```java
+// 正确：枚举允许的集合
+boolean executable = effectiveStatus == AVAILABLE && effectiveReason == NONE
+                  || effectiveStatus == DEGRADED;
+
+// 禁止：排除法（会把 UNKNOWN 与未来新增状态默认放行）
+boolean executable = effectiveStatus != UNREGISTERED;
+```
+
+**N7-6　`effectiveReason` 的测试覆盖（19 + 1）**
+
+| 范围 | 要求 |
+|---|---|
+| 19 个**当前可达**的 reason | 逐个提供**正向推导测试**（构造输入使其真实产生该 reason） |
+| `FUNCTION_NOT_CALLABLE` | 提供**不可达性测试**：确认当前诊断输出不会错误地产生该 reason |
+
+**不得**为了凑齐 20 个正向用例而伪造一个当前无法产生的诊断输入
+（Python 侧只有单一诊断码 `INVALID_IMPLEMENTATION`，见 `SOURCE-04-04-EFFECTIVE-REASON.md` Q9）。
+
 **测试命令**
 ```bash
 cd backend && mvn -s ../deploy/docker/maven-settings.xml -o test
 ```
 
 **验收标准**
-- 新增 `CapabilityReconcilerTest`：**20 个 `effectiveReason` 逐条有正向用例**
-  （依据 `SOURCE-04-04-EFFECTIVE-REASON.md` §5；`FUNCTION_NOT_CALLABLE` 因数据源缺失，
-  用手工注入的 `CapabilityItem` 构造并标注为预留）；
+- 新增 `CapabilityReconcilerTest`：**19 个当前可达 `effectiveReason` 逐条有正向用例**，
+  `FUNCTION_NOT_CALLABLE` 提供**不可达性测试**（确认当前诊断不会产生该 reason）；
+  依据 `SOURCE-04-04-EFFECTIVE-REASON.md` §5；
 - 判定顺序与 `SOURCE-04-04-EFFECTIVE-REASON.md` §4 逐行一致，**不得为实现方便调整**；
 - 断言 `UNKNOWN` 一律不可执行；断言准入判据是白名单而非反转判断；
 - 一条端到端测试：真实的 `ds_source` 行 + 真实 Observed 快照 → Effective；
 - 明确断言「Java 未声明的能力不被执行」；
-- 明确断言「计算只用单一快照，不混用两个端点的数据」。
+- 明确断言「计算只用单一快照，不混用两个端点的数据」；
+- **N7-1**：断言核对只遍历 `platformScopedAdapters()`；用一条含 STUB 的真实快照验证
+  STUB 不产生任何 Effective 结果；
+- **N7-3**：断言 `VERIFIED` 但快照 STALE 的能力**不可执行**；
+- **N7-4**：断言 `STALE` / `UNAVAILABLE` 快照下所有能力为 `UNKNOWN`，不得出现 `AVAILABLE`；
+- **N7-5**：断言准入判断里不存在 `!=` 形式的排除法。
 
 ---
 

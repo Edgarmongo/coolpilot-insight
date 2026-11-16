@@ -177,10 +177,17 @@ public class SnapshotCache {
             result = performRefresh();
             future.complete(result);
             return result;
-        } catch (RuntimeException e) {
-            // 让等待者收到一致的失败，而不是各自去重试
+        } catch (RuntimeException | Error e) {
+            // **必须完成 future**，否则已持有它的等待者会永久阻塞。
+            // 清理 inFlight 只解决"后续请求能重新发起"，不解决"当前等待者醒来"。
             future.completeExceptionally(e);
-            log.warn("[capability] 刷新过程异常，等待线程共享失败: {}", e.toString());
+            log.warn("[capability] 刷新过程异常（{}），等待线程共享失败: {}",
+                    e.getClass().getSimpleName(), e.toString());
+            if (e instanceof Error error) {
+                // JVM 级错误（OOM / StackOverflow / NoClassDefFound…）不能吞掉：
+                // 完成通知之后继续向上抛出，让容器与监控能看到真实的致命故障。
+                throw error;
+            }
             return read();
         } finally {
             synchronized (flightLock) {

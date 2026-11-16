@@ -200,6 +200,58 @@ def test_snapshot_after_mutation_is_fully_consistent():
 
 
 # ----------------------------------------------------------------------
+# platformScoped 类型契约（N2：失败关闭）
+# ----------------------------------------------------------------------
+def test_platform_scoped_must_be_bool():
+    """``platform_scoped`` 不是装饰性字段：Java 靠它排除链路验证替身。
+
+    字符串 ``"false"`` 在 Python 里是真值，一旦被输出成
+    ``"platformScoped": "false"``，下游按真值判断就会把 STUB 当成真实接入。
+    所以这里在构造期就拒绝，而不是事后 ``bool()`` 转换（那会静默改语义）。
+    """
+    from app.registry.capability import AdapterMetadata
+
+    for bad in ("false", 0, 1, None):
+        try:
+            AdapterMetadata(
+                connector_code="X",
+                source_code="DOUYIN",
+                connector_version="1.0.0",
+                load_status="LOADED",
+                module="app.x",
+                platform_scoped=bad,
+            )
+        except TypeError:
+            continue
+        raise AssertionError(f"platform_scoped={bad!r} 应被拒绝，实际被接受了")
+
+
+def test_platform_scoped_true_and_false_both_valid():
+    from app.registry.capability import AdapterMetadata
+
+    for ok_value in (True, False):
+        meta = AdapterMetadata(
+            connector_code="X",
+            source_code="DOUYIN",
+            connector_version="1.0.0",
+            load_status="LOADED",
+            module="app.x",
+            platform_scoped=ok_value,
+        )
+        assert meta.to_v1()["platformScoped"] is ok_value
+
+
+def test_snapshot_always_carries_boolean_platform_scoped():
+    """真实快照的每个 adapter 都必须带布尔型的 platformScoped。"""
+    snap = build_registry().snapshot()
+    assert snap["adapters"], "快照必须包含适配器"
+    for a in snap["adapters"]:
+        assert "platformScoped" in a, f"{a['connectorCode']} 缺少 platformScoped"
+        assert isinstance(a["platformScoped"], bool), \
+            f"{a['connectorCode']} 的 platformScoped 不是 bool: {type(a['platformScoped'])}"
+
+
+# ----------------------------------------------------------------------
 # A02 同源：capabilities 与 diagnostics 互相排斥
 # ----------------------------------------------------------------------
 def test_capabilities_and_diagnostics_are_disjoint():

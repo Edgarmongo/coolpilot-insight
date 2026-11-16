@@ -48,14 +48,16 @@ public record RegistrySnapshot(
      * @param module            Python 模块路径（诊断与定位用）
      * @param platformScoped    <b>关键</b>：是否为真实平台接入。
      *                          {@code false} 表示链路验证替身，04-03 必须排除它，
-     *                          不得靠 {@code sourceCode == "STUB"} 或能力数量推断
+     *                          不得靠 {@code sourceCode == "STUB"} 或能力数量推断。
+     *                          用 {@code boolean} 而非 {@code Boolean}：解析器已强制该字段
+     *                          存在且为布尔，类型层面不再允许 null
      * @param capabilityCount   已兑现能力数
      * @param errorCode         加载失败时的错误码
      * @param errorMessage      加载失败时的说明
      * @param capabilities      该接入下的能力（Adapter 视角，与顶层平台文档互为冗余）
      */
     public record AdapterView(String connectorCode, String sourceCode, String connectorVersion,
-                              String loadStatus, String module, Boolean platformScoped,
+                              String loadStatus, String module, boolean platformScoped,
                               Integer capabilityCount, String errorCode, String errorMessage,
                               List<CapabilityItem> capabilities) {
 
@@ -63,9 +65,15 @@ public record RegistrySnapshot(
             return "LOADED".equals(loadStatus);
         }
 
-        /** 是否真实平台接入。缺失该字段时按 {@code true} 处理（保守：不误排除）。 */
+        /**
+         * 是否真实平台接入。
+         *
+         * <p><b>失败关闭</b>：解析器对缺失或类型错误的 {@code platformScoped} 直接拒绝整个快照，
+         * 因此本方法不会遇到"未知"取值。类型用原始 {@code boolean}，
+         * 从结构上排除了 {@code null} 被当成 {@code true} 的 fail-open 路径。
+         */
         public boolean isPlatformScoped() {
-            return platformScoped == null || Boolean.TRUE.equals(platformScoped);
+            return platformScoped;
         }
     }
 

@@ -403,6 +403,80 @@ class SnapshotCacheTest {
     }
 
     // ------------------------------------------------------------------
+    // Error 路径（N1）
+    // ------------------------------------------------------------------
+    @Test
+    @DisplayName("owner 抛 Error：等待者不永久阻塞，且 Error 不被吞掉")
+    void ownerErrorStillCompletesWaiters() throws Exception {
+        var gate = new CountDownLatch(1);
+        var providerBlocked = new CountDownLatch(1);
+        var seq = new AtomicInteger();
+
+        var cache = new SnapshotCache(() -> {
+            int n = seq.getAndIncrement();
+            if (n == 0) {
+                return ok("sha256:old");
+            }
+            if (n == 1) {
+                providerBlocked.countDown();
+                try {
+                    gate.await(5, TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                throw new StackOverflowError("simulated fatal owner error");
+            }
+            return ok("sha256:new");   // Error 之后应能恢复
+        }, 1, 0);
+
+        cache.refresh();               // 基线：old，ttl=1
+        sleep(1200);                   // 超 TTL，制造需要刷新的场景
+
+        var ownerError = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        Thread owner = new Thread(() -> {
+            try {
+                cache.refresh();
+            } catch (Throwable t) {
+                ownerError.set(t);
+            }
+        });
+        owner.start();
+        assertThat(providerBlocked.await(5, TimeUnit.SECONDS))
+                .as("owner 应已进入 provider").isTrue();
+
+        var waiterResult = new java.util.concurrent.atomic.AtomicReference<SnapshotCache.SnapshotRead>();
+        var waiterExited = new java.util.concurrent.atomic.AtomicBoolean(false);
+        Thread waiter = new Thread(() -> {
+            waiterResult.set(cache.get());
+            waiterExited.set(true);
+        });
+        waiter.start();
+        sleep(120);                    // 让 waiter 进入 future.join()
+
+        gate.countDown();              // 放行 owner → 抛 Error
+
+        waiter.join(3000);
+        assertThat(waiter.isAlive())
+                .as("等待者不得永久阻塞——清理 inFlight 不等于完成 future")
+                .isFalse();
+        assertThat(waiterExited).isTrue();
+        assertThat(waiterResult.get()).isNotNull();
+        assertThat(waiterResult.get().usableForExecution())
+                .as("Error 之后不可能有可执行快照").isFalse();
+
+        owner.join(3000);
+        assertThat(ownerError.get())
+                .as("JVM 级错误必须继续向上抛出，不能被吞掉")
+                .isInstanceOf(StackOverflowError.class);
+
+        // Error 路径也必须清理 inFlight，否则后续请求会复用坏 future
+        var recovered = cache.refresh();
+        assertThat(recovered.snapshot().snapshotId())
+                .as("Error 之后应能重新发起刷新")
+                .isEqualTo("sha256:new");
+    }
+
+    // ------------------------------------------------------------------
     // 工具
     // ------------------------------------------------------------------
     private static List<SnapshotCache.SnapshotRead> runConcurrently(

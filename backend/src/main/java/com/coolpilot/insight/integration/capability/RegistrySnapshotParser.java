@@ -55,6 +55,8 @@ public final class RegistrySnapshotParser {
         UNSUPPORTED_CONTRACT,
         /** 缺少 capabilities / diagnostics / adapters 任一数组 */
         MISSING_ARRAY,
+        /** 某个 Adapter 条目结构非法（缺 connectorCode，或 platformScoped 缺失/类型非布尔） */
+        BROKEN_ADAPTER,
         /** 某条能力文档结构非法（缺 code / 缺 adapterFunction） */
         BROKEN_CAPABILITY,
         /** 能力清单与诊断互相矛盾 */
@@ -168,6 +170,25 @@ public final class RegistrySnapshotParser {
         // 5) adapters（完整字段映射）
         List<RegistrySnapshot.AdapterView> adapters = new ArrayList<>();
         for (JsonNode n : adapterNodes) {
+            String connectorCode = CapabilityContractParser.text(n, "connectorCode");
+            if (connectorCode == null || connectorCode.isBlank()) {
+                return Result.failure(Failure.BROKEN_ADAPTER, "Adapter 条目缺少 connectorCode");
+            }
+
+            // platformScoped **必须存在且必须是布尔**。
+            // 它是排除链路验证替身（STUB）的结构化依据；缺失时若默认 true，
+            // 就是把未知数据当成真实平台接入 —— 失败开放（fail-open）。
+            JsonNode psNode = n.get("platformScoped");
+            if (psNode == null || psNode.isNull()) {
+                return Result.failure(Failure.BROKEN_ADAPTER,
+                        "Adapter " + connectorCode + " 缺少 platformScoped");
+            }
+            if (!psNode.isBoolean()) {
+                return Result.failure(Failure.BROKEN_ADAPTER,
+                        "Adapter " + connectorCode + " 的 platformScoped 不是布尔值: "
+                                + psNode.getNodeType());
+            }
+
             List<CapabilityItem> caps = new ArrayList<>();
             JsonNode inner = n.get("capabilities");
             if (inner != null && inner.isArray()) {
@@ -176,12 +197,12 @@ public final class RegistrySnapshotParser {
                 }
             }
             adapters.add(new RegistrySnapshot.AdapterView(
-                    CapabilityContractParser.text(n, "connectorCode"),
+                    connectorCode,
                     CapabilityContractParser.text(n, "sourceCode"),
                     CapabilityContractParser.text(n, "connectorVersion"),
                     CapabilityContractParser.text(n, "loadStatus"),
                     CapabilityContractParser.text(n, "module"),
-                    n.hasNonNull("platformScoped") ? n.get("platformScoped").asBoolean() : null,
+                    psNode.asBoolean(),
                     n.hasNonNull("capabilityCount") ? n.get("capabilityCount").asInt() : null,
                     CapabilityContractParser.text(n, "errorCode"),
                     CapabilityContractParser.text(n, "errorMessage"),

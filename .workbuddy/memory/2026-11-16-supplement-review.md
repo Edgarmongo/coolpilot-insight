@@ -1,5 +1,47 @@
 # 2026-11-16 工作日志
 
+## SOURCE-04-02-FIX-01 关闭评审遗留（N1 / N2 + N7 冻结）
+
+04-02 验收通过，但保留 N1、N2 待处理；本轮按用户要求只做前置修复，
+不启动 04-03 核心实现。
+
+### N2：platformScoped 改失败关闭（优先项）
+原实现"字段缺失 → null → isPlatformScoped() 按 true"= 失败开放，
+而 platformScoped=false 正是排除 STUB 的唯一结构化依据。
+- Python: AdapterMetadata.__post_init__ 拒绝非 bool（不做事后 bool() 转换，
+  bool("false")==True 会把配置错误变成语义相反的快照）
+- Java: Parser 新增 Failure.BROKEN_ADAPTER；platformScoped 缺失/null/非布尔
+  一律拒绝整个快照；用 psNode.isBoolean() 严格判类型，不用 asBoolean() 容错
+- DTO: platformScoped 从 Boolean 改为原始 boolean，null→true 这条路径在
+  类型层面消失
+- 测试：Java 4 条负向（缺失/null/字符串"false"/数字 0 + 缺 connectorCode）,
+  Python 3 条（非 bool 四种取值、true/false 均可、真实快照全为 bool）
+
+### N1：Error 路径也要完成 Future
+原 catch(RuntimeException) 不捕获 Error：finally 清了 inFlight 但 future
+永不 complete → 等待者永久阻塞。
+- 改为 catch (RuntimeException | Error e) → completeExceptionally →
+  if (e instanceof Error) throw error（不吞 JVM 级错误）→ finally 清 inFlight
+- 关键区分：清 inFlight 解决"后续能重发"，不解决"当前等待者醒来"，两件事
+- 测试 ownerErrorStillCompletesWaiters：provider 阻塞在 gate → 确认 owner
+  已进入 → waiter 进入 join → 放行抛 StackOverflowError → 断言 waiter 退出、
+  Error 被重抛、后续 refresh 能恢复。单独耗时 1.486s（若阻塞会多 3s）
+
+### N7 冻结进 04-03 任务卡
+六条硬约束：只遍历 platformScopedAdapters()、platformScoped 不等于已验证、
+VERIFIED 不等于可执行、只有 FRESH 可参与准入（STALE/UNAVAILABLE 判 UNKNOWN）、
+白名单准入禁止 != 排除法、19 个 reason 正向 + FUNCTION_NOT_CALLABLE 不可达测试。
+验收标准同步改为 19+1，并补 N7-1/3/4/5 四条断言。
+
+### 结果
+Java 197/197（+5）；Python 76/76（+3）；5 容器 healthy。
+真实快照实测：所有 adapter 的 platformScoped 均为 bool，
+STUB_PUBLIC=False / DOUYIN_PUBLIC=True。
+
+零改动：库/Flyway(V30)/Desired Schema/账号/状态机/前端全部未动；
+未创建 CapabilityReconciler，未实现 Effective，未启动 04-03。
+
+
 ## SOURCE-04-02 第二轮修复（评审 H1/H2 + M1~M8）
 
 第一轮评审不通过（HIGH 2），本轮按四阶段修复。

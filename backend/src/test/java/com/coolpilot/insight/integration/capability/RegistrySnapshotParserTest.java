@@ -211,6 +211,51 @@ class RegistrySnapshotParserTest {
     }
 
     // ------------------------------------------------------------------
+    // platformScoped 严格校验（N2：失败关闭）
+    // ------------------------------------------------------------------
+    @Test
+    @DisplayName("Adapter 缺少 platformScoped → BROKEN_ADAPTER（不默认 true）")
+    void rejectsMissingPlatformScoped() {
+        String body = minimal(VALID_ID, "1.1").replace("\"platformScoped\":true,", "");
+        assertThat(body).doesNotContain("platformScoped");
+        assertThat(RegistrySnapshotParser.parse(body).error().failure())
+                .as("缺失该字段必须拒绝整个快照——默认 true 就是失败开放")
+                .isEqualTo(RegistrySnapshotParser.Failure.BROKEN_ADAPTER);
+    }
+
+    @Test
+    @DisplayName("Adapter platformScoped 为 null → BROKEN_ADAPTER")
+    void rejectsNullPlatformScoped() {
+        String body = minimal(VALID_ID, "1.1")
+                .replace("\"platformScoped\":true", "\"platformScoped\":null");
+        assertThat(RegistrySnapshotParser.parse(body).error().failure())
+                .isEqualTo(RegistrySnapshotParser.Failure.BROKEN_ADAPTER);
+    }
+
+    @Test
+    @DisplayName("Adapter platformScoped 为字符串 / 数字 → BROKEN_ADAPTER")
+    void rejectsNonBooleanPlatformScoped() {
+        String asString = minimal(VALID_ID, "1.1")
+                .replace("\"platformScoped\":true", "\"platformScoped\":\"false\"");
+        assertThat(RegistrySnapshotParser.parse(asString).error().failure())
+                .as("字符串 \"false\" 若被 asBoolean() 容错，就会变成真假不明")
+                .isEqualTo(RegistrySnapshotParser.Failure.BROKEN_ADAPTER);
+
+        String asNumber = minimal(VALID_ID, "1.1")
+                .replace("\"platformScoped\":true", "\"platformScoped\":0");
+        assertThat(RegistrySnapshotParser.parse(asNumber).error().failure())
+                .isEqualTo(RegistrySnapshotParser.Failure.BROKEN_ADAPTER);
+    }
+
+    @Test
+    @DisplayName("Adapter 缺少 connectorCode → BROKEN_ADAPTER")
+    void rejectsAdapterWithoutConnectorCode() {
+        String body = minimal(VALID_ID, "1.1").replace("\"connectorCode\":\"X\",", "");
+        assertThat(RegistrySnapshotParser.parse(body).error().failure())
+                .isEqualTo(RegistrySnapshotParser.Failure.BROKEN_ADAPTER);
+    }
+
+    // ------------------------------------------------------------------
     // 内部一致性
     // ------------------------------------------------------------------
     @Test

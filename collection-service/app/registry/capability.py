@@ -243,6 +243,22 @@ class AdapterMetadata:
     legacy_status: str | None = None
     legacy_note: str | None = None
 
+    def __post_init__(self) -> None:
+        """``platform_scoped`` 必须是真正的 ``bool``。
+
+        它不是装饰性字段：Java 侧靠它把链路验证替身（``STUB_PUBLIC``）从
+        **真实平台能力准入**里排除。一旦这里出现 ``"false"`` 这样的字符串，
+        下游按真值判断时会把它当成"真实接入"——属于失败开放（fail-open）。
+
+        所以这里不做事后 ``bool()`` 转换，而是**构造时就拒绝**：
+        宁可启动失败，也不产出一个语义模糊的快照。
+        """
+        if not isinstance(self.platform_scoped, bool):
+            raise TypeError(
+                "platform_scoped 必须是 bool，实际为 "
+                f"{type(self.platform_scoped).__name__}: {self.platform_scoped!r}"
+            )
+
     def to_v1(self) -> dict[str, Any]:
         out: dict[str, Any] = {
             "connectorCode": self.connector_code,
