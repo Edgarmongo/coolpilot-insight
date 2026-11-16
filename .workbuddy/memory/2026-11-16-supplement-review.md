@@ -59,62 +59,6 @@ Java 253/253、Python 76/76、5 容器 healthy；FRESH/STALE/UNAVAILABLE 与恢�
 零改动：库/Flyway V30/Schema 八值/账号/状态机/前端。
 
 
-## SOURCE-04-03 修复：FIX-01（H1）+ FIX-02（M1/M2）
-
-评审 edcb034 判 FAIL（H1 HIGH）。按用户裁决分两个独立任务修复，方案 A。
-
-### FIX-01（d6610f9）H1 证据闸门
-根因两层：04-04 §3.2 原第 19 行把 {VERIFIED, IMPLEMENTED} 并列判 AVAILABLE（契约错），
-代码又把证据校验限定在 UNVERIFIED/VERIFIED（实现错）。
-- 契约：§3.2 改 14/15/16/18/19 行；新增 §3.2.1「实现状态 × 证据矩阵」（六值 × 三态 18 格）；
-  SOURCE-04-TASKCARD 同步 + 注意 4；ADR-008 §4.3.1 记录"白名单解决结论能否执行、
-  证据闸门解决结论怎么得出"。
-- 代码：去掉外层 if，改为对所有状态无条件生效；证据有效但 impl==IMPLEMENTED 仍判
-  VERIFICATION_REQUIRED；IMPLEMENTED 判定放在证据校验**之后**（否则"证据被篡改"
-  会被误报成"从未验证"）。
-- 测试 34→41；新增 rejectedEvidenceNeverExecutable 含与 CapabilityStatus.ALL 的
-  结构性自检（防"测试清单自己也会漏"）。
-- 探针实证：同样输入，修复前全放行、修复后全拒绝。
-
-### FIX-02（d7a4077）M1 + M2
-- M1：新增 reason DESIRED_UNPARSEABLE（20→21），位置从链首下移到第 4 位
-  （服务不可达是更前置的未知）；新增 DataSourceView.desiredError ——
-  因为"两边都坏"时候选为空、返回空列表，调用方看不到任何原因。
-  发现：Desired 不支持 + Registry 不可达时无行可标注，这是 L4 的加强版证据。
-- M2：parseV2 按 connectorCode+code 检测重复，整份文档拒绝；四类组合测试。
-
-### 教训（值得沉淀）
-对"枚举允许的取值"做准入推导必须**穷举全部取值**。只处理常见两值、其余默认落到
-最后一步，等于给未列举的值开了一条通往 AVAILABLE 的暗门。这与"禁止 != 反转判断"
-是同一错误的两个面：黑名单漏新状态，穷举不全漏旧状态。
-
-Java 253/253、Python 76/76、5 容器 healthy；FRESH/STALE/UNAVAILABLE 与恢复全验证。
-零改动：库/Flyway V30/Schema 八值/账号/状态机/前端。
-
-
-## SOURCE-04-03 代码评审（只读，结论 FAIL）
-
-评审 4e534a8（基线 4288924），仅新增 SOURCE-04-03-CODE-REVIEW.md。
-
-**H1 潜伏型 fail-open**：CapabilityReconciler:222 的证据校验守卫只覆盖
-UNVERIFIED/VERIFIED，IMPLEMENTED 与 DEGRADED 直接跳过第 14~16 步落入 AVAILABLE。
-用真实 RegistrySnapshotParser + 临时探针实测：IMPLEMENTED+证据被拒 → AVAILABLE、
-executable=true。当前未触发（四个声明全 UNVERIFIED），但 Schema 允许 IMPLEMENTED，
-一旦声明即误放行。根因是 04-04 冻结表没有 IMPLEMENTED 这一行（契约空白），
-但实现不应在沉默处选 fail-open。给了 A/B/C 三方案，建议先定契约再改码。
-
-**M1** Desired 不可解析借用 SCHEMA_UNSUPPORTED 且排在快照判定之前（冻结顺序 2<3），
-故障域指错方向。**M2** v2 重复能力静默 first-wins，无诊断。
-LOW：contractVersion 缺失跳过校验、STALE 的 CONTRACT/INCONSISTENT 合并为 SCHEMA、
-跨 Connector 无测试、sourceCode 不校验、账号粒度 Source 级。
-
-做对：三态隔离靠类型系统、白名单准入 + 构造期校验 executable、候选取并集
-（运行时 COMMENT_REPLY→NOT_DECLARED 证明有效）、9/10 步守卫保留"声明过"事实。
-
-测试：Java 241/241、Python 76/76、五容器 healthy；独立复现停服→全 UNKNOWN、
-恢复→自动 FRESH+AVAILABLE。Flyway 仍 V30，capability_json 原值未变。
-
-
 ## SOURCE-04-03 代码评审（只读，结论 FAIL）
 
 评审 4e534a8（基线 4288924），仅新增 SOURCE-04-03-CODE-REVIEW.md。
