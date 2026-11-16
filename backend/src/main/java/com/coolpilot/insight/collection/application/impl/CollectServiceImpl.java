@@ -345,15 +345,27 @@ public class CollectServiceImpl implements CollectService {
         boolean ok = false;
         String error = null;
         try {
-            ok = invokeCollector(awemeId, maxComments, mode, task.getId(), item.getId());
+            CommandResult collected = invokeCollector(awemeId, maxComments, mode, task.getId(), item.getId());
+            ok = collected.success();
+            // 短摘要走 info（每个 item 一行）；完整原话走 debug——
+            // 0 条时能直接看出是"无新增"还是"没抓到"，又不会把生产日志灌满
+            log.info("[collect] item={} aweme={} 执行器 success={} 耗时={}ms",
+                    item.getId(), awemeId, ok, collected.durationMs());
+            log.debug("[collect] item={} 执行器原文: {}", item.getId(), collected.tail(800));
             if (ok) {
                 File csv = new File(appProperties.getDatasDir(), awemeId + ".csv");
+                long csvLen = csv.exists() ? csv.length() : -1;
+                log.info("[collect] item={} 产物检查 path={} exists={} size={}",
+                        item.getId(), csv.getAbsolutePath(), csv.exists(), csvLen);
                 if (!csv.exists() || csv.length() == 0) {
                     ok = false;
                     error = "采集未产出数据文件（可能触发风控或该视频无评论）";
+                    log.warn("[collect] item={} 判定失败：{}（执行器 success=true，但无产物）",
+                            item.getId(), error);
                 } else {
                     Map<String, Object> cleanResult = runCleanAs(
                             task.getOwnerUserId(), awemeId + ".csv");
+                    log.info("[collect] item={} 清洗结果={}", item.getId(), cleanResult.get("output"));
                     if (!Boolean.TRUE.equals(cleanResult.get("success"))) {
                         ok = false;
                         error = "清洗入库失败：" + cleanResult.get("output");
@@ -370,6 +382,8 @@ public class CollectServiceImpl implements CollectService {
         if (ok) {
             Map<String, Object> row = commentMapper.summaryRow(item.getVideoId());
             long total = row == null || row.get("total") == null ? 0 : ((Number) row.get("total")).longValue();
+            log.info("[collect] item={} 判定 SUCCESS：库内累计 {} 条（注意：这是该视频的累计评论数，"
+                    + "不是本次新增数）", item.getId(), total);
             CollectionTaskItem done = new CollectionTaskItem();
             done.setId(item.getId());
             done.setStatus("SUCCESS");
@@ -432,12 +446,12 @@ public class CollectServiceImpl implements CollectService {
                 message == null ? status : message, null);
     }
 
-    private boolean invokeCollector(String awemeId, int maxComments, String mode,
-                                    Long taskId, Long itemId) {
-        // 子进程调用已抽到 integration 层：本方法只关心"成功与否"这一业务结论
-        CommandResult result = collectionClient.collectComments(
+    private CommandResult invokeCollector(String awemeId, int maxComments, String mode,
+                                          Long taskId, Long itemId) {
+        // 调用已抽到 integration 层；这里把**原始结果**交回调用方，
+        // 而不是只返回 true/false——否则"为什么算成功"在日志里无从追溯。
+        return collectionClient.collectComments(
                 awemeId, maxComments, "online-login".equals(mode), taskId, itemId);
-        return result.success();
     }
 
     private void finishWithError(Long taskId, String message) {
