@@ -182,6 +182,32 @@ t4  新线程 T3 进入 → inFlight == null → T3 成为新 owner
 | 旧 owner 清理新 owner | `:193` `if (inFlight == future)` 用引用相等判断，只清自己创建的那个 | ✅ 不会误清 |
 | 清理竞态 | 判定与置空在同一个 `synchronized (flightLock)` 块内 | ✅ 原子 |
 
+**检查 E：`read()` 路径是否可能抛异常，导致 `performRefresh()` 的返回值构造失败**
+
+`read()`（`:88-113`）有 4 处 `new SnapshotRead(...)`，而 `SnapshotRead` 的
+compact constructor 会校验三条不变量，违反即抛 `IllegalArgumentException`：
+
+| 构造点 | 传入 | 校验结果 |
+|---|---|---|
+| `:95` `e == null` | `(null, UNAVAILABLE, false)` | ✅ 合法（UNAVAILABLE 要求 snapshot 为 null） |
+| `:104` `e.stale()` | `(e.snapshot(), STALE, false)` | ✅ 合法（STALE 要求携带快照） |
+| `:109` 超 TTL | `(e.snapshot(), STALE, false)` | ✅ 合法 |
+| `:112` 正常 | `(e.snapshot(), FRESH, true)` | ✅ 合法（FRESH 允许 true） |
+
+`e.snapshot()` 恒非 null：`Entry` 只在 `applyResult` 的 `result.ok()` 分支创建，
+而 `FetchResult.ok()` 的定义是 `kind == OK && snapshot != null`。
+因此 `read()` **不会**因不变量校验抛异常。
+
+即便将来某条分支违反了不变量，异常也会传播到 `refreshShared()` 的
+`catch (RuntimeException | Error)` → `completeExceptionally` → waiter 照常退出。
+**不存在"Future 永不完成"的残留路径。**
+
+**检查 F：`performRefresh()` 内部 `synchronized (flightLock) { applyResult(result); }` 抛异常**
+
+若 `applyResult` 抛 `RuntimeException`/`Error`（例如 `result.snapshot()` 意外为 null
+导致的 NPE），异常会穿过 `performRefresh()` 传播到 `refreshShared()` 的 catch，
+同样完成 future 并清理 `inFlight`（`:191` 的 finally 覆盖该出口）。
+
 ### 3.5 N1 结论
 
 **所有异常路径均有确定性结论，Future 不存在"永远未完成"的代码路径**（除 F3 的接口层超时缺失）。
@@ -423,23 +449,40 @@ cpi-mysql        Up 7 hours (healthy)
 
 ## 七、新发现问题
 
-### F1（MEDIUM · 验收缺陷，非代码缺陷）：N7-2 未进入验收标准
+### F1（MEDIUM · **文档/验收缺陷**，非代码缺陷）：N7-2 未进入验收标准
 
-**位置**：`docs/architecture/collection/SOURCE-04-TASKCARD.md` 04-03 验收标准段
+**位置**（准确行号）：
 
-**实际行为**：N7-2（`platformScoped=true` 不代表能力已验证）只写在实现要求里，
-验收标准没有对应断言。其余 5 项均已两处覆盖。
+| 位置 | 内容 |
+|---|---|
+| `SOURCE-04-TASKCARD.md:302` | `**N7-2　\`platformScoped=true\` 不等于能力已验证**`（实现要求，存在） |
+| `SOURCE-04-TASKCARD.md:361-374` | 04-03 验收标准段，**无 N7-2 对应条目** |
+
+**实际行为**：N7-2 只写在实现要求里（`:302`），验收标准（`:361-374`）没有对应断言。
+对照其余五项：
+
+| 编号 | 实现要求行 | 验收标准行 |
+|---|---|---|
+| N7-1 | `:289` | `:370` |
+| **N7-2** | `:302` | **无** |
+| N7-3 | `:308` | `:372` |
+| N7-4 | `:314` | `:373` |
+| N7-5 | `:335` | `:374` |
+| N7-6 | `:346` | `:362` |
 
 **为什么算缺陷**：用户通过标准明确要求「六项约束进入任务卡验收标准」。
 仅写在背景说明中的约束，在实施时容易被当作"理解性描述"跳过；
 写入验收标准才是可拒收的硬条件。
+
+**缺陷分类**：**文档/验收缺陷**（不是代码缺陷，也不是测试实现缺陷）——
+代码侧无对应实现可改，需改的是任务卡的验收条目。
 
 **建议补的断言**：
 
 > 断言 `platformScoped=true` 且 `implementationStatus=UNVERIFIED` 的能力，
 > `effectiveStatus` 不是 `AVAILABLE`。
 
-**影响**：不阻塞 04-03 启动，但建议在启动前补进任务卡。
+**影响**：不阻塞 04-03 启动，但建议在启动前补进任务卡 `:361-374`。
 
 ---
 
@@ -461,6 +504,8 @@ cpi-mysql        Up 7 hours (healthy)
 `/health` 会直接输出该非法值。但 `/health` 只用于探活，**不参与能力准入判定**，
 且 `snapshot()` / `adapter_views()` 会在同一状态下抛 `TypeError` 导致 500，
 下游表现为 `HTTP_ERROR → REGISTRY_UNREACHABLE`（fail-close）。
+
+**缺陷分类**：**代码缺陷**（校验点位置不当），非测试缺陷。
 
 **判定为 LOW 的理由**：不产出可被误用为"真实平台接入"的数据；错误暴露时机偏晚
 （请求期 500 而非启动期失败），但不造成正确性风险。
@@ -484,6 +529,8 @@ public interface SnapshotProvider {
 **实际行为**：若某实现永久阻塞（无超时），owner 会一直卡在
 `performRefresh()` → `provider.fetchSnapshot()`，`future` 永不完成，
 所有 waiter 永久 `join`。
+
+**缺陷分类**：**设计缺陷**（契约缺失），非代码缺陷、非测试缺陷。
 
 **当前风险评估**：生产唯一实现 `CollectionServiceClient` 有
 connect 2s + request 5s 超时，因此实际不会触发。
@@ -514,7 +561,19 @@ connect 2s + request 5s 超时，因此实际不会触发。
 | **N7 六项约束进入任务卡验收标准** | ❌ **5/6**（N7-2 缺失，F1） |
 | Java / Python 全量测试通过 | ✅ 197/197、76/76 |
 
-### 8.2 判定
+### 8.2 缺陷分类汇总
+
+| 编号 | 级别 | 分类 | 是否阻塞 04-03 |
+|---|---|---|---|
+| F1 N7-2 未进验收标准 | MEDIUM | **文档/验收缺陷** | 建议启动前补 |
+| F2 Python 校验点不统一 | LOW | **代码缺陷** | 否 |
+| F3 Provider 无超时契约 | LOW | **设计缺陷** | 否 |
+| F4 记忆文件随实现提交 | 观察 | 过程记录 | 否 |
+
+本轮**未发现**：测试实现缺陷（4 类测试均实际执行并通过，且断言有辨别力）、
+BLOCKER、HIGH。
+
+### 8.3 判定
 
 **PASS WITH FINDINGS**
 
@@ -522,7 +581,7 @@ connect 2s + request 5s 超时，因此实际不会触发。
 - N7 冻结**基本到位**，但 N7-2 漏在验收标准之外，未完全满足"六项都进验收标准"的要求；
 - 另有 2 项 LOW（F2、F3），均为"当前不造成正确性风险、但应尽早收敛"的类型。
 
-### 8.3 对启动 SOURCE-04-03 的建议
+### 8.4 对启动 SOURCE-04-03 的建议
 
 | 事项 | 建议 |
 |---|---|
