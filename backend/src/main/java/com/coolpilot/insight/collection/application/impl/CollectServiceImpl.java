@@ -80,11 +80,21 @@ public class CollectServiceImpl implements CollectService {
     @Autowired
     private CollectionClient collectionClient;
     @Autowired
+    private com.coolpilot.insight.collection.application.CollectionAdmissionGuard admissionGuard;
+    @Autowired
     private CollectionQueryService queryService;
     @Autowired
     private com.coolpilot.insight.collection.application.RunApplicationService runApplicationService;
     @Autowired
     private com.coolpilot.insight.collection.infrastructure.persistence.ColRunMapper runMapper;
+
+    /**
+     * 本编排链路只处理抖音。准入需要平台码，而 {@code extractVideoId} 也只认抖音链接，
+     * 所以这里用常量而不是从入参推——推不出来才是事实。
+     * 支持多平台时，source 必须随请求带进来，不能靠猜。
+     */
+    private static final String SOURCE_DOUYIN = "DOUYIN";
+    private static final String CAPABILITY_COMMENT = "COMMENT";
 
     /** 同一时刻只允许一个采集批次在跑（Chrome 单实例限制） */
     private final AtomicBoolean busy = new AtomicBoolean(false);
@@ -101,6 +111,10 @@ public class CollectServiceImpl implements CollectService {
         if (videoIds == null || videoIds.isEmpty()) {
             throw new BizException(ErrorCode.PARAM_INVALID, "请至少提供一个视频链接或编号");
         }
+        // 准入必须在任何写入之前：任务不建、item 不插、HTTP 不发。
+        // 放在这里而不是逐条判断，是为了让"整批不可执行"一次说清楚，
+        // 而不是建出一堆必然失败的任务再逐个报错。
+        admissionGuard.requireExecutable(SOURCE_DOUYIN, CAPABILITY_COMMENT);
         int max = Math.min(Math.max(maxComments, 1), 1000);
 
         // 解析 + 去重，保持输入顺序

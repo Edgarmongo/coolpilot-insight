@@ -84,6 +84,12 @@ app:
   ai-service-url: ${AI_SERVICE_URL:http://127.0.0.1:5000}
   # 采集服务间调用令牌（与采集服务的 INTERNAL_TOKEN 对应）
   collection-internal-token: ${COLLECTION_INTERNAL_TOKEN:}
+  # ---- 采集执行（SOURCE-06）----
+  collection:
+    # http（默认）＝ 提交作业给采集服务并轮询；process ＝ 旧的子进程实现（已废弃，仅作回滚）
+    executor: ${COLLECTION_EXECUTOR:http}
+    # 评论采集的接入实现。当前链路只处理抖音，故用默认值而不是从入参推断。
+    default-connector: ${COLLECTION_DEFAULT_CONNECTOR:DOUYIN_PUBLIC}
   # ---- 能力快照（SOURCE-04-02）----
   capability:
     # Observed 统一快照的缓存 TTL（秒）。超 TTL 未刷新则不得作为执行准入依据。

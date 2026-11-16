@@ -3,15 +3,23 @@ package com.coolpilot.insight.integration.collection;
 import com.coolpilot.insight.integration.common.CommandResult;
 import com.coolpilot.insight.integration.common.ProcessRunner;
 import com.coolpilot.insight.integration.config.AppProperties;
-import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** 当前实现：以子进程方式调用 collection-service 的抖音适配器脚本。 */
-@Component
+/**
+ * 子进程实现：直接调 collection-service 的抖音适配器脚本。
+ *
+ * <p><b>已标记 deprecated</b>（SOURCE-06 · D3）：采集执行已切到 HTTP 作业派发
+ * （{@link HttpCollectionClient}）。本实现保留一个版本周期作为回滚通道，
+ * 由 {@code app.collection.executor=process} 显式启用。
+ *
+ * <p>注意它<b>不经过任何能力准入</b>——只要进程能起，脚本就会跑。
+ * 这正是 SOURCE-06 要解决的问题，因此不得再把新功能挂到这里。
+ */
+@Deprecated
 public class ProcessCollectionClient implements CollectionClient {
 
     /** 采集单个内容可能翻页较久，给 10 分钟；超时即视为失败，由图上层重试。 */

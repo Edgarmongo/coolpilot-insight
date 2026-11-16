@@ -171,3 +171,68 @@ D1、D2 已按建议实现（可一句话推翻）；**D3 决定 Java 改动范�
 | `CONTENT_DETAIL` / `KEYWORD_SEARCH` 作业派发 | 已注册但未接适配，返回 `CAPABILITY_NOT_DISPATCHABLE`（明确拒绝，不是静默跳过） |
 | 作业持久化 | 仍是进程内存，重启即丢；权威状态在 Java 侧 `col_task_item` |
 | 多实例 | 单实例假设；多副本时队列会各跑一份，需要外部队列或选主 |
+
+---
+
+## 八、Java 侧切换（第二阶段，2026-11-17 追加）
+
+按 D1/D2/D3 的建议实施，**默认已切到 http**。
+
+| 文件 | 内容 |
+|---|---|
+| `integration/collection/HttpCollectionClient.java` | 提交作业 → 轮询 → 收敛；五类失败分别可辨 |
+| `integration/collection/CollectionClientConfig.java` | `app.collection.executor=http|process` 选择实现，默认 `http` |
+| `integration/collection/ProcessCollectionClient.java` | 去掉 `@Component`、标记 `@Deprecated`，仅作回滚通道 |
+| `collection/application/CollectionAdmissionGuard.java` | 采集前的准入校验，拒绝时给出 `status/reason/detail` |
+| `collection/application/impl/CollectServiceImpl.java` | `submit()` **第一条**语句做准入；建任务之前就拒绝 |
+| `application.yml` | 新增 `app.collection.executor` / `app.collection.default-connector` |
+
+### 8.1 为什么准入要放在 `submit()` 的第一条
+
+不可执行时应该"什么都不发生"：不建任务、不插 item、不发 HTTP。
+放在逐条判断里，会先建出一堆必然失败的任务再逐个报错——用户看到的是"提交成功"，
+半小时后才发现全红。测试用"其余依赖全为 null"来锁定这个顺序：
+守卫若不是第一条，测试会以 NPE 而不是业务异常失败。
+
+### 8.2 关键词搜索为什么不一起切
+
+`KEYWORD_SEARCH` 至今没有真实平台验证证据（`SOURCE-01` 记录"风控行为未知"），
+接进作业派发只会被闸门判 `NOT_EXECUTABLE`。硬切等于把一个**未验证能力**
+包装成"可用功能"。因此 `searchByKeyword` 显式委派给旧实现，
+并在启动日志里写明这是已知不一致——等该能力拿到证据后并入。
+注意 `run_search` 的 `printer` 接受 `**kwargs`（内部传 `file=sys.stderr`），
+接入时不能直接传 `job.log`。
+
+### 8.3 验证（真实容器）
+
+```
+启动日志： [collection] 采集执行走 HTTP 作业派发（executor=http, connector=DOUYIN_PUBLIC）
+提交接口： POST /api/collect/start → taskId=6
+跨服务：   172.21.0.2 - - "POST /v1/jobs HTTP/1.1" 202      ← backend 容器 IP
+子进程：   后端日志中 ProcessRunner / python / comment.py 命中数 = 0
+结果：     collection_task_item.status=SUCCESS, collected_count=20；该视频评论 19 → 20
+```
+
+Java 全量 **328 / 328**（新增 13：`HttpCollectionClientTest` 7 + `CollectionAdmissionTest` 6）。
+
+### 8.4 一个尚未对上的现象（如实记录）
+
+作业的内存状态显示 `collected=0 / pages=3`（本次无新增），但同一 `jobId` 对应
+的子任务最终 `SUCCESS` 且评论数 +1。两者至少有一处解释不完整：
+
+- 可能是本次运行确实采到 1 条新评论，而 `collected` 统计口径与服务端 `items` 不一致；
+- 也可能是 `SUCCEEDED 但无 CSV → Java 判失败` 这条边界没有被这次运行区分开
+  （Java 侧 `runItem` 有"采集未产出数据文件"分支）。
+
+**未定性**。要定位需要把 `com.coolpilot.insight` 的日志级别开到 debug 再跑一次
+（当前 `application.yml` 只给旧包名 `com.dy.comment` 开了 debug，新代码的
+debug 日志根本没输出——这本身也是个待修项）。
+
+### 8.5 Java 侧遗留
+
+| 项 | 说明 |
+|---|---|
+| 上述计数口径 | 见 §8.4，需要一次带 debug 日志的复跑 |
+| 日志级别配置过期 | `logging.level.com.dy.comment: debug` 指向旧包名，新代码 debug 日志不输出 |
+| 平台码硬编码 | `CollectServiceImpl` 用常量 `DOUYIN`：当前链路只认抖音链接，推不出别的来源；多平台时必须把 source 带进请求 |
+| `PARTIAL` 判定 | 客户端把 `PARTIAL` 一律视为失败。若将来服务端把"部分成功"用于别的语义，需要重新约定 |
