@@ -58,49 +58,150 @@ def test_capabilities_marks_stub_unavailable():
     assert item["status"] == "PENDING"
 
 
-def test_job_lifecycle():
+def _fake_registry_for_jobs():
+    """构造一个"真的可执行"的注册表：VERIFIED + 证据已接受 + 函数可解析。
+
+    为什么不在 HTTP 测试里直接用真实 Registry：生产 Registry 里没有一个能力
+    同时满足 VERIFIED 与 evidence.accepted（那是 SOURCE-06 的准入要求），
+    要在这里跑通生命周期，只能注入受控注册表——
+    **而不是放宽派发判定**。
+    """
+    import types
+    from app.registry.capability import (
+        AccessMode, CapabilityCategory, CapabilityCode, CapabilitySpec, ImplementationStatus,
+    )
+
+    class Entry:
+        connector_code = "DOUYIN_PUBLIC"
+        load_status = "LOADED"
+        platform_scoped = True
+        error_code = None
+        error_message = None
+
+    def fake_collect(video_id, max_comments, **kwargs):
+        # 只验行映射，不碰浏览器；CSV 落盘由真实采集器负责，此处不重复实现
+        return types.SimpleNamespace(
+            comments=[{"CID": "c1", "PARENT_CID": "", "内容": "hi", "昵称": "n",
+                       "点赞": "2", "地区": "上海", "日期": "2026-01-01"}],
+            ok=True, message="")
+
+    spec = CapabilitySpec(
+        code=CapabilityCode.COMMENT, category=CapabilityCategory.COMMENT, name="评论采集",
+        access_modes=(AccessMode.PUBLIC,), implementation_status=ImplementationStatus.VERIFIED,
+        contract_version="1.0", adapter_function="fake.collect",
+        evidence={"accepted": True})
+
+    class Caps:
+        def resolve(self, name):
+            return fake_collect if name == "fake.collect" else None
+
+    class Adapters:
+        def list(self):
+            return [Entry()]
+
+    class Reg:
+        adapters = Adapters()
+        capabilities = Caps()
+
+        def observed_specs(self, connector):
+            return [spec] if connector == "DOUYIN_PUBLIC" else []
+
+    return Reg()
+
+
+def _use_fake_registry(monkeypatch):
+    import app.server as server
+    monkeypatch.setattr(server, "get_registry", lambda: _fake_registry_for_jobs())
+    monkeypatch.setattr(server, "_QUEUE", None)   # 队列缓存了旧 Registry，必须重建
+    return server
+
+
+def test_job_lifecycle(monkeypatch):
+    """SOURCE-06：作业按 Registry 派发 → 排队执行 → 结果可分页拉取。"""
+    _use_fake_registry(monkeypatch)
     c = app.test_client()
 
-    r = c.post("/v1/jobs", json={"externalContentId": "abc", "maxItems": 4, "jobId": "j-test-1"})
+    r = c.post("/v1/jobs", json={
+        "connectorCode": "DOUYIN_PUBLIC", "capabilityCode": "COMMENT",
+        "accessMode": "PUBLIC", "externalContentId": "abc",
+        "maxItems": 4, "jobId": "j-test-1",
+    })
     assert r.status_code == 202
     job_id = r.get_json()["jobId"]
 
-    # 后台线程执行，轮询至结束
     status = None
     for _ in range(50):
         s = c.get(f"/v1/jobs/{job_id}").get_json()
         status = s["status"]
-        if status in ("SUCCEEDED", "FAILED"):
+        if status in ("SUCCEEDED", "FAILED", "PARTIAL"):
             break
         time.sleep(0.1)
     assert status == "SUCCEEDED", f"作业未完成: {status}"
 
     res = c.get(f"/v1/jobs/{job_id}/result").get_json()
-    assert len(res["items"]) == 4
+    assert len(res["items"]) == 1
     assert res["done"] is True
     assert res["items"][0]["dedupStrategy"] == "CID"
+    assert res["items"][0]["externalCommentId"] == "c1"
 
 
-def test_job_idempotent():
+def test_job_idempotent(monkeypatch):
+    _use_fake_registry(monkeypatch)
     c = app.test_client()
-    body = {"externalContentId": "xyz", "maxItems": 2, "jobId": "j-idem"}
-    assert c.post("/v1/jobs", json=body).get_json()["jobId"] == "j-idem"
-    # 重复提交同一 jobId：返回既有作业，不新建
+    body = {"connectorCode": "DOUYIN_PUBLIC", "capabilityCode": "COMMENT",
+            "externalContentId": "xyz", "maxItems": 2, "jobId": "j-idem"}
+
+    first = c.post("/v1/jobs", json=body)
+    assert first.status_code == 202
+    assert first.get_json()["created"] is True
+
     second = c.post("/v1/jobs", json=body)
     assert second.status_code == 202
     assert second.get_json()["jobId"] == "j-idem"
+    assert second.get_json()["created"] is False, "重复提交不得重复入队"
+
+
+def test_job_requires_dispatch_target():
+    """没有 connectorCode / capabilityCode 不再默认跑 STUB——那是 fail-open。"""
+    c = app.test_client()
+    r = c.post("/v1/jobs", json={"externalContentId": "abc"})
+    assert r.status_code == 400
+    assert r.get_json()["code"] == "PARAM_INVALID"
+
+
+def test_job_stub_rejected_by_default(monkeypatch):
+    """真实 Registry 里的 STUB 是链路验证替身，生产不允许执行。"""
+    import app.server as server
+    monkeypatch.setattr(server, "_QUEUE", None)
+    monkeypatch.delenv("COLLECTION_ALLOW_STUB", raising=False)
+
+    c = app.test_client()
+    r = c.post("/v1/jobs", json={"connectorCode": "STUB_PUBLIC", "capabilityCode": "COMMENT",
+                                 "externalContentId": "abc"})
+    assert r.status_code == 403
+    assert r.get_json()["code"] == "STUB_NOT_ALLOWED"
+
+
+def test_job_unknown_connector(monkeypatch):
+    c = app.test_client()
+    r = c.post("/v1/jobs", json={"connectorCode": "NOPE", "capabilityCode": "COMMENT",
+                                 "externalContentId": "abc"})
+    assert r.status_code == 404
+    assert r.get_json()["code"] == "CONNECTOR_NOT_FOUND"
 
 
 def test_missing_external_id_rejected():
     c = app.test_client()
-    r = c.post("/v1/jobs", json={})
+    r = c.post("/v1/jobs", json={"connectorCode": "DOUYIN_PUBLIC",
+                                 "capabilityCode": "COMMENT"})
     assert r.status_code == 400
-    assert r.get_json()["code"] == 40001
+    assert r.get_json()["code"] == "PARAM_INVALID"
 
 
 def test_unknown_job_returns_404():
     c = app.test_client()
     assert c.get("/v1/jobs/nope").status_code == 404
+    assert c.post("/v1/jobs/nope/cancel").status_code == 404
 
 
 # ----------------------------------------------------------------------

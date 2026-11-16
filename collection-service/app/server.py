@@ -44,9 +44,7 @@ from __future__ import annotations
 import os
 import sys
 import threading
-import time
 import uuid
-from dataclasses import dataclass, field
 from typing import Any
 
 # 允许 `python app/server.py` 直接运行：把服务根目录加入 sys.path，
@@ -55,35 +53,33 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from flask import Flask, jsonify, request  # noqa: E402
 
-from app.adapters.stub import StubAdapter  # noqa: E402
+from app.jobs import dispatch as job_dispatch  # noqa: E402
+from app.jobs.executor import build_runner  # noqa: E402
+from app.jobs.queue import Job, JobQueue, QueueFull  # noqa: E402
 from app.registry.bootstrap import get_registry  # noqa: E402
 from app.registry.capability import SCHEMA_VERSION  # noqa: E402
-from app.registry.errors import classify_exception  # noqa: E402
 
 app = Flask(__name__)
 
-# 作业内存表：进程重启即丢。当前是「单实例 + 短生命周期」的取舍，
+# 作业队列：进程重启即丢。当前是「单实例 + 短生命周期」的取舍，
 # 任务状态的权威记录在 Java 侧的 col_task_item，这里只是执行上下文。
-_JOBS: dict[str, "Job"] = {}
-_LOCK = threading.Lock()
+#
+# 队列是**单 worker** 的：Chrome 只有一个，共享 chrome-data 卷（ADR-007），
+# 并发启动会撞 profile 锁，表现为"采集随机失败"。
+_QUEUE: JobQueue | None = None
+_QUEUE_LOCK = threading.Lock()
 
 _INTERNAL_TOKEN = os.environ.get("INTERNAL_TOKEN", "")
 
 
-@dataclass
-class Job:
-    job_id: str
-    source_code: str
-    external_content_id: str
-    max_items: int
-    status: str = "ACCEPTED"          # ACCEPTED/RUNNING/SUCCEEDED/PARTIAL/FAILED/CANCELLED
-    collected: int = 0
-    total: int = 0
-    items: list[dict[str, Any]] = field(default_factory=list)
-    error_code: str | None = None
-    error_message: str | None = None
-    started_at: float | None = None
-    updated_at: float = field(default_factory=time.time)
+def _job_queue() -> JobQueue:
+    """延迟构造：runner 需要 Registry，而 Registry 首访才装配。"""
+    global _QUEUE
+    with _QUEUE_LOCK:
+        if _QUEUE is None:
+            save_dir = os.environ.get("PY_DATAS_DIR") or "/app/collection-service/datas"
+            _QUEUE = JobQueue(build_runner(get_registry(), save_dir))
+        return _QUEUE
 
 
 # ----------------------------------------------------------------------
@@ -119,43 +115,6 @@ def _require_token():
     if request.headers.get("X-Internal-Token") != _INTERNAL_TOKEN:
         return jsonify({"code": 401, "message": "invalid internal token"}), 401
     return None
-
-
-def _run_job(job: Job) -> None:
-    try:
-        with _LOCK:
-            job.status = "RUNNING"
-            job.started_at = time.time()
-            job.updated_at = job.started_at
-
-        adapter = StubAdapter(content_id=job.external_content_id, comment_count=job.max_items)
-        comments = list(adapter.collect_comments(job.external_content_id, job.max_items))
-
-        with _LOCK:
-            job.items = [
-                {
-                    "externalCommentId": c.external_id,
-                    "parentExternalId": c.parent_external_id,
-                    "text": c.text,
-                    "nickname": c.nickname,
-                    "likes": c.likes,
-                    "ipRegion": c.ip_region,
-                    "publishedAt": c.published_at,
-                    "dedupStrategy": "CID" if c.external_id else "FINGERPRINT",
-                }
-                for c in comments
-            ]
-            job.collected = len(job.items)
-            job.total = len(job.items)
-            job.status = "SUCCEEDED"
-            job.updated_at = time.time()
-    except Exception as e:  # 单作业失败不能影响服务
-        spec = classify_exception(e)
-        with _LOCK:
-            job.status = "FAILED"
-            job.error_code = spec.code
-            job.error_message = str(e)[:500]
-            job.updated_at = time.time()
 
 
 # ----------------------------------------------------------------------
@@ -308,64 +267,107 @@ def adapter_capabilities(connector_code: str):
 
 
 # ----------------------------------------------------------------------
-# 作业（兼容期：仍为 stub 实现）
+# 作业（SOURCE-06：按 Registry 派发 + 单 worker 排队）
 # ----------------------------------------------------------------------
 @app.post("/v1/jobs")
 def create_job():
+    """创建采集作业。
+
+    **提交前就派发一次**：不能跑的作业不该进入队列——
+    让调用方等 30 秒才拿到 409，比立刻拒绝糟糕得多。
+    执行时会再判一次（排队期间 Registry 可能已经变了）。
+    """
     denied = _require_token()
     if denied:
         return denied
 
     body = request.get_json(silent=True) or {}
-    external_id = (body.get("externalContentId") or "").strip()
+    external_id = str(body.get("externalContentId") or "").strip()
     if not external_id:
-        return jsonify({"code": 40001, "message": "externalContentId 不能为空"}), 400
+        return jsonify({"code": "PARAM_INVALID", "message": "externalContentId 不能为空"}), 400
 
-    job_id = body.get("jobId") or str(uuid.uuid4())[:12]
-    with _LOCK:
-        if job_id in _JOBS:
-            # 幂等：同一 jobId 重复提交返回既有作业，不重复执行
-            return jsonify({"jobId": job_id, "status": _JOBS[job_id].status}), 202
-        job = Job(
-            job_id=job_id,
-            source_code=body.get("sourceCode", "STUB"),
-            external_content_id=external_id,
-            max_items=int(body.get("maxItems") or 100),
-        )
-        _JOBS[job_id] = job
+    connector_code = str(body.get("connectorCode") or "").strip()
+    capability_code = str(body.get("capabilityCode") or "").strip()
+    access_mode = str(body.get("accessMode") or "PUBLIC").strip()
+    if not connector_code or not capability_code:
+        return jsonify({
+            "code": "PARAM_INVALID",
+            "message": "connectorCode 与 capabilityCode 必填（派发由 Registry 决定，不接受隐式默认）",
+        }), 400
 
-    threading.Thread(target=_run_job, args=(job,), daemon=True).start()
-    return jsonify({"jobId": job_id, "status": "ACCEPTED"}), 202
+    try:
+        job_dispatch.resolve(get_registry(), connector_code, capability_code, access_mode)
+    except job_dispatch.DispatchError as e:
+        return jsonify(e.as_body()), e.http_status
+
+    job_id = str(body.get("jobId") or uuid.uuid4().hex[:12])
+    max_items = int(body.get("maxItems") or 100)
+    job = Job(
+        job_id=job_id,
+        connector_code=connector_code,
+        capability_code=capability_code,
+        access_mode=access_mode,
+        external_content_id=external_id,
+        max_items=max_items,
+        params=dict(body.get("params") or {}),
+    )
+
+    try:
+        stored, created = _job_queue().submit(job)
+    except QueueFull as e:
+        return jsonify({"code": "QUEUE_FULL", "message": str(e)}), 429
+
+    return jsonify({
+        "jobId": stored.job_id,
+        "status": stored.status,
+        "queuePosition": _job_queue().queue_position(stored),
+        "created": created,
+    }), 202
 
 
 @app.get("/v1/jobs/<job_id>")
 def job_status(job_id: str):
-    job = _JOBS.get(job_id)
+    job = _job_queue().get(job_id)
     if not job:
-        return jsonify({"code": 40400, "message": "作业不存在"}), 404
-    return jsonify({
-        "jobId": job.job_id,
-        "status": job.status,
-        "collected": job.collected,
-        "total": job.total,
-        "errorCode": job.error_code,
-        "errorMessage": job.error_message,
-    })
+        return jsonify({"code": "JOB_NOT_FOUND", "message": "作业不存在"}), 404
+    return jsonify(job.to_status(_job_queue().queue_position(job)))
 
 
 @app.get("/v1/jobs/<job_id>/result")
 def job_result(job_id: str):
-    job = _JOBS.get(job_id)
+    job = _job_queue().get(job_id)
     if not job:
-        return jsonify({"code": 40400, "message": "作业不存在"}), 404
-    cursor = int(request.args.get("cursor", 0))
-    size = int(request.args.get("size", 100))
+        return jsonify({"code": "JOB_NOT_FOUND", "message": "作业不存在"}), 404
+    cursor = max(int(request.args.get("cursor", 0) or 0), 0)
+    size = min(max(int(request.args.get("size", 100) or 100), 1), 1000)
     chunk = job.items[cursor:cursor + size]
     next_cursor = cursor + len(chunk)
     return jsonify({
+        "jobId": job.job_id,
+        "status": job.status,
         "items": chunk,
         "nextCursor": next_cursor,
         "done": next_cursor >= len(job.items),
+    })
+
+
+@app.post("/v1/jobs/<job_id>/cancel")
+def job_cancel(job_id: str):
+    """尽力取消：排队中立即生效；执行中只置标志，结束时丢弃结果。
+
+    **不杀 Chrome**：强杀会留下 profile 锁，下一次启动直接失败。
+    """
+    denied = _require_token()
+    if denied:
+        return denied
+
+    job = _job_queue().cancel(job_id)
+    if job is None:
+        return jsonify({"code": "JOB_NOT_FOUND", "message": "作业不存在"}), 404
+    return jsonify({
+        "jobId": job.job_id,
+        "status": job.status,
+        "cancelRequested": job.cancel_requested,
     })
 
 
