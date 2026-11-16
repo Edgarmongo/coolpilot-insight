@@ -1,5 +1,29 @@
 # 2026-11-16 工作日志
 
+## SOURCE-04-04 设计冻结（纯设计，未改代码/库/Flyway）
+
+SOURCE-03 及其补充审查正式标记完成，方案 A 作为部署基线。
+本轮执行 SOURCE-04-04：Desired 数据结构与状态语义定稿，**只审计+设计+冻结**。
+
+产出：`docs/architecture/collection/SOURCE-04-04-TASKCARD.md`，含六份交付物：
+1. `capability_json` 真实样本：`{"comments":true,"commentStatus":"AVAILABLE",
+   "contentDetail":true,"keywordSearch":false,"keywordStatus":"PENDING"}`（库中唯一一行）。
+2. SOURCE-02 v1.1 字段映射：Desired 只存 code/category/accessModes/desired，
+   implementationStatus/adapterFunction/evidence/contractVersion **一律不写回 Desired**。
+3. 三态转换表：Effective 九条短路规则 + UNKNOWN/UNAVAILABLE 区别。
+4. PENDING 裁决：否决"加进枚举"（C），推荐 v2 结构迁移（A）；PENDING 被拆解为
+   "声明 + UNVERIFIED → UNREGISTERED"。
+5. 版本规则：Schema 主版本 + Contract 主版本 + 可选 Adapter 锁版本；变更即失效缓存。
+6. 八场景 + 4 补充分支的测试设计。
+
+关键红线（用户强调）：
+- **不把 Python Observed 写回 capability_json**（三态会塌成两态，探测失败会静默清空声明）。
+- Effective 是**派生结论**，不落库、不作为第三份事实来源。
+- Collection Service 不可达 → UNKNOWN，**不代表所有平台能力失效**。
+
+待评审确认 4 项（阻塞 04-02/04-03）：迁移方案 A/B、版本匹配深度、
+connectorCode 是否进 Desired 顶层、desired 字段命名。
+
 ## SOURCE-03 补充审查（承接 a0ea22a）
 
 用户在阶段验收时提出五个追问，本轮逐项审查并修复。

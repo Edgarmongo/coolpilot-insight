@@ -33,7 +33,7 @@
 | SOURCE-04-01 | 修正 `AccountVerificationService` 探活目标 | P0 | ✅ **已完成**（补充审查中） |
 | SOURCE-04-02 | Java 消费 Python `/v1/capabilities` | P0 | 待执行 |
 | SOURCE-04-03 | Desired / Observed / Effective 核对 | P0 | 待执行 |
-| SOURCE-04-04 | 修正 `PENDING` 与 `effectiveStatus` 枚举不一致 | P0 | 待执行 |
+| SOURCE-04-04 | 修正 `PENDING` 与 `effectiveStatus` 枚举不一致 | P0 | 🟡 **设计已冻结，待评审**（`SOURCE-04-04-TASKCARD.md`） |
 | SOURCE-04-05 | Collection Service 部署架构决策 | P0 | ✅ **已完成**（ADR-007） |
 | SOURCE-04-06 | Java 数据源管理 API | P1 | 待执行 |
 | SOURCE-04-07 | 数据源管理前端 | P1 | **推迟**（用户明确要求本轮不做前端） |
@@ -154,6 +154,10 @@ cd backend && mvn -s ../deploy/docker/maven-settings.xml -o test
 ---
 
 ### SOURCE-04-04：修正 `PENDING` 与 `effectiveStatus` 枚举不一致 （P0）
+
+> **2026-11-16 更新**：本卡的设计部分已单独冻结为 `SOURCE-04-04-TASKCARD.md`，
+> 含六份交付物（真实样本、字段映射、三态转换表、PENDING 裁决、版本规则、八场景测试设计）。
+> 下面是它的**执行阶段**要点，设计细节以专项文档为准。
 
 **问题**：库中现值
 
