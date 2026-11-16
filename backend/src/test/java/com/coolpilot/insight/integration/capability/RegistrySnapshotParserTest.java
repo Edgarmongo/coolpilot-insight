@@ -45,7 +45,10 @@ class RegistrySnapshotParserTest {
                   "adapters":[{"connectorCode":"X","sourceCode":"DOUYIN",
                                "connectorVersion":"1.0.0","loadStatus":"LOADED",
                                "module":"app.x.adapter","platformScoped":true,"capabilityCount":1,
-                               "capabilities":[{"code":"COMMENT","adapterFunction":"app.x.y"}]}],
+                               "capabilities":[{"code":"COMMENT","category":"COMMENT",
+                                     "accessModes":["PUBLIC"],"implementationStatus":"UNVERIFIED",
+                                     "contractVersion":"1.0",
+                                     "adapterFunction":"app.x.y","semantics":"READ"}]}],
                   "capabilities":[{"schemaVersion":"1.1","sourceCode":"DOUYIN","connectorCode":"X",
                                    "connectorVersion":"1.0.0",
                                    "capabilities":[{"code":"COMMENT","category":"COMMENT",
@@ -208,6 +211,89 @@ class RegistrySnapshotParserTest {
                          "\"semantics\":\"READ\"");
         assertThat(RegistrySnapshotParser.parse(body).error().failure())
                 .isEqualTo(RegistrySnapshotParser.Failure.BROKEN_CAPABILITY);
+    }
+
+    // ------------------------------------------------------------------
+    // O1：adapters[].capabilities 与 capabilities[] 必须互为镜像
+    //
+    // 二者由 Python 的同一次 evaluate_all() 生成，是同一份声明的两个视图。
+    // Java 同时消费：候选码取自 adapters，状态取自 documents。
+    // 分叉会出现"用 A 的清单 + B 的状态"这种无人定义过的组合，故拒绝整份快照。
+    // ------------------------------------------------------------------
+    /** 只替换 adapters 段（文档段之前）。 */
+    private static String inAdapter(String body, String from, String to) {
+        int i = body.indexOf("\"capabilities\":[{\"schemaVersion\"");
+        return body.substring(0, i).replace(from, to) + body.substring(i);
+    }
+
+    /** 只替换 capabilities 文档段。 */
+    private static String inDoc(String body, String from, String to) {
+        int i = body.indexOf("\"capabilities\":[{\"schemaVersion\"");
+        return body.substring(0, i) + body.substring(i).replace(from, to);
+    }
+
+    @Test
+    @DisplayName("O1 两份副本的实现状态不一致 → BROKEN_CAPABILITY（报出两个值）")
+    void rejectsMirrorStatusMismatch() {
+        String body = inDoc(minimal(VALID_ID, "1.1"),
+                "\"implementationStatus\":\"UNVERIFIED\"", "\"implementationStatus\":\"VERIFIED\"");
+
+        var result = RegistrySnapshotParser.parse(body);
+        assertThat(result.ok()).isFalse();
+        assertThat(result.error().failure()).isEqualTo(RegistrySnapshotParser.Failure.BROKEN_CAPABILITY);
+        assertThat(result.error().message())
+                .contains("X/COMMENT").contains("adapters=UNVERIFIED").contains("capabilities=VERIFIED");
+    }
+
+    @Test
+    @DisplayName("O1 能力只出现在 adapters 侧 → BROKEN_CAPABILITY")
+    void rejectsAdapterOnlyCapability() {
+        String body = inAdapter(minimal(VALID_ID, "1.1"),
+                "\"semantics\":\"READ\"}]}],",
+                "\"semantics\":\"READ\"},{\"code\":\"EXTRA\",\"category\":\"X\","
+                        + "\"accessModes\":[\"PUBLIC\"],\"implementationStatus\":\"VERIFIED\","
+                        + "\"contractVersion\":\"1.0\",\"adapterFunction\":\"app.x.z\","
+                        + "\"semantics\":\"READ\"}]}],");
+
+        var result = RegistrySnapshotParser.parse(body);
+        assertThat(result.ok()).isFalse();
+        assertThat(result.error().message()).contains("EXTRA").contains("不在 capabilities[]");
+    }
+
+    @Test
+    @DisplayName("O1 能力只出现在 capabilities 文档侧 → BROKEN_CAPABILITY")
+    void rejectsDocumentOnlyCapability() {
+        String body = inDoc(minimal(VALID_ID, "1.1"),
+                "\"semantics\":\"READ\"}]}]",
+                "\"semantics\":\"READ\"},{\"code\":\"EXTRA\",\"category\":\"X\","
+                        + "\"accessModes\":[\"PUBLIC\"],\"implementationStatus\":\"VERIFIED\","
+                        + "\"contractVersion\":\"1.0\",\"adapterFunction\":\"app.x.z\","
+                        + "\"semantics\":\"READ\"}]}]");
+
+        var result = RegistrySnapshotParser.parse(body);
+        assertThat(result.ok()).isFalse();
+        assertThat(result.error().message()).contains("EXTRA").contains("不在 adapters");
+    }
+
+    @Test
+    @DisplayName("O1 STUB（platformScoped=false）的能力不参与镜像比较")
+    void stubCapabilitiesExcludedFromMirror() {
+        // STUB 在文档侧本来就没有条目，把它的能力拿来比较会导致"正常的快照被判非法"
+        String body = minimal(VALID_ID, "1.1").replace("\"adapters\":[{\"connectorCode\":\"X\",",
+                "\"adapters\":[{\"connectorCode\":\"STUB_PUBLIC\",\"sourceCode\":\"STUB\","
+                        + "\"connectorVersion\":\"1.0.0\",\"loadStatus\":\"LOADED\","
+                        + "\"module\":\"app.stub\",\"platformScoped\":false,\"capabilityCount\":1,"
+                        + "\"capabilities\":[{\"code\":\"SOME_STUB_CAP\",\"category\":\"X\","
+                        + "\"accessModes\":[\"PUBLIC\"],\"implementationStatus\":\"DEGRADED\","
+                        + "\"contractVersion\":\"1.0\",\"adapterFunction\":\"app.stub.x\","
+                        + "\"semantics\":\"READ\"}]},"
+                        + "{\"connectorCode\":\"X\",");
+
+        var result = RegistrySnapshotParser.parse(body);
+        assertThat(result.ok())
+                .as("STUB 不进文档侧，不应因镜像校验被误判：%s",
+                        result.ok() ? "" : result.error().message())
+                .isTrue();
     }
 
     // ------------------------------------------------------------------

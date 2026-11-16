@@ -6,7 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -246,6 +248,18 @@ public final class RegistrySnapshotParser {
             documents.add(doc);
         }
 
+        // 6.5) 两份 capabilities 副本必须互为镜像（O1 审计结论的落点）
+        //
+        // Python 的 snapshot() 用**同一次** evaluate_all() 同时生成 adapters[].capabilities
+        // 与 capabilities[]（文档），对 platformScoped 接入二者是同一份声明。
+        // 但 Java 同时消费两者：候选能力码取自 adapters，状态取自 documents。
+        // 一旦二者分叉，就会出现"用 A 的清单 + B 的状态"这种无人定义过的组合。
+        // 因此这里断言镜像关系，不满足即拒绝整份快照。
+        String mirrorProblem = checkCapabilityMirror(adapters, documents);
+        if (mirrorProblem != null) {
+            return Result.failure(Failure.BROKEN_CAPABILITY, mirrorProblem);
+        }
+
         // 7) 诊断
         List<RegistrySnapshot.Diagnostic> diagnostics = new ArrayList<>();
         for (JsonNode n : diagNodes) {
@@ -291,6 +305,60 @@ public final class RegistrySnapshotParser {
     /** 合法实现状态清单（排序后拼串，保证同输入同报错文案）。 */
     private static final String KNOWN_STATUSES =
             String.join(" / ", CapabilityStatus.ALL.stream().sorted().toList());
+
+    /**
+     * 校验 adapters[].capabilities 与 capabilities[]（文档）互为镜像。
+     *
+     * <p>只比较 {@code platformScoped=true} 的接入：STUB 替身在文档侧本来就没有条目。
+     *
+     * <p>返回 {@code null} 表示一致，否则返回人类可读的差异说明。
+     */
+    private static String checkCapabilityMirror(List<RegistrySnapshot.AdapterView> adapters,
+                                               List<CapabilityDocument> documents) {
+        Map<String, CapabilityDocument> byConnector = new LinkedHashMap<>();
+        for (CapabilityDocument d : documents) {
+            if (d.connectorCode() != null) {
+                byConnector.put(d.connectorCode(), d);
+            }
+        }
+        for (RegistrySnapshot.AdapterView a : adapters) {
+            if (!a.platformScoped()) {
+                continue;
+            }
+            CapabilityDocument doc = byConnector.get(a.connectorCode());
+            if (doc == null) {
+                return "Adapter " + a.connectorCode()
+                        + " 标记为真实平台接入，但 capabilities 中没有对应文档";
+            }
+            Map<String, String> fromAdapter = new LinkedHashMap<>();
+            for (CapabilityItem c : a.capabilities()) {
+                fromAdapter.put(c.code(), c.implementationStatus());
+            }
+            Map<String, String> fromDoc = new LinkedHashMap<>();
+            for (CapabilityItem c : doc.capabilities()) {
+                fromDoc.put(c.code(), c.implementationStatus());
+            }
+            for (Map.Entry<String, String> e : fromAdapter.entrySet()) {
+                if (!fromDoc.containsKey(e.getKey())) {
+                    return "能力 " + a.connectorCode() + "/" + e.getKey()
+                            + " 出现在 adapters[].capabilities，但不在 capabilities[] 文档中";
+                }
+                String docStatus = fromDoc.get(e.getKey());
+                if (!java.util.Objects.equals(e.getValue(), docStatus)) {
+                    return "能力 " + a.connectorCode() + "/" + e.getKey()
+                            + " 的 implementationStatus 两份副本不一致: adapters=" + e.getValue()
+                            + "，capabilities=" + docStatus;
+                }
+            }
+            for (String code : fromDoc.keySet()) {
+                if (!fromAdapter.containsKey(code)) {
+                    return "能力 " + a.connectorCode() + "/" + code
+                            + " 出现在 capabilities[] 文档，但不在 adapters[].capabilities 中";
+                }
+            }
+        }
+        return null;
+    }
 
     /** 诊断用标签：优先 connectorCode，退回 sourceCode。 */
     private static String connectorLabel(CapabilityDocument doc) {

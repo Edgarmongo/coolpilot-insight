@@ -42,12 +42,12 @@
 | 类 | 职责 |
 |---|---|
 | `source/domain/EffectiveStatus` | 冻结八值 + **白名单**准入判据 |
-| `source/domain/EffectiveReason` | 20 值；`REACHABLE` 标识 19 个可达 |
+| `source/domain/EffectiveReason` | 21 值；`REACHABLE` 标识 20 个可达 |
 | `source/domain/EffectiveCapability` | Effective 结果；构造时强制不变量 |
 | `source/domain/DesiredCapability` | Desired 声明（不含任何实现状态） |
 | `source/domain/DesiredCapabilitySet` | Desired 集合 + 查找/判定 |
 | `source/application/DesiredCapabilityParser` | v1/v2 双读 + 确定性映射 |
-| `source/application/CapabilityReconciler` | **核心**：19 步短路核对 |
+| `source/application/CapabilityReconciler` | **核心**：20 步短路核对 |
 | `source/application/AccountAvailability` | 账号可用性窄接口（便于测试与替换） |
 | `source/application/DaoAccountAvailability` | 基于 `ds_account` 的实现 |
 
@@ -73,28 +73,37 @@
 
 ---
 
-## 三、19 步判定顺序（与 EFFECTIVE-REASON §4 逐行一致）
+## 三、20 步判定顺序（与 EFFECTIVE-REASON §4 逐行一致）
+
+> **2026-11-16 修订**：本节曾被历次 FIX 改动拉出偏差（Desired 用错 Reason、
+> 证据闸门只覆盖两个状态、步号仍是 19 步）。现已与
+> `SOURCE-04-04-EFFECTIVE-REASON.md` §四 逐行对齐。**以那份文档为准。**
 
 | 序 | 条件 | status | reason |
 |---|---|---|---|
 | ① | Source 已停用 | `SOURCE_DISABLED` | `SOURCE_DISABLED` |
-| — | Desired 不可解析 | `UNKNOWN` | `SCHEMA_UNSUPPORTED` |
-| ② | 快照 UNAVAILABLE | `UNKNOWN` | `REGISTRY_UNREACHABLE` |
+| ② | 快照 UNAVAILABLE（无任何历史） | `UNKNOWN` | `REGISTRY_UNREACHABLE` |
 | ③④ | 快照 STALE | `UNKNOWN` | 按失败分类：`REGISTRY_UNREACHABLE` / `SCHEMA_UNSUPPORTED` / `OBSERVED_STALE` |
-| ⑤ | Desired 未声明或 DISABLED | `UNREGISTERED` | `NOT_DECLARED` |
-| ⑥ | 接入未加载 / 非真实平台接入 | `ADAPTER_MISSING` | `ADAPTER_NOT_LOADED` |
-| ⑦ | Connector 版本与锁定不符 | `VERSION_MISMATCH` | `CONNECTOR_VERSION_MISMATCH` |
-| ⑧ | 能力契约主版本不兼容 | `VERSION_MISMATCH` | `CONTRACT_VERSION_MISMATCH` |
-| ⑨⑩ | Registry 无此能力 | `UNREGISTERED` | 有函数诊断 → `FUNCTION_UNRESOLVED`；否则 `CAPABILITY_NOT_REGISTERED` |
-| ⑪ | Python 显式禁用 | `UNREGISTERED` | `CAPABILITY_DISABLED` |
-| ⑫ | 平台不支持 | `UNREGISTERED` | `PLATFORM_UNSUPPORTED` |
-| ⑬ | 访问模式不覆盖 | `UNREGISTERED` | `ACCESS_MODE_UNSUPPORTED` |
-| ⑭ | 从未验证（evidence 为 null） | `UNKNOWN` | `VERIFICATION_REQUIRED` |
-| ⑮ | 证据过期 | `UNKNOWN` | `EVIDENCE_EXPIRED` |
-| ⑯ | 证据无效 | `UNKNOWN` | `EVIDENCE_INVALID` |
-| ⑰ | 仅 AUTHENTICATED 且无账号 | `ACCOUNT_REQUIRED` | `ACCOUNT_REQUIRED` |
-| ⑱ | 可用但受限 | `DEGRADED` | `DEGRADED` |
-| ⑲ | 全部通过 | `AVAILABLE` | `NONE` |
+| ⑤ | **Desired 配置不可解析** | `UNKNOWN` | **`DESIRED_UNPARSEABLE`**（不是 `SCHEMA_UNSUPPORTED`；排在快照之后，因为服务不可达是更前置的未知） |
+| ⑥ | Desired 未声明或 DISABLED | `UNREGISTERED` | `NOT_DECLARED` |
+| ⑦ | 接入未加载 / 非真实平台接入 | `ADAPTER_MISSING` | `ADAPTER_NOT_LOADED` |
+| ⑧ | Connector 版本与锁定不符 | `VERSION_MISMATCH` | `CONNECTOR_VERSION_MISMATCH` |
+| ⑨ | 能力契约主版本不兼容 | `VERSION_MISMATCH` | `CONTRACT_VERSION_MISMATCH` |
+| ⑩⑪ | Registry 无此能力 | `UNREGISTERED` | 有函数诊断 → `FUNCTION_UNRESOLVED`；否则 `CAPABILITY_NOT_REGISTERED` |
+| ⑫ | Python 显式禁用 | `UNREGISTERED` | `CAPABILITY_DISABLED` |
+| ⑬ | 平台不支持 | `UNREGISTERED` | `PLATFORM_UNSUPPORTED` |
+| ⑭ | 访问模式不覆盖 | `UNREGISTERED` | `ACCESS_MODE_UNSUPPORTED` |
+| ⑮⑯⑰ | **证据闸门（对所有未被 ⑫⑬ 拦下的状态生效）** | `UNKNOWN` | 证据缺失 → `VERIFICATION_REQUIRED`（含 `IMPLEMENTED` / `UNVERIFIED`）；过期 → `EVIDENCE_EXPIRED`；无效 → `EVIDENCE_INVALID` |
+| ⑱ | 仅 AUTHENTICATED 且无账号 | `ACCOUNT_REQUIRED` | `ACCOUNT_REQUIRED` |
+| ⑲ | 可用但受限（须持有已接受证据） | `DEGRADED` | `DEGRADED` |
+| ⑳ | 全部通过（仅 `VERIFIED` + 证据已接受） | `AVAILABLE` | `NONE` |
+
+**补充两条 2026-11-16 的硬约束**：
+
+- `implementationStatus` 不在契约六值内 / 缺失 / `null` → **解析阶段即拒绝整份快照**
+  （`BROKEN_CAPABILITY`），不进核对；
+- `adapters[].capabilities` 与 `capabilities[]` 必须**互为镜像**，不一致即拒绝整份快照
+  （避免"用 A 的清单 + B 的状态"）。
 
 **候选集合取 Desired ∪ Observed**：只看 Desired 会漏掉 `NOT_DECLARED`
 （Python 有、Java 没登记）；只看 Observed 会漏掉"声明了但没加载"。
@@ -120,34 +129,35 @@
 
 ---
 
-## 五、19 个 reason 的测试对照
+## 五、20 个可达 reason 的测试对照
 
 | # | reason | 测试方法 | 构造 |
 |---|---|---|---|
 | 1 | `NONE` | `reasonNone` | 全条件通过 |
 | 2 | `SOURCE_DISABLED` | `reasonSourceDisabled` | `status=DISABLED` |
 | 3 | `REGISTRY_UNREACHABLE` | `reasonRegistryUnreachable` | UNAVAILABLE |
-| 4 | `SCHEMA_UNSUPPORTED` | `reasonSchemaUnsupported` / `...ByDesired` | STALE+协议失败 / Desired 不可解析 |
+| 4 | `SCHEMA_UNSUPPORTED` | `reasonSchemaUnsupported` | STALE + 协议类失败 |
 | 5 | `OBSERVED_STALE` | `reasonObservedStale` | STALE 无失败信息 |
-| 6 | `NOT_DECLARED` | `reasonNotDeclared` / `...BecauseDisabled` | Desired 空 / DISABLED |
-| 7 | `ADAPTER_NOT_LOADED` | `reasonAdapterNotLoaded` / `...NotPlatformScoped` | loadStatus=FAILED / platformScoped=false |
-| 8 | `CONNECTOR_VERSION_MISMATCH` | `reasonConnectorVersionMismatch` | 锁 1.0.0 vs 实际 1.1.0 |
-| 9 | `CONTRACT_VERSION_MISMATCH` | `reasonContractVersionMismatch` | contractVersion=2.0 |
-| 10 | `CAPABILITY_NOT_REGISTERED` | `reasonCapabilityNotRegistered` | Observed 无 + 无诊断 |
-| 11 | `FUNCTION_UNRESOLVED` | `reasonFunctionUnresolved` | Observed 无 + 函数诊断 |
-| 12 | `FUNCTION_NOT_CALLABLE` | **不可达性测试** | 见下 |
-| 13 | `CAPABILITY_DISABLED` | `reasonCapabilityDisabled` | implStatus=DISABLED |
-| 14 | `PLATFORM_UNSUPPORTED` | `reasonPlatformUnsupported` | implStatus=UNSUPPORTED |
-| 15 | `ACCESS_MODE_UNSUPPORTED` | `reasonAccessModeUnsupported` | Desired=AUTH，Observed=PUBLIC |
-| 16 | `VERIFICATION_REQUIRED` | `reasonVerificationRequired` | UNVERIFIED + evidence=null |
-| 17 | `EVIDENCE_EXPIRED` | `reasonEvidenceExpired` | rejected EVIDENCE_EXPIRED |
-| 18 | `EVIDENCE_INVALID` | `reasonEvidenceInvalid` | rejected EVIDENCE_TAMPERED |
-| 19 | `ACCOUNT_REQUIRED` | `reasonAccountRequired` | 仅 AUTHENTICATED + 无账号 |
-| 20 | `DEGRADED` | `reasonDegraded` | implStatus=DEGRADED |
+| 6 | **`DESIRED_UNPARSEABLE`** | `desiredUnparseableIsNotSchemaUnsupported` / `staleOutranksDesiredUnparseable` | Desired 主版本 3.0（FRESH） / 同左 + STALE |
+| 7 | `NOT_DECLARED` | `reasonNotDeclared` / `...BecauseDisabled` | Desired 空 / DISABLED |
+| 8 | `ADAPTER_NOT_LOADED` | `reasonAdapterNotLoaded` / `...NotPlatformScoped` | loadStatus=FAILED / platformScoped=false |
+| 9 | `CONNECTOR_VERSION_MISMATCH` | `reasonConnectorVersionMismatch` | 锁 1.0.0 vs 实际 1.1.0 |
+| 10 | `CONTRACT_VERSION_MISMATCH` | `reasonContractVersionMismatch` | contractVersion=2.0 |
+| 11 | `CAPABILITY_NOT_REGISTERED` | `reasonCapabilityNotRegistered` | Observed 无 + 无诊断 |
+| 12 | `FUNCTION_UNRESOLVED` | `reasonFunctionUnresolved` | Observed 无 + 函数诊断 |
+| 13 | `FUNCTION_NOT_CALLABLE` | **不可达性测试** | 见下 |
+| 14 | `CAPABILITY_DISABLED` | `reasonCapabilityDisabled` | implStatus=DISABLED |
+| 15 | `PLATFORM_UNSUPPORTED` | `reasonPlatformUnsupported` | implStatus=UNSUPPORTED |
+| 16 | `ACCESS_MODE_UNSUPPORTED` | `reasonAccessModeUnsupported` | Desired=AUTH，Observed=PUBLIC |
+| 17 | `VERIFICATION_REQUIRED` | `reasonVerificationRequired` / `implWithoutEvidence` / `implWithAcceptedEvidenceStillNotAvailable` / `unverifiedWithAcceptedEvidenceIsNotAvailable` / `verifiedWithoutEvidence` | `UNVERIFIED`+无证据 / `IMPLEMENTED` 任意证据 / `UNVERIFIED`+已接受证据 / `VERIFIED` 缺证据 |
+| 18 | `EVIDENCE_EXPIRED` | `reasonEvidenceExpired` | rejected EVIDENCE_EXPIRED |
+| 19 | `EVIDENCE_INVALID` | `reasonEvidenceInvalid` / `verifiedWithTamperedEvidence` | rejected EVIDENCE_TAMPERED |
+| 20 | `ACCOUNT_REQUIRED` | `reasonAccountRequired` | 仅 AUTHENTICATED + 无账号 |
+| 21 | `DEGRADED` | `reasonDegraded` / `degradedEvidenceMatrix` | implStatus=DEGRADED + 证据已接受（其余三种证据态 → `UNKNOWN`） |
 
 **`FUNCTION_NOT_CALLABLE` 的不可达性测试**（`functionNotCallableIsUnreachable`）：
 
-1. 枚举层：`ALL` 有 20 个、`REACHABLE` 有 19 个、`REACHABLE` 不含它；
+1. 枚举层：`ALL` 有 21 个、`REACHABLE` 有 20 个、`REACHABLE` 不含它；
 2. 行为层：用三种不同 `detail` 文本（含"引用指向的对象不可调用"）构造
    `INVALID_IMPLEMENTATION` 诊断，**一律**产出 `FUNCTION_UNRESOLVED`。
 

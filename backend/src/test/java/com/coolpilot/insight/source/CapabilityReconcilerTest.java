@@ -563,6 +563,51 @@ class CapabilityReconcilerTest {
     }
 
     @Test
+    @DisplayName("F1-3 DEGRADED + 证据不合格的 reason：构造期就拒绝 executable=true")
+    void degradedWithBadReasonCannotBeConstructedExecutable() {
+        // 即使有人手工拼一个 DEGRADED + EVIDENCE_INVALID，也不允许标成可执行
+        for (String bad : List.of(EffectiveReason.EVIDENCE_INVALID,
+                EffectiveReason.EVIDENCE_EXPIRED, EffectiveReason.VERIFICATION_REQUIRED)) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                    new EffectiveCapability("COMMENT", "COMMENT", EffectiveStatus.DEGRADED,
+                            bad, true, "非法"))
+                    .as("DEGRADED + %s + executable=true 必须构造失败", bad)
+                    .isInstanceOf(IllegalArgumentException.class);
+
+            // 标成不可执行则是合法的——允许存在"降级但已失效"的记录供诊断
+            var cap = new EffectiveCapability("COMMENT", "COMMENT",
+                    EffectiveStatus.DEGRADED, bad, false, "已失效的降级记录");
+            assertThat(cap.executable()).isFalse();
+        }
+    }
+
+    @Test
+    @DisplayName("F1-3 DEGRADED 的证据准入矩阵：只有证据有效才可降级执行")
+    void degradedEvidenceMatrix() throws Exception {
+        // 4 个问题逐一回答：
+        //   证据有效   -> DEGRADED / DEGRADED / executable=true
+        //   证据缺失   -> UNKNOWN / VERIFICATION_REQUIRED / false
+        //   证据过期   -> UNKNOWN / EVIDENCE_EXPIRED / false
+        //   证据无效   -> UNKNOWN / EVIDENCE_INVALID / false
+        record Case(String name, CapabilityItem.Evidence ev, String status, String reason, boolean exec) {
+        }
+        for (Case c : List.of(
+                new Case("有效", goodEvidence(), EffectiveStatus.DEGRADED, EffectiveReason.DEGRADED, true),
+                new Case("缺失", null, EffectiveStatus.UNKNOWN, EffectiveReason.VERIFICATION_REQUIRED, false),
+                new Case("过期", rejectedEvidence("EVIDENCE_EXPIRED"),
+                        EffectiveStatus.UNKNOWN, EffectiveReason.EVIDENCE_EXPIRED, false),
+                new Case("无效", rejectedEvidence("EVIDENCE_TAMPERED"),
+                        EffectiveStatus.UNKNOWN, EffectiveReason.EVIDENCE_INVALID, false))) {
+
+            var r = one(commentDesired(),
+                    fresh(snapshotWith(cap("COMMENT", "DEGRADED", c.ev()))));
+            assertThat(r.effectiveStatus()).as("DEGRADED + 证据%s", c.name()).isEqualTo(c.status());
+            assertThat(r.effectiveReason()).as("DEGRADED + 证据%s", c.name()).isEqualTo(c.reason());
+            assertThat(r.executable()).as("DEGRADED + 证据%s", c.name()).isEqualTo(c.exec());
+        }
+    }
+
+    @Test
     @DisplayName("F1-2 未知实现状态（绕过解析器构造）→ 不可执行")
     void unknownImplementationStatusNeverAvailable() {
         // 解析器已拒绝非法值（RegistrySnapshotParserTest 覆盖）；
@@ -758,7 +803,7 @@ class CapabilityReconcilerTest {
     // N7-5：白名单准入
     // ==================================================================
     @Test
-    @DisplayName("N7-5 UNKNOWN 一律不可执行；只有 AVAILABLE+NONE 与 DEGRADED 可执行")
+    @DisplayName("N7-5 UNKNOWN 一律不可执行；只有 AVAILABLE+NONE 与 DEGRADED+DEGRADED 可执行")
     void n75WhitelistOnly() {
         assertThat(EffectiveStatus.allowsExecution(EffectiveStatus.AVAILABLE, EffectiveReason.NONE))
                 .isTrue();
@@ -767,6 +812,16 @@ class CapabilityReconcilerTest {
                 .isFalse();
         assertThat(EffectiveStatus.allowsExecution(EffectiveStatus.DEGRADED, EffectiveReason.DEGRADED))
                 .isTrue();
+
+        // F1-3：DEGRADED 也必须 reason 匹配。
+        // 原实现只看 status，导致"降级"成了证据无效也能跑的通行证。
+        for (String bad : List.of(EffectiveReason.EVIDENCE_INVALID,
+                EffectiveReason.EVIDENCE_EXPIRED, EffectiveReason.VERIFICATION_REQUIRED,
+                EffectiveReason.NONE, EffectiveReason.ACCOUNT_REQUIRED)) {
+            assertThat(EffectiveStatus.allowsExecution(EffectiveStatus.DEGRADED, bad))
+                    .as("DEGRADED + %s 不得可执行", bad)
+                    .isFalse();
+        }
         for (String s : List.of(EffectiveStatus.UNKNOWN, EffectiveStatus.UNREGISTERED,
                 EffectiveStatus.ADAPTER_MISSING, EffectiveStatus.VERSION_MISMATCH,
                 EffectiveStatus.ACCOUNT_REQUIRED, EffectiveStatus.SOURCE_DISABLED)) {

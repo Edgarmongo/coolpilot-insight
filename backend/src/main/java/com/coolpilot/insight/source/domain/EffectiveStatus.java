@@ -55,7 +55,18 @@ public final class EffectiveStatus {
             // 可用还必须无任何阻断原因
             return EffectiveReason.NONE.equals(reason);
         }
-        // 降级执行：状态本身即代表"可用但受限"
-        return DEGRADED.equals(status);
+        if (DEGRADED.equals(status)) {
+            // 降级执行也要求 reason 匹配。
+            //
+            // 原实现 `return DEGRADED.equals(status)` 忽略了 reason，于是
+            // DEGRADED + EVIDENCE_INVALID / EVIDENCE_EXPIRED / VERIFICATION_REQUIRED
+            // 都会被判为可执行——"降级"成了"证据无效也能跑"的通行证
+            // （SOURCE-04-03 独立复核 F1-3）。
+            //
+            // 证据矩阵（04-04 §3.2.1）规定：DEGRADED 必须持有已接受证据。
+            // 证据不合格时推导层已把它变成 UNKNOWN，此处的 reason 校验是最后一道防线。
+            return EffectiveReason.DEGRADED.equals(reason);
+        }
+        return false;
     }
 }

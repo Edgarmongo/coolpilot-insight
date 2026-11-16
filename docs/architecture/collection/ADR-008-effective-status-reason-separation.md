@@ -226,11 +226,19 @@ effectiveReason  = VERIFICATION_REQUIRED
 实现要求：
 
 ```java
-// 唯一允许执行的判据：白名单 + reason 必须为 NONE
-boolean executable = "AVAILABLE".equals(effectiveStatus)
-                  && "NONE".equals(effectiveReason)
-                  || "DEGRADED".equals(effectiveStatus);
+// 唯一允许执行的判据：白名单，且**两个分支都要求 reason 匹配**
+boolean executable = ("AVAILABLE".equals(effectiveStatus)
+                      && "NONE".equals(effectiveReason))
+                  || ("DEGRADED".equals(effectiveStatus)
+                      && "DEGRADED".equals(effectiveReason));
 ```
+
+> **2026-11-16 修订（F1-3）**：原示例写作 `|| "DEGRADED".equals(effectiveStatus)`，
+> **只看 status 不看 reason**，等于让 `DEGRADED + EVIDENCE_INVALID` /
+> `DEGRADED + EVIDENCE_EXPIRED` / `DEGRADED + VERIFICATION_REQUIRED` 都能执行
+> ——"降级"变成了"证据无效也能跑"的通行证，与 §4.3.1 的证据闸门自相矛盾。
+> 实现按 ADR 原文照做，所以松的是**本 ADR 的示例**，不是实现。
+> 现已收紧为 reason 必须为 `DEGRADED`，并由 `EffectiveCapability` 的构造期不变量强制执行。
 
 **不得**写成语义反转的形式（如 `!"UNREGISTERED".equals(status)`），
 那会把 `UNKNOWN` 及未来新增的状态默认放行——这是最危险的一类缺陷。

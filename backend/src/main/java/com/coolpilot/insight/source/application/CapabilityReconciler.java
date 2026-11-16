@@ -98,7 +98,7 @@ public class CapabilityReconciler {
     }
 
     // ------------------------------------------------------------------
-    // 全局短路（§4 第 1~4 步）
+    // 全局短路（§4 第 1~5 步）
     // ------------------------------------------------------------------
     private Blocked globalBlock(DataSource source, DesiredCapabilitySet desired,
                                 SnapshotCache.SnapshotRead read) {
@@ -146,7 +146,7 @@ public class CapabilityReconciler {
     }
 
     // ------------------------------------------------------------------
-    // 逐条判定（§4 第 5~19 步）
+    // 逐条判定（§4 第 6~20 步）
     // ------------------------------------------------------------------
     private EffectiveCapability evaluate(DesiredCapabilitySet desired,
                                          RegistrySnapshot snap,
