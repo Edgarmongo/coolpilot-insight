@@ -89,9 +89,42 @@ Chrome 用户数据目录使用与 backend **同一个** named volume `chrome-da
   将来从子进程切到容器采集时需要迁移 profile，徒增复杂度。
 - **代价（硬约束）**：**同一个 Chrome profile 不能被两个 Chrome 进程同时占用**。
   因此 collection 容器与 backend 容器**不得并发启动 Chrome**。
-  当前不构成问题——collection 容器目前只承载 Registry 查询，采集执行尚未切换；
-  SOURCE-06 切换时必须显式停掉子进程链路。
+  SOURCE-06 之后采集执行已切到该容器（`app.collection.executor=http`），
+  因此这条约束从"将来时"变成"现在时"：backend 不得再起采集子进程，
+  回滚到 `executor=process` 时必须先停掉 collection 的采集作业。
 - **兜底**：当前生产是匿名态采集（`use_login=False`），即使 profile 冲突也只影响登录态采集。
+
+### 4.2.1 单副本部署（**硬约束**，SOURCE-04 后续 C-4）
+
+`collection-service` **只允许部署 1 个副本**。这不是建议，是当前实现的前提。
+
+**原因**：采集作业队列 `app/jobs/queue.py` 是**进程内**队列（一个 worker 线程 +
+`queue.Queue`），它只在**单进程内**保证"任一时刻只有一个 Chrome 在跑"。
+队列不跨进程、不跨容器，也没有外部分布式锁。
+
+**多副本会发生什么**：
+
+1. 两个副本各自从 `POST /v1/jobs` 收作业，各自起一个 Chrome；
+2. 两个 Chrome 抢同一个 `chrome-data` volume 的 profile → `SingletonLock` 冲突；
+3. 表现为**间歇性**浏览器启动失败（不是每次必现），
+   而作业状态会被记为 `FAILED / BROWSER_ERROR`，看起来像"平台风控"，很难归因。
+
+**注意区分两个不同的约束**：
+
+| 约束 | 现状 | 说明 |
+|---|---|---|
+| backend 多副本 | **允许** | backend 无状态，靠 DB 行锁/租约协调 |
+| collection 多副本 | **禁止** | 进程内队列 + 共享 Chrome profile |
+
+**未来要扩容必须同时具备**（缺一不可）：
+
+1. 跨进程作业协调（外部队列 / 选主 / DB 租约），保证全局只有一个 Chrome；
+2. Chrome profile 按副本隔离（每副本独立 volume），并解决登录态的分配问题；
+3. 作业状态从内存迁到持久存储，否则副本重启会丢在途作业；
+4. 上述任一缺失时，扩容只会把"串行"变成"随机失败"。
+
+**当前不做**：不修改副本数、不改 compose 部署结构、不引入外部队列。
+本节的交付物只有这条约束本身。
 
 ### 4.3 服务间认证
 

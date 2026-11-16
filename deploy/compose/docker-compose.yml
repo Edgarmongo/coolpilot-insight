@@ -76,6 +76,10 @@ services:
       - cpi-net
 
   # ---------------- Collection Service（方案 A：独立容器） ----------------
+  # ⚠️ 硬约束：本服务只能部署 1 个副本，不要用 --scale 扩容。
+  # 作业队列是进程内队列（app/jobs/queue.py），只在单进程内保证"同时只有一个 Chrome"；
+  # 多副本会各起一个 Chrome 抢同一个 chrome-data profile，表现为间歇性浏览器启动失败。
+  # 详见 docs/architecture/collection/ADR-007-collection-service-deployment.md §4.2.1
   collection:
     build:
       context: ../..
