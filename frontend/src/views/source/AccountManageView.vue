@@ -35,9 +35,11 @@
       <el-table-column label="最近验证" width="180">
         <template #default="{ row }">{{ row.lastVerifiedAt || '从未验证' }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="170" fixed="right">
+      <el-table-column label="操作" width="220" fixed="right">
         <template #default="{ row }">
           <el-button v-if="hasPerm('source:account:manage')" size="small" link type="primary"
+                     @click="doVerify(row)">验证</el-button>
+          <el-button v-if="hasPerm('source:account:manage')" size="small" link
                      @click="openEdit(row)">编辑</el-button>
           <el-button v-if="hasPerm('source:account:manage')" size="small" link
                      :type="row.status === 'ACTIVE' ? 'warning' : 'success'"
@@ -156,6 +158,18 @@ async function save() {
   } finally {
     saving.value = false
   }
+}
+
+async function doVerify(row) {
+  const res = await accountApi.verify(row.id)
+  const d = res.data || {}
+  // 明确告知验证范围，避免把「配置有效」误解为「平台确认有效」
+  if (d.success) {
+    ElMessage.success(`验证通过（范围：${d.scope === 'CONFIG_ONLY' ? '仅凭证配置' : d.scope}）`)
+  } else {
+    ElMessage.warning(`${d.message || '验证未通过'}${d.errorCode ? ' [' + d.errorCode + ']' : ''}`)
+  }
+  await load()
 }
 
 async function toggle(row) {

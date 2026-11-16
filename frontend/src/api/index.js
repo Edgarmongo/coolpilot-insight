@@ -139,6 +139,7 @@ export const accountApi = {
   update: (id, data) => request.put(`/v1/source/accounts/${id}`, data),
   setStatus: (id, status) => request.patch(`/v1/source/accounts/${id}/status`, { status }),
   usage: (id) => request.get(`/v1/source/accounts/${id}/usage`),
+  verify: (id) => request.post(`/v1/source/accounts/${id}/verify`),
 }
 
 export const sourceApi = {

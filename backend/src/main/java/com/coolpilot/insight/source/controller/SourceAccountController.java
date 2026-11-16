@@ -2,6 +2,7 @@ package com.coolpilot.insight.source.controller;
 
 import com.coolpilot.insight.common.security.RequireRole;
 import com.coolpilot.insight.common.web.Result;
+import com.coolpilot.insight.source.application.AccountVerificationService;
 import com.coolpilot.insight.source.application.SourceAccountService;
 import com.coolpilot.insight.source.domain.SourceAccount;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,8 +31,11 @@ import java.util.Map;
 public class SourceAccountController {
 
     private final SourceAccountService service;
+    private final AccountVerificationService verificationService;
 
-    public SourceAccountController(SourceAccountService service) {
+    public SourceAccountController(SourceAccountService service,
+                                   AccountVerificationService verificationService) {
+        this.verificationService = verificationService;
         this.service = service;
     }
 
@@ -70,5 +74,12 @@ public class SourceAccountController {
     @GetMapping("/{id}/usage")
     public Result<Map<String, Object>> usage(@PathVariable Long id) {
         return Result.ok(service.usage(id));
+    }
+
+    /** 触发授权验证。返回 scope=CONFIG_ONLY，表示只确认凭证配置与可达性。 */
+    @RequireRole(role = 1)
+    @PostMapping("/{id}/verify")
+    public Result<AccountVerificationService.VerifyResult> verify(@PathVariable Long id) {
+        return Result.ok(verificationService.verify(id));
     }
 }
