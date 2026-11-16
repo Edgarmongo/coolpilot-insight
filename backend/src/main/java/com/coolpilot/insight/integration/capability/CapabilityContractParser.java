@@ -119,7 +119,8 @@ public final class CapabilityContractParser {
         return out;
     }
 
-    private static CapabilityDocument parseDocument(JsonNode node) {
+    /** 解析单个平台能力文档。同包内由统一快照解析器复用。 */
+    static CapabilityDocument parseDocument(JsonNode node) {
         String schemaVersion = text(node, "schemaVersion");
         String sourceCode = text(node, "sourceCode");
         String connectorCode = text(node, "connectorCode");
@@ -135,7 +136,8 @@ public final class CapabilityContractParser {
         return new CapabilityDocument(schemaVersion, sourceCode, connectorCode, connectorVersion, capabilities);
     }
 
-    private static CapabilityItem parseItem(JsonNode cap) {
+    /** 解析单条能力。同包内由统一快照解析器复用。 */
+    static CapabilityItem parseItem(JsonNode cap) {
         List<String> accessModes = new ArrayList<>();
         JsonNode modes = cap.get("accessModes");
         if (modes != null && modes.isArray()) {
@@ -233,7 +235,8 @@ public final class CapabilityContractParser {
         return out;
     }
 
-    private static String text(JsonNode node, String field) {
+    /** 取文本字段；缺失或 null 返回 null。 */
+    static String text(JsonNode node, String field) {
         JsonNode v = node.get(field);
         return (v == null || v.isNull()) ? null : v.asText();
     }

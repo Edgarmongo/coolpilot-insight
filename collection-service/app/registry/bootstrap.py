@@ -30,12 +30,24 @@ from app.registry.evidence import (
     EvidenceVerifier,
     implementation_hash,
     read_records,
+    sha256_of,
     ttl_days,
 )
 
 #: 验证证据文件位置（随代码分发，默认是空证据）。
 EVIDENCE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                               "verification_evidence.json")
+
+#: 统一快照的契约版本（与 SOURCE-02 Schema 对齐，独立于 Python 包版本）。
+SNAPSHOT_CONTRACT_VERSION = SCHEMA_VERSION
+
+
+def _utc_now() -> str:
+    """ISO8601 UTC，秒级精度。**只用于观察，不参与 snapshotId 计算。**"""
+    from datetime import datetime, timezone
+
+    return (datetime.now(timezone.utc).replace(microsecond=0)
+            .isoformat().replace("+00:00", "Z"))
 
 
 @dataclass
@@ -296,6 +308,85 @@ class CollectionRegistry:
                 "adapterFunction": None,
             })
         return out
+
+    # ------------------------------------------------------------------
+    # 统一快照（SOURCE-04-02 §A：capabilities 与 diagnostics 必须同源）
+    # ------------------------------------------------------------------
+    def snapshot(self) -> dict[str, Any]:
+        """产出**一份不可变的 Registry 快照**。
+
+        与分别调用 :meth:`v1_documents` 与 :meth:`diagnostics` 的区别：
+
+        * 这里只做**一次** ``evaluate_all()``，适配器清单、能力文档、诊断
+          全部由这同一份评估结果派生，不存在"两次计算之间 Registry 变了"的窗口；
+        * ``snapshotId`` 由**规范化后的快照内容**计算，不是时间戳——
+          内容不变则 id 不变，任一变化（Adapter 加载状态 / 能力 / 证据 / 诊断）
+          都会换 id；
+        * ``generatedAt`` **不参与** id 计算，只用于观察与排障。
+        """
+        evaluation = self.capabilities.evaluate_all()
+
+        adapters: list[dict[str, Any]] = []
+        for entry in self.adapters.list():
+            view = entry.to_metadata().to_v1()
+            specs = [
+                self.apply_evidence(entry.connector_code, s)
+                for s in evaluation.specs_for(entry.connector_code)
+            ]
+            view["capabilityCount"] = len(specs)
+            view["capabilities"] = [s.to_v1() for s in specs]
+            adapters.append(view)
+
+        connectors: list[dict[str, Any]] = []
+        for entry in self.adapters.list():
+            if not entry.platform_scoped:
+                continue
+            specs = [
+                self.apply_evidence(entry.connector_code, s)
+                for s in evaluation.specs_for(entry.connector_code)
+            ]
+            connectors.append({
+                "schemaVersion": SCHEMA_VERSION,
+                "sourceCode": entry.source_code,
+                "connectorCode": entry.connector_code,
+                "connectorVersion": entry.connector_version,
+                "capabilities": [s.to_v1() for s in specs],
+            })
+
+        diagnostics: list[dict[str, Any]] = [
+            d.to_v1() for d in evaluation.diagnostics
+        ]
+        for entry in self.adapters.failed():
+            diagnostics.append({
+                "connectorCode": entry.connector_code,
+                "capabilityCode": None,
+                "reason": DiagnosticReason.ADAPTER_NOT_LOADED,
+                "detail": entry.error_message or "",
+                "adapterFunction": None,
+            })
+        for (connector_code, capability_code), (reason, detail) in \
+                sorted(self.evidence_rejections.items()):
+            diagnostics.append({
+                "connectorCode": connector_code,
+                "capabilityCode": capability_code,
+                "reason": reason,
+                "detail": detail,
+                "adapterFunction": None,
+            })
+
+        # 参与哈希计算的本体：**不含 generatedAt**（否则每次请求 id 都变）
+        body: dict[str, Any] = {
+            "contractVersion": SNAPSHOT_CONTRACT_VERSION,
+            "schemaVersion": SCHEMA_VERSION,
+            "adapters": adapters,
+            "capabilities": connectors,
+            "diagnostics": diagnostics,
+        }
+        return {
+            "snapshotId": "sha256:" + sha256_of(body),
+            "generatedAt": _utc_now(),
+            **body,
+        }
 
 
 def load_evidence(path: str | None = None) -> dict[str, Any]:

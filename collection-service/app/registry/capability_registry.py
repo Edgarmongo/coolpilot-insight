@@ -202,3 +202,49 @@ class CapabilityRegistry:
             for code, spec in self._specs
             if connector_code is None or code == connector_code
         ]
+
+    # ------------------------------------------------------------------
+    # 一次性评估（统一快照专用）
+    # ------------------------------------------------------------------
+    def evaluate_all(self, connector_code: str | None = None) -> CapabilityEvaluation:
+        """**一次遍历**同时产出 Observed 能力与诊断。
+
+        为什么需要这个方法：``list_capabilities()`` 与 ``diagnostics()`` 各自遍历
+        一次 ``_specs``。虽然两者共享 ``_evaluations`` 缓存、结果必然一致，
+        但"一致"靠的是缓存命中这个隐含前提。统一快照要求
+        **capabilities 与 diagnostics 来自同一份内部快照**（SOURCE-04-02 §A），
+        所以这里显式地只遍历一次，把两个产物绑在同一次计算上。
+
+        :param connector_code: 只评估某个接入；``None`` 表示全部
+        """
+        observed: list[tuple[str, CapabilitySpec]] = []
+        diagnostics: list[CapabilityDiagnostic] = []
+        for code, spec in self._specs:
+            if connector_code is not None and code != connector_code:
+                continue
+            ok, reason, detail = self._evaluate(code, spec)
+            if ok:
+                observed.append((code, spec))
+            else:
+                diagnostics.append(
+                    CapabilityDiagnostic(
+                        connector_code=code,
+                        capability_code=spec.code,
+                        reason=reason or DiagnosticReason.FUNCTION_UNRESOLVED,
+                        detail=detail or "",
+                        adapter_function=spec.adapter_function,
+                    )
+                )
+        return CapabilityEvaluation(observed=observed, diagnostics=diagnostics)
+
+
+@dataclass(frozen=True)
+class CapabilityEvaluation:
+    """一次评估的完整产物：兑现的能力 + 未兑现的诊断。"""
+
+    observed: list[tuple[str, CapabilitySpec]]
+    diagnostics: list[CapabilityDiagnostic]
+
+    def specs_for(self, connector_code: str) -> list[CapabilitySpec]:
+        """某接入下兑现的能力声明。"""
+        return [spec for code, spec in self.observed if code == connector_code]

@@ -84,6 +84,10 @@ app:
   ai-service-url: ${AI_SERVICE_URL:http://127.0.0.1:5000}
   # 采集服务间调用令牌（与采集服务的 INTERNAL_TOKEN 对应）
   collection-internal-token: ${COLLECTION_INTERNAL_TOKEN:}
+  # ---- 能力快照（SOURCE-04-02）----
+  capability:
+    # Observed 统一快照的缓存 TTL（秒）。超 TTL 未刷新则不得作为执行准入依据。
+    observed-ttl-seconds: ${CAPABILITY_SNAPSHOT_TTL_SECONDS:60}
   # 首次启动把哨兵管理员置为可用密码；留空则账号保持不可登录
   admin-init-password: ${ADMIN_INIT_PASSWORD:}
 

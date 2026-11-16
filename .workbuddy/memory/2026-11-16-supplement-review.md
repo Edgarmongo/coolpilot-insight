@@ -1,5 +1,51 @@
 # 2026-11-16 工作日志
 
+## SOURCE-04-02 实施完成（方案 A：统一 Registry 快照）
+
+用户批准方案 A，进入代码实施。范围严格限定：Snapshot 获取/校验/缓存/Observed 转换，
+**不做 Effective 推导**（属 04-03）。
+
+### Python 侧
+
+- `CapabilityRegistry.evaluate_all()`：**一次遍历**同时产出 observed + diagnostics。
+  为什么不复用 list_capabilities()+diagnostics()——它们各遍历一次，"一致"靠缓存命中这个
+  隐含前提；统一快照要求显式只遍历一次。
+- `CollectionRegistry.snapshot()`：一次评估派生 adapters/capabilities/diagnostics，
+  `snapshotId = "sha256:" + sha256(canonical_json(body))`，**body 不含 generatedAt**
+  （否则每次请求 ID 都变）。
+- 新增 `GET /v1/registry/snapshot`；原 `/v1/capabilities`、`/v1/adapters` 完全保留。
+- `tests/test_snapshot.py` 17 条。
+
+### Java 侧
+
+新增 `RegistrySnapshot` / `RegistrySnapshotParser` / `CollectionServiceClient` /
+`SnapshotProvider` / `SnapshotCache` + 3 个测试类。
+
+**解析器六道拒绝**，最关键的是第 6 道「内部不自洽」，且两条规则**方向相反**：
+- `INVALID_IMPLEMENTATION` → 该能力**不应**在 Observed 清单里
+- `EVIDENCE_*` → 该能力**应当**在 Observed 清单里（能力兑现了，只是证据无效）
+所以不能简单写"两集合不能有交集"——会误杀合法的"已兑现但证据过期"。
+
+**缓存状态机**：单位是完整快照（结构上不可能分开缓存）；
+`usableForExecution == fresh`，STALE 与超 TTL 都不可用于执行准入。
+
+### 两个由测试逼出来的真实缺陷
+
+1. **TTL 用 `getSeconds()` 会截断**：TTL=1s 时 1.2s 后被算成 1s，仍判"在 TTL 内"。
+   改用 `Duration.compareTo`。
+2. **失败时间不能只放 Entry 里**："失败且无历史"时 entry==null，无处记录，
+   导致 Registry 不可用期间每次查询都打网络请求。改为独立 `lastFailureAt` 字段
+   + 5 秒最小重试间隔。
+
+### 结果
+
+Python **73/73**（23+17+16+17）；Java **174/174**（原 147 + 27）；
+含 5 条**真实 HTTP 往返**测试（对 cpi-collection，刻意不用 assume 跳过）；
+5 容器 healthy；backend→collection:5001 快照端点连通。
+
+零改动：未改库（capability_json 仍 v1）、Flyway 仍 V30、未改 Schema 枚举、
+未改前端/账号/状态机、未启动 04-03、Observed 未回写 Desired。
+
 ## SOURCE-04-04 二次评审闭环（纯文档，仍不改代码）
 
 评审裁决三项，全部落地：

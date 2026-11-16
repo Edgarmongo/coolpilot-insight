@@ -23,6 +23,18 @@ Java 调用方不必立刻改造。
     GET  /v1/adapters/<connectorCode>
     GET  /v1/adapters/<connectorCode>/capabilities
 
+**SOURCE-04-02 新增**：
+
+    GET  /v1/registry/snapshot
+
+一次返回 ``capabilities`` + ``diagnostics`` + ``adapters``，并带不可变的
+``snapshotId``（内容哈希）。存在的理由：Java 计算 Effective 需要能力清单与
+Adapter 诊断，若分两次请求，Registry 可能在两次之间变化，两端口径不一致就会
+拼出一个"从未同时存在过"的事实。统一快照从源头消除这个窗口。
+
+原有 ``/v1/capabilities`` 与 ``/v1/adapters`` **继续保留**（不破坏 SOURCE-03
+已冻结的契约），只是不再作为 Java 的一致性计算输入。
+
 **已知限制**（留给 SOURCE-04）：``/v1/jobs`` 仍是 stub 实现，
 生产采集走 Java → 子进程 → ``comment.py`` 的老链路，本任务不动它。
 """
@@ -199,6 +211,29 @@ def capabilities():
         "error": None,
         "meta": {"traceId": _trace_id()},
     })
+
+
+@app.get("/v1/registry/snapshot")
+def registry_snapshot():
+    """**统一 Registry 快照**（SOURCE-04-02 §A）。
+
+    设计要点（缺一不可）：
+
+    1. ``capabilities`` 与 ``diagnostics`` 来自**同一次**评估，不是两次独立计算；
+    2. ``snapshotId`` 由规范化后的快照**内容**计算 —— 内容不变则 id 不变，
+       任一变化（Adapter 加载状态 / 能力 / 证据 / 诊断）都会换 id；
+    3. ``generatedAt`` 只用于观察与排障，**不参与** id 计算，
+       因此**不能**用它判断一致性；
+    4. 本端点只读本地注册表，**不触发任何平台请求**。
+
+    Java 侧只能消费完整快照：不得把两个不同快照的内容合并，
+    也不得在本端点失败时回退到双端点拼接。
+    """
+    denied = _require_token()
+    if denied is not None:
+        return denied
+    registry = get_registry()
+    return jsonify(_envelope(registry.snapshot()))
 
 
 @app.get("/v1/adapters")

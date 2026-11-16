@@ -31,7 +31,7 @@
 | 任务 | 内容 | 优先级 | 状态 |
 |---|---|---|---|
 | SOURCE-04-01 | 修正 `AccountVerificationService` 探活目标 | P0 | ✅ **已完成**（补充审查中） |
-| SOURCE-04-02 | Java 消费 Python Registry（**含快照一致性**） | P0 | 待执行（任务卡已修订，含方案 A/B 裁决） |
+| SOURCE-04-02 | Java 消费 Python Registry（**含快照一致性**） | P0 | ✅ **已实施，待评审**（`SOURCE-04-02-IMPLEMENTATION.md`） |
 | SOURCE-04-03 | Desired / Observed / Effective 核对 | P0 | 待执行 |
 | SOURCE-04-04 | Desired v2 结构与状态语义定稿 | P0 | 🟡 **设计已冻结 v2，评审通过**（`SOURCE-04-04-TASKCARD.md` + `ADR-008` + `SOURCE-04-04-EFFECTIVE-REASON.md`） |
 | SOURCE-04-05 | Collection Service 部署架构决策 | P0 | ✅ **已完成**（ADR-007） |
@@ -71,6 +71,12 @@ Python 侧 **56/56**（`test_registry.py` 23 + `test_server.py` 17 + `test_evide
 ---
 
 ### SOURCE-04-02：Java 消费 Python Registry（含快照一致性）（P0）
+
+> **2026-11-16 已实施**：方案 A 落地，报告见 `SOURCE-04-02-IMPLEMENTATION.md`。
+> 新增 `GET /v1/registry/snapshot`（内容哈希 `snapshotId`），Java 侧
+> `RegistrySnapshot` / `RegistrySnapshotParser` / `CollectionServiceClient` /
+> `SnapshotCache`。Python 73/73、Java 174/174、5 容器 healthy。
+> **Effective 推导仍未实现**（属 04-03）。
 
 **目标**：Java 侧能**实际**查询 Python 的 Registry，而不是只读自己的 `capability_json`。
 并且必须保证「一次 Effective 计算用的是**同一份** Observed 快照」。
