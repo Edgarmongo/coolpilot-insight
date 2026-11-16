@@ -36,7 +36,7 @@
 | SOURCE-04-04 | Desired v2 结构与状态语义定稿 | P0 | ✅ **设计已冻结 + 迁移已落地**（V31；`SOURCE-04-04-TASKCARD.md` + `ADR-008` + `SOURCE-04-04-EFFECTIVE-REASON.md`） |
 | SOURCE-04-05 | Collection Service 部署架构决策 | P0 | ✅ **已完成**（ADR-007） |
 | SOURCE-04-06 | Java 数据源管理 API | P1 | ✅ **已实施**（`SOURCE-04-06-IMPLEMENTATION.md`） |
-| SOURCE-04-07 | 数据源管理前端 | P1 | **推迟**（用户明确要求本轮不做前端） |
+| SOURCE-04-07 | 数据源管理前端 | P1 | ✅ **已实施**（`SOURCE-04-07-IMPLEMENTATION.md`；视觉验证缺口见其 §五） |
 | SOURCE-04-08 | 集成测试与回归 | P0 | 🟡 **部分验证**：跨服务 HTTP / Java 全量 315 / 部署回归已做；Python 全量与生产链路未跑（见 `SOURCE-04-06-IMPLEMENTATION.md` §4） |
 
 > **SOURCE-08 的追踪不合并掉**：Desired/Observed 状态核对的**架构决策与验收要求**
@@ -516,9 +516,11 @@ DOUYIN / DOUYIN_PUBLIC / 1.0.0
 
 ---
 
-### SOURCE-04-07：数据源管理前端 ⏸ 推迟
+### SOURCE-04-07：数据源管理前端 ✅ 已实施
 
-用户明确要求本轮不做前端页面。
+> 2026-11-17 更新：原定推迟，现随 04-06 一并落地，详见
+> `SOURCE-04-07-IMPLEMENTATION.md`（含"视觉未验证"的明确缺口声明）。
+> 下面保留推迟期的原始记录，便于回溯为什么当时不做。
 
 推迟期间的前端现状（如实记录）：数据源管理页读的是 `capability` 字段，
 即 `ds_source.capability_json` 的旧结构，**不反映** Python 的实际加载情况。

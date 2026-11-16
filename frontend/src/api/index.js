@@ -144,4 +144,8 @@ export const accountApi = {
 
 export const sourceApi = {
   list: () => request.get('/v1/source/sources'),
+  /** 三态明细：desired / observed / effective（SOURCE-04-06） */
+  capabilities: (code) => request.get(`/v1/source/sources/${code}/capabilities`),
+  /** 覆盖写 Desired（只接受 v2 文档） */
+  saveCapabilities: (code, doc) => request.put(`/v1/source/sources/${code}/capabilities`, doc),
 }

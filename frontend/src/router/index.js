@@ -15,6 +15,7 @@ const routes = [
       { path: 'tasks', name: 'TaskCenter', component: () => import('../views/TaskCenterView.vue') },
       { path: 'clean', name: 'Clean', component: () => import('../views/CleanView.vue') },
       { path: 'comments', name: 'Comments', component: () => import('../views/CommentListView.vue') },
+      { path: 'sources', name: 'SourceManage', component: () => import('../views/source/SourceManageView.vue') },
       { path: 'accounts', name: 'SourceAccounts', component: () => import('../views/source/AccountManageView.vue') },
       { path: 'keywords', name: 'Keywords', component: () => import('../views/KeywordView.vue') },
       { path: 'insight', name: 'Insight', component: () => import('../views/InsightView.vue') },
