@@ -224,6 +224,20 @@ public final class RegistrySnapshotParser {
                     return Result.failure(Failure.BROKEN_CAPABILITY,
                             "快照中存在缺少 code 的能力条目");
                 }
+                // implementationStatus 是**跨语言枚举契约**，必须严格校验：
+                // 只读不验会让 Python 的拼写错误 / 版本不兼容值被 Java 当成正常状态
+                // 继续核对，最终可能落到 AVAILABLE（SOURCE-04-03 独立复核 F1-2）。
+                //
+                // 不设默认值、不做映射：缺失 / null / 非法字符串一律拒绝整份快照，
+                // 宁可"读不懂"也不要"猜成合法"。
+                if (!CapabilityStatus.isKnown(item.implementationStatus())) {
+                    String raw = item.implementationStatus() == null
+                            ? "<缺失或 null>" : "\"" + item.implementationStatus() + "\"";
+                    return Result.failure(Failure.BROKEN_CAPABILITY,
+                            "能力 " + connectorLabel(doc) + "/" + item.code()
+                                    + " 的 implementationStatus 非法: " + raw
+                                    + "（合法值: " + KNOWN_STATUSES + "）");
+                }
                 if (!item.hasBoundFunction()) {
                     return Result.failure(Failure.BROKEN_CAPABILITY,
                             "能力 " + item.code() + " 缺少 adapterFunction");
@@ -274,6 +288,21 @@ public final class RegistrySnapshotParser {
      * <p>若违反，说明 capabilities 与 diagnostics 不是同一次计算产生的——
      * 这正是跨请求混合数据的典型症状。
      */
+    /** 合法实现状态清单（排序后拼串，保证同输入同报错文案）。 */
+    private static final String KNOWN_STATUSES =
+            String.join(" / ", CapabilityStatus.ALL.stream().sorted().toList());
+
+    /** 诊断用标签：优先 connectorCode，退回 sourceCode。 */
+    private static String connectorLabel(CapabilityDocument doc) {
+        if (doc == null) {
+            return "?";
+        }
+        if (doc.connectorCode() != null && !doc.connectorCode().isBlank()) {
+            return doc.connectorCode();
+        }
+        return doc.sourceCode() == null ? "?" : doc.sourceCode();
+    }
+
     private static String checkConsistency(List<CapabilityDocument> documents,
                                            List<RegistrySnapshot.Diagnostic> diagnostics) {
         Set<String> observed = new HashSet<>();

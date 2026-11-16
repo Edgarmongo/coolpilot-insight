@@ -211,6 +211,74 @@ class RegistrySnapshotParserTest {
     }
 
     // ------------------------------------------------------------------
+    // implementationStatus 六值严格校验（独立复核 F1-2）
+    //
+    // 跨语言枚举契约：只读不验会让 Python 的拼写错误/版本不兼容值被当成正常状态，
+    // 最终可能落到 AVAILABLE。这里锁定"缺失/null/非法一律拒绝整份快照"。
+    // ------------------------------------------------------------------
+    @Test
+    @DisplayName("implementationStatus 非法值 → BROKEN_CAPABILITY（不映射为默认合法状态）")
+    void rejectsUnknownImplementationStatus() {
+        String body = minimal(VALID_ID, "1.1")
+                .replace("\"implementationStatus\":\"UNVERIFIED\"",
+                        "\"implementationStatus\":\"PARTIAL\"");
+        assertThat(body).contains("PARTIAL");
+
+        var result = RegistrySnapshotParser.parse(body);
+        assertThat(result.ok()).isFalse();
+        assertThat(result.error().failure()).isEqualTo(RegistrySnapshotParser.Failure.BROKEN_CAPABILITY);
+        assertThat(result.error().message())
+                .as("必须能诊断到是哪条能力、什么值、有哪些合法值")
+                .contains("PARTIAL").contains("implementationStatus").contains("VERIFIED");
+    }
+
+    @Test
+    @DisplayName("implementationStatus 缺失 / null → BROKEN_CAPABILITY")
+    void rejectsMissingImplementationStatus() {
+        // 缺失
+        String missing = minimal(VALID_ID, "1.1")
+                .replace("\"implementationStatus\":\"UNVERIFIED\",", "");
+        assertThat(missing).doesNotContain("implementationStatus");
+        assertThat(RegistrySnapshotParser.parse(missing).error().failure())
+                .isEqualTo(RegistrySnapshotParser.Failure.BROKEN_CAPABILITY);
+
+        // null
+        String nullVal = minimal(VALID_ID, "1.1")
+                .replace("\"implementationStatus\":\"UNVERIFIED\"",
+                        "\"implementationStatus\":null");
+        var result = RegistrySnapshotParser.parse(nullVal);
+        assertThat(result.error().failure()).isEqualTo(RegistrySnapshotParser.Failure.BROKEN_CAPABILITY);
+        assertThat(result.error().message()).contains("缺失或 null");
+    }
+
+    @Test
+    @DisplayName("implementationStatus 大小写敏感：小写 verified 也拒绝")
+    void rejectsWrongCaseImplementationStatus() {
+        String body = minimal(VALID_ID, "1.1")
+                .replace("\"implementationStatus\":\"UNVERIFIED\"",
+                        "\"implementationStatus\":\"verified\"");
+        assertThat(RegistrySnapshotParser.parse(body).error().failure())
+                .as("枚举是精确匹配，不做大小写归一")
+                .isEqualTo(RegistrySnapshotParser.Failure.BROKEN_CAPABILITY);
+    }
+
+    @Test
+    @DisplayName("六值全部合法：逐值解析均通过")
+    void acceptsAllSixImplementationStatuses() {
+        for (String st : new String[]{"UNVERIFIED", "IMPLEMENTED", "VERIFIED",
+                "DEGRADED", "DISABLED", "UNSUPPORTED"}) {
+            String body = minimal(VALID_ID, "1.1")
+                    .replace("\"implementationStatus\":\"UNVERIFIED\"",
+                            "\"implementationStatus\":\"" + st + "\"");
+            var result = RegistrySnapshotParser.parse(body);
+            assertThat(result.ok())
+                    .as("%s 必须被接受，失败原因=%s", st,
+                            result.ok() ? "" : result.error().message())
+                    .isTrue();
+        }
+    }
+
+    // ------------------------------------------------------------------
     // platformScoped 严格校验（N2：失败关闭）
     // ------------------------------------------------------------------
     @Test

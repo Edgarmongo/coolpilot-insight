@@ -251,12 +251,19 @@ public class CapabilityReconciler {
                     EffectiveStatus.UNKNOWN, reason,
                     "验证证据不被接受: " + ev.rejectionReason() + " " + ev.rejectionDetail());
         }
-        // 证据有效，但实现状态只到"本地测试通过"：
-        // 本地测试 ≠ 真实平台验证，因此仍不产出 AVAILABLE（§3.2.1 铁律 2）。
-        if (CapabilityStatus.IMPLEMENTED.equals(impl)) {
+        // 证据有效，但实现状态不足以支撑执行 —— 改成**白名单**而不是逐个点名。
+        //
+        // 首版只写了 `if (IMPLEMENTED)` 一个分支，于是：
+        //   · UNVERIFIED + 已接受证据 → 落到最后的 AVAILABLE（契约 §3.2.1 明写"按不可执行处理"）；
+        //   · 任何未知/拼错的实现状态 → 同样落到 AVAILABLE。
+        // 两者都是"没被点名就放行"，与白名单原则相悖（独立复核 F1-1 / F1-2）。
+        //
+        // 现在只有 VERIFIED（真实平台验证）与 DEGRADED（降级执行）能继续往下走；
+        // 其余一律 UNKNOWN + VERIFICATION_REQUIRED。
+        if (!CapabilityStatus.VERIFIED.equals(impl) && !CapabilityStatus.DEGRADED.equals(impl)) {
             return EffectiveCapability.of(c.code, c.category,
                     EffectiveStatus.UNKNOWN, EffectiveReason.VERIFICATION_REQUIRED,
-                    "实现状态为 IMPLEMENTED（本地测试通过），尚未取得真实平台验证");
+                    unverifiedDetail(impl));
         }
 
         // ⑱ 需要认证但无可用账号（仅当没有 PUBLIC 可用时的确无法执行）
@@ -360,6 +367,27 @@ public class CapabilityReconciler {
             return "降级能力缺少验证证据，未经验证不得降级执行";
         }
         return "能力已注册但从未获得有效验证证据";
+    }
+
+    /**
+     * 证据有效、但实现状态不足以执行时的说明。
+     *
+     * <p>三种语境必须能区分，否则排障时会误判：
+     * <ul>
+     *   <li>`IMPLEMENTED`：本地测试通过，未上真实平台；</li>
+     *   <li>`UNVERIFIED` 却带着已接受证据：数据自相矛盾，按不可执行处理；</li>
+     *   <li>其它（未知 / 拼错 / 缺失）：不在契约的六值内，一律不可执行。</li>
+     * </ul>
+     */
+    private static String unverifiedDetail(String impl) {
+        if (CapabilityStatus.IMPLEMENTED.equals(impl)) {
+            return "实现状态为 IMPLEMENTED（本地测试通过），尚未取得真实平台验证";
+        }
+        if (CapabilityStatus.UNVERIFIED.equals(impl)) {
+            return "实现状态为 UNVERIFIED 却带有已接受证据（数据自相矛盾），按不可执行处理";
+        }
+        return "实现状态不在契约枚举内（" + (impl == null ? "缺失" : "\"" + impl + "\"")
+                + "），按不可执行处理";
     }
 
     private static int majorOf(String version) {

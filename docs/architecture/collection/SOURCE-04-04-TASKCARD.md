@@ -270,7 +270,7 @@ v1 没有 `accessModes` 概念。迁移时**取保守值**：
 | 无 `schemaVersion` | 按 v1 解析 → 用 §2.2 规则映射为内部 Desired 模型 → 返回视图时**同时**含旧字段与 v2 结构 |
 | `schemaVersion = "2.0"` | 直接解析 |
 | `schemaVersion = "2.x"`（x>0） | 主版本一致，按 2.0 解析（前向兼容） |
-| `schemaVersion` 主版本 ≥ 3 | 拒绝解析，该 Source 的 Desired 判为 `UNKNOWN` + `SCHEMA_UNSUPPORTED` |
+| `schemaVersion` 主版本 ≥ 3 | 拒绝解析，该 Source 的 Desired 判为 `UNKNOWN` + **`DESIRED_UNPARSEABLE`**（见 §3.2 第 4 行；**不是** `SCHEMA_UNSUPPORTED`——那是 Observed 快照的故障码） |
 
 **旧结构不允许继续产生新写入**：04-06 落地后，管理接口只写 v2；
 旧字段（`comments` 等）由服务端从 v2 **派生输出**，只读不写。
@@ -339,12 +339,13 @@ Python 的 `/v1/capabilities` 只输出 Observed，**从不输出** `effectiveSt
 
 | `implementationStatus` | 证据 `accepted=true` | 证据缺失（`null`） | 证据被拒（`accepted=false`） |
 |---|---|---|---|
-| `UNVERIFIED` | ⚠️ 不可能（证据接受即升 `VERIFIED`）；若出现按**不可执行**处理 | `UNKNOWN` + `VERIFICATION_REQUIRED` | `UNKNOWN` + `EVIDENCE_EXPIRED` / `EVIDENCE_INVALID` |
+| `UNVERIFIED` | ⚠️ 不可能（证据接受即升 `VERIFIED`）；若出现 → **`UNKNOWN` + `VERIFICATION_REQUIRED`**（按不可执行处理，代码已强制执行） | `UNKNOWN` + `VERIFICATION_REQUIRED` | `UNKNOWN` + `EVIDENCE_EXPIRED` / `EVIDENCE_INVALID` |
 | `IMPLEMENTED` | **`UNKNOWN` + `VERIFICATION_REQUIRED`**（本地测试通过 ≠ 真实平台验证） | `UNKNOWN` + `VERIFICATION_REQUIRED` | `UNKNOWN` + `EVIDENCE_EXPIRED` / `EVIDENCE_INVALID` |
 | `VERIFIED` | 继续第 18~20 步（可判 `AVAILABLE`） | `UNKNOWN` + `VERIFICATION_REQUIRED`（协议异常：`VERIFIED` 必须带证据） | `UNKNOWN` + `EVIDENCE_EXPIRED` / `EVIDENCE_INVALID` |
 | `DEGRADED` | `DEGRADED` + `DEGRADED`（降级执行） | `UNKNOWN` + `VERIFICATION_REQUIRED` | `UNKNOWN` + `EVIDENCE_EXPIRED` / `EVIDENCE_INVALID` |
 | `DISABLED` | 第 12 步已返回，不进本矩阵 | 同左 | 同左 |
 | `UNSUPPORTED` | 第 13 步已返回，不进本矩阵 | 同左 | 同左 |
+| **不在上述六值内 / 缺失 / `null`** | **解析阶段即拒绝**（`BROKEN_CAPABILITY`），整份快照不可用 | 同左 | 同左 |
 
 **三条铁律**：
 
@@ -354,6 +355,11 @@ Python 的 `/v1/capabilities` 只输出 Observed，**从不输出** `effectiveSt
    "在真实平台跑通并留下证据"是两件事。Schema 的 `VERIFIED` 才对应后者。
 3. **`evidence.accepted=false` 一律不可执行**，与状态无关。这是 04-02 阶段
    `platformScoped` 失败的教训：准入判断里任何"默认通过"的分支都是缺陷。
+4. **不在六值内的实现状态不得进入核对**（`SOURCE-04-03` 独立复核 F1-2）。
+   解析层（`RegistrySnapshotParser`）对缺失 / `null` / 非法字符串一律拒绝整份快照，
+   **不做默认值、不做大小写归一、不映射成某个合法状态**；核对层再加一道兜底——
+   只有 `VERIFIED` / `DEGRADED` 能继续往下走，其余一律 `UNKNOWN`。
+   两层都守，是因为"跨语言枚举"只靠一层必然会在某次改动中被绕过。
 
 > **为什么归入 `VERIFICATION_REQUIRED` 而不是新增状态**：该 reason 的冻结定义就是
 > "能力已注册且函数可用，但从未获得有效验证证据"，`IMPLEMENTED` 精确落在这个定义里。

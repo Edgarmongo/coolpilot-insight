@@ -544,6 +544,38 @@ class CapabilityReconcilerTest {
     }
 
     @Test
+    @DisplayName("F1-1 UNVERIFIED + 已接受证据（自相矛盾）→ 不可执行，不是 AVAILABLE")
+    void unverifiedWithAcceptedEvidenceIsNotAvailable() {
+        // 契约 §3.2.1 该格写"若出现按不可执行处理"；首版实现落入最后的 AVAILABLE。
+        // 触发条件：Python 输出 UNVERIFIED 却带着 accepted=true（其自身会把接受证据
+        // 升为 VERIFIED，所以现在不可达）——但契约写明的行为必须被执行，不能靠巧合。
+        var r = one(commentDesired(), fresh(snapshotWith(
+                cap("COMMENT", "UNVERIFIED", goodEvidence()))));
+
+        assertThat(r.effectiveStatus()).isEqualTo(EffectiveStatus.UNKNOWN);
+        assertThat(r.effectiveReason()).isEqualTo(EffectiveReason.VERIFICATION_REQUIRED);
+        assertThat(r.executable()).isFalse();
+        assertThat(r.detail())
+                .as("detail 必须点明是数据自相矛盾，而不是笼统的未验证")
+                .contains("自相矛盾");
+    }
+
+    @Test
+    @DisplayName("F1-2 未知实现状态（绕过解析器构造）→ 不可执行")
+    void unknownImplementationStatusNeverAvailable() {
+        // 解析器已拒绝非法值（RegistrySnapshotParserTest 覆盖）；
+        // 这里验证核对层自身的兜底——即便有人直接构造 CapabilityItem 绕过解析，
+        // 未知状态也不能落到 AVAILABLE。两层都守，才是 fail-close。
+        var r = one(commentDesired(), fresh(snapshotWith(
+                cap("COMMENT", "PARTIAL", goodEvidence()))));
+
+        assertThat(r.effectiveStatus()).isEqualTo(EffectiveStatus.UNKNOWN);
+        assertThat(r.effectiveReason()).isEqualTo(EffectiveReason.VERIFICATION_REQUIRED);
+        assertThat(r.executable()).isFalse();
+        assertThat(r.detail()).contains("不在契约枚举内").contains("PARTIAL");
+    }
+
+    @Test
     @DisplayName("H1 全矩阵：任何『证据被拒』组合都不可执行")
     void rejectedEvidenceNeverExecutable() {
         // 穷举 Schema 允许的六值 —— 若将来新增状态，本用例会因 statuses 清单
