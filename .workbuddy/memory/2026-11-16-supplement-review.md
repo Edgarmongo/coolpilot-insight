@@ -1,5 +1,33 @@
 # 2026-11-16 工作日志
 
+## SOURCE-04-03-FIX-04 六项收尾（a3b498c）
+
+### O1 两份 capabilities 副本审计（先查后改）
+结论：同一次 evaluate_all() 生成、同序列化器，对 platformScoped 接入是同一份声明；
+差异只在覆盖面（adapters 含 STUB）。权威划分：状态看文档，adapters 提供
+loadStatus/version/platformScoped，内嵌 capabilities 只用于枚举候选码。
+处置：不复制第二套枚举校验，改为断言两份镜像（双向比码集 + 比 status），
+不一致即拒绝整份快照。顺带发现测试夹具的 adapter 侧能力缺字段——与真实载荷不符。
+
+### F1-3 DEGRADED 准入
+allowsExecution 原 `return DEGRADED.equals(status)` 不看 reason，导致降级成了
+证据无效也能跑的通行证。收紧为 reason 必须 DEGRADED；构造期同判据，
+DEGRADED+坏 reason+true 现在构造即抛。ADR-008 §4.3 示例同步，
+并写明"实现当初忠于 ADR，松的是 ADR 的示例"。
+
+### F2-3 新增 SourceQueryServiceTest（4 条）
+A/B/C/D。此前 desiredError 只在私有 toView 赋值且 Service 无任何测试，
+M1 闭环只有代码没断言。用记录型假 Mapper + 真实样本 + 真实解析器。
+
+### O2/O3
+IMPLEMENTATION.md 全文 8 处（21 值/20 步/判定表重排 ①~⑳/Desired 行/
+证据闸门表述/测试对照 21 行）；EFFECTIVE-REASON 术语统一为"实现状态与证据状态不一致"。
+
+测试 Java 269/269、Python 76/76、5 容器 healthy；
+真实快照两份副本镜像一致（镜像校验对真实载荷零影响）。
+未动 L1~L5；未改库/Flyway(V30)/Schema/账号/状态机/前端；未启动 04-06/07/08。
+
+
 ## SOURCE-04-03-FIX-03：契约统一 + 非法实现状态 fail-closed（36eeb87）
 
 独立复核判 PASS WITH FINDINGS（3 MEDIUM）。本轮只做 P1 三项，FIX-04 待评审通过后再动。
