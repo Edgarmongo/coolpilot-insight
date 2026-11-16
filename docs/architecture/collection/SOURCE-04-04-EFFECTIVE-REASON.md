@@ -54,7 +54,7 @@
 | 13 | `CAPABILITY_DISABLED` | 能力被 Python 侧**显式禁用** | `C.implementationStatus = DISABLED` | `C` | `UNREGISTERED` |
 | 14 | `PLATFORM_UNSUPPORTED` | 平台**客观不支持**该能力 | `C.implementationStatus = UNSUPPORTED` | `C` | `UNREGISTERED` |
 | 15 | `ACCESS_MODE_UNSUPPORTED` | Observed 的 `accessModes` **不包含** Desired 要求的模式 | `Desired.accessModes ⊄ C.accessModes` | `D` + `C` | `UNREGISTERED` |
-| 16 | `VERIFICATION_REQUIRED` | **能力已注册，但从未获得有效验证证据**（含数据自相矛盾的情形） | `C.implementationStatus ∈ {UNVERIFIED, IMPLEMENTED}`，或该字段不在契约六值内（解析层已拒绝，此处为末道兜底）；**即便证据 `accepted=true` 也归此**——`IMPLEMENTED` 是本地测试、`UNVERIFIED` + 证据是自相矛盾，都不构成真实平台验证 | `C` | `UNKNOWN` |
+| 16 | `VERIFICATION_REQUIRED` | **能力已注册，但从未获得有效验证证据**（含数据自相矛盾的情形） | `C.implementationStatus ∈ {UNVERIFIED, IMPLEMENTED}`，或该字段不在契约六值内（解析层已拒绝，此处为末道兜底）；**即便证据 `accepted=true` 也归此**——`IMPLEMENTED` 是本地测试、`UNVERIFIED` + 已接受证据是字段冲突，都不构成真实平台验证 | `C` | `UNKNOWN` |
 | 17 | `EVIDENCE_EXPIRED` | 验证证据**超过有效期** | **任意未被 13/14 拦下的状态** 且 `C.evidence.rejectionReason = EVIDENCE_EXPIRED` | `C` | `UNKNOWN` |
 | 18 | `EVIDENCE_INVALID` | 证据**完整性或有效性校验失败**（篡改 / 实现变更 / 版本或范围不符 / 结构非法） | **任意未被 13/14 拦下的状态** 且 `rejectionReason ∈ {EVIDENCE_TAMPERED, EVIDENCE_STALE, EVIDENCE_VERSION_MISMATCH, EVIDENCE_SCOPE_MISMATCH, EVIDENCE_MALFORMED}` | `C` | `UNKNOWN` |
 | 19 | `ACCOUNT_REQUIRED` | 需要 `AUTHENTICATED` 但**无可用账号** | `Desired.accessModes ⊇ {AUTHENTICATED}` **且** 该 Source 下无 `status=ACTIVE && auth_status=VALID` 的账号 | `D` + `AC` | `ACCOUNT_REQUIRED` |

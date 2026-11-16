@@ -375,7 +375,7 @@ public class CapabilityReconciler {
      * <p>三种语境必须能区分，否则排障时会误判：
      * <ul>
      *   <li>`IMPLEMENTED`：本地测试通过，未上真实平台；</li>
-     *   <li>`UNVERIFIED` 却带着已接受证据：数据自相矛盾，按不可执行处理；</li>
+     *   <li>`UNVERIFIED` 却带着已接受证据：两个字段互相冲突，按不可执行处理；</li>
      *   <li>其它（未知 / 拼错 / 缺失）：不在契约的六值内，一律不可执行。</li>
      * </ul>
      */
@@ -384,7 +384,10 @@ public class CapabilityReconciler {
             return "实现状态为 IMPLEMENTED（本地测试通过），尚未取得真实平台验证";
         }
         if (CapabilityStatus.UNVERIFIED.equals(impl)) {
-            return "实现状态为 UNVERIFIED 却带有已接受证据（数据自相矛盾），按不可执行处理";
+            // 不用"数据自相矛盾"这种笼统说法：必须点明是哪两个字段冲突，
+            // 否则排障时不知道该查 Python 的升级逻辑还是证据链路。
+            return "实现状态与证据状态不一致：implementationStatus=UNVERIFIED，"
+                    + "但 evidence.accepted=true。证据已被接受，但实现状态仍未标记为 VERIFIED";
         }
         return "实现状态不在契约枚举内（" + (impl == null ? "缺失" : "\"" + impl + "\"")
                 + "），按不可执行处理";

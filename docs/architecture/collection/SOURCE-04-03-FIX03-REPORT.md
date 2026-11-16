@@ -92,7 +92,7 @@ F1-1 与 F1-2 其实是同一个病的两次发作——**"没被点名就放行
 | 状态 | detail |
 |---|---|
 | `IMPLEMENTED` | 实现状态为 IMPLEMENTED（本地测试通过），尚未取得真实平台验证 |
-| `UNVERIFIED`（却带已接受证据） | 实现状态为 UNVERIFIED 却带有已接受证据（**数据自相矛盾**），按不可执行处理 |
+| `UNVERIFIED`（却带已接受证据） | 实现状态与证据状态不一致：`implementationStatus=UNVERIFIED`，但 `evidence.accepted=true`。证据已被接受，但实现状态仍未标记为 `VERIFIED` |
 | 其它 / `null` | 实现状态不在契约枚举内（`"PARTIAL"` / 缺失），按不可执行处理 |
 
 三者 `status` + `reason` 相同（`UNKNOWN` / `VERIFICATION_REQUIRED`），
@@ -132,7 +132,7 @@ F1-1 与 F1-2 其实是同一个病的两次发作——**"没被点名就放行
 | §3.2.1 `UNVERIFIED` + 证据接受 | 由"若出现按不可执行处理"改为"→ `UNKNOWN` + `VERIFICATION_REQUIRED`（代码已强制执行）" |
 | §3.2.1 新增一行 | **不在六值内 / 缺失 / `null`** → 解析阶段即拒绝（`BROKEN_CAPABILITY`） |
 | §3.2.1 铁律新增第 4 条 | 非法状态不得进入核对；解析层拒绝 + 核对层兜底，两层都守 |
-| `EFFECTIVE-REASON` 第 16 行 | 条件补上"即便证据 `accepted=true` 也归此"，并说明 `UNVERIFIED` + 证据是自相矛盾 |
+| `EFFECTIVE-REASON` 第 16 行 | 条件补上"即便证据 `accepted=true` 也归此"，并说明 `UNVERIFIED` + 证据属字段冲突 |
 
 ---
 
@@ -146,7 +146,7 @@ F1-1 与 F1-2 其实是同一个病的两次发作——**"没被点名就放行
 | | `rejectsMissingImplementationStatus` | 缺失 与 `null` 分别拒绝；报错含"缺失或 null" |
 | | `rejectsWrongCaseImplementationStatus` | `verified`（小写）被拒——不做大小写归一 |
 | | `acceptsAllSixImplementationStatuses` | 六值逐值均通过（防"校验写死成只允许某个值"） |
-| `CapabilityReconcilerTest` | `unverifiedWithAcceptedEvidenceIsNotAvailable` | `UNKNOWN` / `VERIFICATION_REQUIRED` / false；detail 含"自相矛盾" |
+| `CapabilityReconcilerTest` | `unverifiedWithAcceptedEvidenceIsNotAvailable` | `UNKNOWN` / `VERIFICATION_REQUIRED` / false；detail 含两个冲突字段名 |
 | | `unknownImplementationStatusNeverAvailable` | 直接构造 `PARTIAL` 绕过解析器 → 仍 `UNKNOWN`；detail 含"不在契约枚举内" |
 
 两条核对层用例的存在意义：**证明兜底不是摆设**。
@@ -230,7 +230,9 @@ docs/architecture/collection/SOURCE-04-03-FIX03-REPORT.md        本文件
 2. **白名单守卫是否覆盖全部路径**：`DISABLED`/`UNSUPPORTED` 在更早的步骤返回，
    因此不会走到这里——这是"提前返回"而非"豁免"，请核对顺序。
 3. **`unverifiedDetail` 的三种语境是否真的可区分**：
-   建议用 `assertThat(detail).contains(...)` 之外，再看一眼真实输出（报告 §2.3）。
+   已按评审建议把 `UNVERIFIED + 已接受证据` 的文案从"数据自相矛盾"改为点明两个冲突字段
+   （`implementationStatus=UNVERIFIED` / `evidence.accepted=true`）。
+   注意 detail 只是诊断文本，机器判据仍是 `effectiveStatus` / `effectiveReason` / `executable`。
 4. **F1-2 的第二层守卫是否有必要**：解析层已经拒绝，核对层兜底是否冗余？
    （我的理由：绕过解析器的构造路径存在——测试里就用到了；且跨语言枚举的破裂
    往往来自"某处新增了一条不经过该解析器的数据通路"。）

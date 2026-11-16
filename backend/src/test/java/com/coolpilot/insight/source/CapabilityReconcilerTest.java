@@ -544,7 +544,7 @@ class CapabilityReconcilerTest {
     }
 
     @Test
-    @DisplayName("F1-1 UNVERIFIED + 已接受证据（自相矛盾）→ 不可执行，不是 AVAILABLE")
+    @DisplayName("F1-1 UNVERIFIED + 已接受证据（字段冲突）→ 不可执行，不是 AVAILABLE")
     void unverifiedWithAcceptedEvidenceIsNotAvailable() {
         // 契约 §3.2.1 该格写"若出现按不可执行处理"；首版实现落入最后的 AVAILABLE。
         // 触发条件：Python 输出 UNVERIFIED 却带着 accepted=true（其自身会把接受证据
@@ -556,8 +556,10 @@ class CapabilityReconcilerTest {
         assertThat(r.effectiveReason()).isEqualTo(EffectiveReason.VERIFICATION_REQUIRED);
         assertThat(r.executable()).isFalse();
         assertThat(r.detail())
-                .as("detail 必须点明是数据自相矛盾，而不是笼统的未验证")
-                .contains("自相矛盾");
+                .as("detail 必须点明冲突的两个字段，而不是笼统的未验证")
+                .contains("implementationStatus=UNVERIFIED")
+                .contains("evidence.accepted=true")
+                .contains("不一致");
     }
 
     @Test
