@@ -1,5 +1,25 @@
 # 2026-11-16 工作日志
 
+## FIX-04-M1/L1 定向修复（8bab59d）
+
+### M1 镜像比较范围
+补 accessModes（集合语义）与 evidence（accepted/rejectionReason/contentHash/verifiedAt）。
+adapterFunction 仍不比，但边界写进代码与契约 §3.2.3（不参与推导）。
+OBS1 核查后升级为必修：findConnector 取第一条、镜像索引后写覆盖，重复 connectorCode 时
+两者看不同文档 → 解析期直接拒绝重复。
+
+### L1 status × reason 组合表
+新增白名单（21 合法 / 147 非法），构造期校验，顺序为"先判组合成立再判 executable 一致"。
+**收回了 F1-3 的放宽**：DEGRADED 只允许配 DEGRADED（降级但证据失效应表达为
+UNKNOWN + EVIDENCE_*，证据闸门在降级之前）。合法非执行态 UNKNOWN+EVIDENCE_*+false 仍允许。
+
+### OBS2
+场景 C 补 effective.isEmpty() 直接断言。
+
+测试 Java 274/274、Python 76/76、5 容器 healthy；真实快照通过扩展后的镜像（未误杀）。
+契约文档新增 §3.2.2（组合表）与 §3.2.3（镜像比较范围）。
+
+
 ## SOURCE-04-03-FIX-04 六项收尾（a3b498c）
 
 ### O1 两份 capabilities 副本审计（先查后改）
