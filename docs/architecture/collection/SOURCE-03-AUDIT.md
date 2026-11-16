@@ -176,10 +176,10 @@ CSV 列名与落盘路径、进度文件、`VIDEO|` stdout 协议全部不变）
 |---|---|---|
 | 1 | **collection-service 进程化**：独立容器 vs 并入 backend | ✅ 已定：**方案 A 独立容器**（`ADR-007`），`cpi-collection` 已部署并实测 |
 | 2 | **`AccountVerificationService` 探活目标错配** | ✅ 已修：`ServiceHealthProbe` 显式绑定服务名；AI / 采集两服务独立判断；不可达不改 `auth_status` |
-| 3 | **Java `ds_source.capability_json` 与 `effectiveStatus` 枚举口径统一**（`PENDING` 不在枚举内） | ⏳ **仍未做** → SOURCE-04-04 |
+| 3 | **Java `ds_source.capability_json` 与 `effectiveStatus` 枚举口径统一**（`PENDING` 不在枚举内） | ✅ 已做：Desired v2 结构冻结（`SOURCE-04-04`）；V31 完成 v1→v2 数据迁移，库中不再有 `PENDING` / `commentStatus` 等非契约状态词；管理接口只写 v2 |
 | 4 | **`/v1/jobs` 仍是 stub 实现** | ⏳ **仍未做** → SOURCE-06（本任务按"不擅自删除旧接口或旧 Adapter"保留该端点与 stub 行为不动） |
-| 5 | **Java 消费 Python `/v1/capabilities`** | ⏳ **仍未做** → SOURCE-04-02（SOURCE-03 审计已确认：当时无任何调用方） |
-| 6 | **Desired / Observed / Effective 核对** | ⏳ **仍未做** → SOURCE-04-03（架构决策与验收要求仍归 SOURCE-08 名下） |
+| 5 | **Java 消费 Python `/v1/capabilities`** | ✅ 已做：改为消费 `GET /v1/registry/snapshot`（方案 A，内容哈希 `snapshotId`），`SnapshotCache` 单飞 + 三态新鲜度；**不按端点分别缓存** |
+| 6 | **Desired / Observed / Effective 核对** | ✅ 已做：`CapabilityReconciler` 20 步短路 + `status×reason` 组合校验；`GET/PUT /api/v1/source/sources/{code}/capabilities` 暴露三态（`SOURCE-04-06`） |
 
 ---
 

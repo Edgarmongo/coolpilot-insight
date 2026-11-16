@@ -188,8 +188,8 @@ audit_log: action=SOURCE_CAPABILITY_UPDATE, resource_id=1, detail_json 1236 字�
 
 `mvn -o test` → **315 / 315 通过**（上一轮基线 274，本卡新增 41）。
 
-Python 侧本卡**未改任何 Python 代码**，因此未重跑 pytest（当前环境无 pytest）。
-上一轮基线为 76/76，本卡不引用为本次证据。
+Python 侧本卡**未改任何 Python 代码**。当时环境无 pytest，未跑；
+后已在 `SOURCE-04-08` 中补齐依赖并跑通 **76 / 76**（见 `SOURCE-04-08-REGRESSION.md` §3.3）。
 
 ---
 

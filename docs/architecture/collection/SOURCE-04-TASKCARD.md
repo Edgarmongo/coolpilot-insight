@@ -37,7 +37,7 @@
 | SOURCE-04-05 | Collection Service 部署架构决策 | P0 | ✅ **已完成**（ADR-007） |
 | SOURCE-04-06 | Java 数据源管理 API | P1 | ✅ **已实施**（`SOURCE-04-06-IMPLEMENTATION.md`） |
 | SOURCE-04-07 | 数据源管理前端 | P1 | ✅ **已实施**（`SOURCE-04-07-IMPLEMENTATION.md`；视觉验证缺口见其 §五） |
-| SOURCE-04-08 | 集成测试与回归 | P0 | 🟡 **部分验证**：跨服务 HTTP / Java 全量 315 / 部署回归已做；Python 全量与生产链路未跑（见 `SOURCE-04-06-IMPLEMENTATION.md` §4） |
+| SOURCE-04-08 | 集成测试与回归 | P0 | ✅ **已执行**（10 项检查全过；真实采集演练与工具缺口见 `SOURCE-04-08-REGRESSION.md` §5） |
 
 > **SOURCE-08 的追踪不合并掉**：Desired/Observed 状态核对的**架构决策与验收要求**
 > 仍保留在 SOURCE-08 名下（`ADR-006` + 本卡 04-03 的推导规则表）。
