@@ -102,6 +102,121 @@ def test_unknown_job_returns_404():
     assert c.get("/v1/jobs/nope").status_code == 404
 
 
+# ----------------------------------------------------------------------
+# SOURCE-03：Registry 驱动的健康检查与能力接口
+# ----------------------------------------------------------------------
+def test_health_reports_real_registry():
+    """/health 必须反映真实注册表，而不是硬编码的 adapter 列表。"""
+    c = app.test_client()
+    r = c.get("/health")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["code"] == 0
+    registry = body["registry"]
+    assert registry["schemaVersion"] == "1.0"
+    codes = {a["connectorCode"] for a in registry["adapters"]}
+    assert "DOUYIN_PUBLIC" in codes
+    assert "STUB_PUBLIC" in codes
+    assert registry["loadedCount"] >= 2
+    assert registry["failedCount"] == 0
+    # 旧字段仍在（兼容期）
+    assert isinstance(body["adapters"], list)
+    assert "DOUYIN_PUBLIC" in body["adapters"]
+    assert body["error"] is None
+    assert body["meta"]["traceId"]
+
+
+def test_health_does_not_trigger_platform_requests():
+    """健康检查不得发起真实平台采集——只读注册表。"""
+    from app.adapters.douyin import collector
+
+    called = []
+    original = collector.collect_comments
+
+    def _spy(*args, **kwargs):
+        called.append(1)
+        return original(*args, **kwargs)
+
+    collector.collect_comments = _spy
+    try:
+        c = app.test_client()
+        c.get("/health")
+        c.get("/v1/capabilities")
+        c.get("/v1/adapters")
+    finally:
+        collector.collect_comments = original
+    assert not called, "健康检查触发了真实采集"
+
+
+def test_capabilities_exposes_v1_schema():
+    c = app.test_client()
+    r = c.get("/v1/capabilities")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["schemaVersion"] == "1.0"
+    assert body["connectors"], "必须有 v1 平台文档"
+    doc = next(d for d in body["connectors"] if d["connectorCode"] == "DOUYIN_PUBLIC")
+    assert doc["sourceCode"] == "DOUYIN"
+    assert doc["connectorVersion"] == "1.0.0"
+    for cap in doc["capabilities"]:
+        assert cap["adapterFunction"]
+        assert cap["implementationStatus"] in (
+            "UNVERIFIED", "IMPLEMENTED", "VERIFIED", "DEGRADED", "DISABLED", "UNSUPPORTED")
+    assert body["data"]["connectors"] == body["connectors"]
+
+
+def test_capabilities_legacy_items_preserved():
+    """旧结构必须逐字保持，避免打断既有调用方。"""
+    c = app.test_client()
+    body = c.get("/v1/capabilities").get_json()
+    item = body["items"][0]
+    assert item["sourceCode"] == "STUB"
+    assert item["comments"] is False
+    assert item["keywordSearch"] is False
+    assert item["status"] == "PENDING"
+
+
+def test_adapters_endpoint_lists_real_connectors():
+    c = app.test_client()
+    r = c.get("/v1/adapters")
+    assert r.status_code == 200
+    body = r.get_json()
+    codes = {a["connectorCode"] for a in body["data"]["adapters"]}
+    assert {"DOUYIN_PUBLIC", "STUB_PUBLIC"} <= codes
+    douyin = next(a for a in body["data"]["adapters"] if a["connectorCode"] == "DOUYIN_PUBLIC")
+    assert douyin["loadStatus"] == "LOADED"
+    assert douyin["capabilityCount"] == 4
+
+
+def test_adapter_detail_and_capabilities():
+    c = app.test_client()
+    detail = c.get("/v1/adapters/DOUYIN_PUBLIC").get_json()
+    assert detail["data"]["adapter"]["connectorCode"] == "DOUYIN_PUBLIC"
+    assert len(detail["data"]["adapter"]["capabilities"]) == 4
+
+    caps = c.get("/v1/adapters/DOUYIN_PUBLIC/capabilities").get_json()["data"]
+    assert caps["sourceCode"] == "DOUYIN"
+    assert caps["schemaVersion"] == "1.0"
+    assert len(caps["capabilities"]) == 4
+
+
+def test_adapter_capabilities_for_non_platform_connector():
+    """链路验证替身没有 sourceCode，不产出 v1 平台文档。"""
+    c = app.test_client()
+    r = c.get("/v1/adapters/STUB_PUBLIC/capabilities")
+    assert r.status_code == 200
+    caps = r.get_json()["data"]
+    assert caps["capabilities"] == []
+    assert "sourceCode" not in caps
+
+
+def test_unknown_adapter_returns_404():
+    c = app.test_client()
+    r = c.get("/v1/adapters/NOPE")
+    assert r.status_code == 404
+    assert r.get_json()["code"] == 40400
+
+
 if __name__ == "__main__":
     # 无 pytest 也能跑：容器内只需 python，便于验证
     failed = 0

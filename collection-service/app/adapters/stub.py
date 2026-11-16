@@ -24,6 +24,8 @@ class StubAdapter(PlatformAdapter):
     """返回固定内容的假适配器。"""
 
     source_code = "STUB"
+    connector_code = "STUB_PUBLIC"
+    connector_version = "1.0.0"
 
     def __init__(self, content_id: str = "stub-content", comment_count: int = 3):
         self._content_id = content_id
@@ -38,6 +40,20 @@ class StubAdapter(PlatformAdapter):
             status="PENDING",
             note="stub 适配器，仅用于链路验证，不代表真实平台能力",
         )
+
+    def capability_specs(self) -> list:
+        """**不声明任何能力。**
+
+        stub 只是链路验证替身：它没有平台、没有真实实现，
+        声明能力等于骗人说"这个平台能采"。
+        """
+        return []
+
+    def legacy_status(self) -> str:
+        return "PENDING"
+
+    def legacy_note(self) -> str:
+        return "stub 适配器，仅用于链路验证，不代表真实平台能力"
 
     def validate_config(self) -> None:
         # stub 无外部依赖，永远可用

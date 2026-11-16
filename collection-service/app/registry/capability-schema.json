@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coolpilot.cn/schemas/source-capability-1.0.json",
+  "title": "CoolPilot Insight Source Capability Contract v1.0",
+  "description": "Java 与 Python 共用的数据源能力描述契约。能力必须由 adapterFunction 指向的真实函数证明，不接受纯声明。",
+  "type": "object",
+  "required": ["schemaVersion", "sourceCode", "connectorCode", "connectorVersion", "capabilities"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0",
+      "description": "顶层 Schema 版本，主版本号变更表示破坏性变更"
+    },
+    "sourceCode": {
+      "type": "string",
+      "enum": ["DOUYIN", "XIAOHONGSHU", "KUAISHOU", "WEB"],
+      "description": "平台业务标识"
+    },
+    "connectorCode": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{2,63}$",
+      "description": "接入实现标识，如 DOUYIN_PUBLIC / DOUYIN_OFFICIAL / DOUYIN_SESSION"
+    },
+    "connectorVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "接入实现版本（semver），接口行为变化时递增"
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 0,
+      "items": { "$ref": "#/$defs/capability" }
+    }
+  },
+  "$defs": {
+    "capability": {
+      "type": "object",
+      "required": ["code", "category", "accessModes", "implementationStatus", "contractVersion", "adapterFunction"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": ["KEYWORD_SEARCH", "CONTENT_DETAIL", "COMMENT", "COMMENT_REPLY", "AUTHOR_PROFILE", "AUTHOR_POSTS", "MEDIA_DOWNLOAD"]
+        },
+        "name": { "type": "string", "description": "显示名称" },
+        "category": {
+          "type": "string",
+          "enum": ["SEARCH", "CONTENT", "COMMENT", "USER", "MEDIA"]
+        },
+        "accessModes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "enum": ["PUBLIC", "AUTHENTICATED"] },
+          "description": "PUBLIC 不需要账号；AUTHENTICATED 必须绑定 isUsable=true 的账号"
+        },
+        "implementationStatus": {
+          "type": "string",
+          "enum": ["UNVERIFIED", "IMPLEMENTED", "VERIFIED", "DEGRADED", "DISABLED", "UNSUPPORTED"],
+          "description": "实现状态。adapterFunction 不存在时，无论此处写什么，Effective 都不是 AVAILABLE"
+        },
+        "contractVersion": {
+          "type": "string",
+          "description": "该能力的入参/出参契约版本，独立于 connectorVersion"
+        },
+        "verifiedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "最近一次真实验证时间，为空表示未验证"
+        },
+        "adapterFunction": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Python 侧真实可调用函数标识，能力由它证明存在"
+        },
+        "inputSchema": { "type": "object", "description": "入参 JSON Schema" },
+        "outputSchema": { "type": "object", "description": "出参 JSON Schema" },
+        "limits": {
+          "type": "object",
+          "properties": {
+            "maxComments": { "type": "integer", "minimum": 0 },
+            "maxPageSize": { "type": "integer", "minimum": 1 },
+            "supportsPagination": { "type": "boolean" }
+          }
+        },
+        "retryPolicy": {
+          "type": "object",
+          "properties": {
+            "maxAttempts": { "type": "integer", "minimum": 0 },
+            "retryableErrors": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["AUTHENTICATION", "AUTHORIZATION", "RATE_LIMIT", "NETWORK", "PLATFORM", "DATA", "SYSTEM"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "failureType": {
+      "type": "string",
+      "enum": ["AUTHENTICATION", "AUTHORIZATION", "RATE_LIMIT", "NETWORK", "PLATFORM", "DATA", "SYSTEM"]
+    },
+    "effectiveStatus": {
+      "type": "string",
+      "enum": ["AVAILABLE", "ADAPTER_MISSING", "VERSION_MISMATCH", "DEGRADED", "ACCOUNT_REQUIRED", "SOURCE_DISABLED", "UNREGISTERED", "UNKNOWN"]
+    }
+  }
+}

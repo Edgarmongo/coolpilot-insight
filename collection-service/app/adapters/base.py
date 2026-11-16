@@ -9,17 +9,21 @@
   * 所有产出统一为 ``RawContent`` / ``RawComment``，由 normalizer 转成库表结构；
     适配器不直接写数据库。
 
-当前状态（2026-11-15）：
-  抖音采集以脚本形式存在（``adapters/douyin/comment.py``），尚未改为实现本接口。
-  本文件先确立契约，P1 阶段把抖音脚本包成 ``DouyinAdapter``，
-  小红书 / 快手 / Web 按同一契约接入。
+当前状态（2026-11-16）：
+  * ``StubAdapter`` —— 链路验证替身，不声明任何真实能力。
+  * ``DouyinPublicAdapter``（``adapters/douyin/douyin_adapter.py``）——
+    首个真实接入实现，能力绑定到 ``collector.py`` / ``search.py`` 里的真实函数。
+  本文件先确立契约；小红书 / 快手 / Web 按同一契约接入。
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Iterable
+from typing import TYPE_CHECKING, Any, Iterable
+
+if TYPE_CHECKING:  # 避免运行期循环导入
+    from app.registry.capability import CapabilitySpec
 
 
 @dataclass
@@ -69,11 +73,35 @@ class PlatformAdapter(ABC):
 
     #: 平台唯一标识，如 DOUYIN / XHS / KUAISHOU / WEB
     source_code: str = ""
+    #: 接入实现标识（SOURCE-02 §02-04）。同一平台可有多个接入实现。
+    connector_code: str = ""
+    #: 接入实现版本（semver）。接口行为变化时递增。
+    connector_version: str = "0.0.0"
 
     @property
     @abstractmethod
     def capabilities(self) -> Capability:
-        """返回当前**已验证**的能力集合。"""
+        """返回当前**已验证**的能力集合（旧契约，供兼容期使用）。
+
+        新代码请用 :meth:`capability_specs` —— 它能表达逐项的访问模式、
+        实现状态与函数绑定。
+        """
+
+    def capability_specs(self) -> list["CapabilitySpec"]:
+        """返回 v1 契约下的能力声明列表。
+
+        默认空：没有真实实现就没有能力声明。
+        每条声明都必须带 ``adapterFunction``，指向真实可调用函数。
+        """
+        return []
+
+    def legacy_status(self) -> str | None:
+        """旧端点使用的状态词覆盖值。返回 ``None`` 表示按能力状态自动推导。"""
+        return None
+
+    def legacy_note(self) -> str | None:
+        """旧端点使用的说明文本覆盖值。"""
+        return None
 
     @abstractmethod
     def validate_config(self) -> None:
@@ -95,7 +123,11 @@ class PlatformAdapter(ABC):
         """采集允许访问的评论。不可用的平台返回空集合并声明能力为 False。"""
 
     def health_check(self) -> bool:
-        """连接与可用性检查。默认认为通过，子类可覆盖。"""
+        """连接与可用性检查。默认认为通过，子类可覆盖。
+
+        **不得**为了健康检查发起真实平台采集请求——
+        L4/L5 健康检查需显式触发且受速率限制（SOURCE-02 §02-05）。
+        """
         return True
 
 

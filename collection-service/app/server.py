@@ -11,8 +11,20 @@
 作业在后台线程执行，接口立即返回 jobId——采集耗时 10~120 秒，
 同步 HTTP 必然超时，这也是契约里定为异步的原因。
 
-当前只接了 stub 适配器（链路验证用）。抖音适配器仍以脚本形式存在，
-R3-04 后续步骤再包装成实现同一契约的 adapter。
+**SOURCE-03 变更**：
+``/health`` 与 ``/v1/capabilities`` 不再返回硬编码 stub，
+而是基于真实的 Adapter / Capability Registry 输出（SOURCE-02 §02-03 v1 Schema）。
+旧字段保留在兼容期，新结构以 ``data`` / ``registry`` / ``connectors`` 并列提供，
+Java 调用方不必立刻改造。
+
+新增（SOURCE-02 §02-05）：
+
+    GET  /v1/adapters
+    GET  /v1/adapters/<connectorCode>
+    GET  /v1/adapters/<connectorCode>/capabilities
+
+**已知限制**（留给 SOURCE-04）：``/v1/jobs`` 仍是 stub 实现，
+生产采集走 Java → 子进程 → ``comment.py`` 的老链路，本任务不动它。
 """
 
 from __future__ import annotations
@@ -32,6 +44,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from flask import Flask, jsonify, request  # noqa: E402
 
 from app.adapters.stub import StubAdapter  # noqa: E402
+from app.registry.bootstrap import get_registry  # noqa: E402
+from app.registry.capability import SCHEMA_VERSION  # noqa: E402
+from app.registry.errors import classify_exception  # noqa: E402
 
 app = Flask(__name__)
 
@@ -57,6 +72,32 @@ class Job:
     error_message: str | None = None
     started_at: float | None = None
     updated_at: float = field(default_factory=time.time)
+
+
+# ----------------------------------------------------------------------
+# 响应信封
+# ----------------------------------------------------------------------
+def _trace_id() -> str:
+    """沿用调用方传入的 traceId，没有就生成一个。"""
+    return request.headers.get("X-Trace-Id") or request.headers.get("X-Request-Id") \
+        or uuid.uuid4().hex[:16]
+
+
+def _envelope(data: Any, error: Any = None) -> dict[str, Any]:
+    """SOURCE-02 §02-05 的统一响应信封。"""
+    return {"code": 0, "msg": "ok", "data": data, "error": error,
+            "meta": {"traceId": _trace_id()}}
+
+
+def _error_envelope(code: int, message: str, http_status: int) -> tuple[Any, int]:
+    """错误响应。保留旧的 ``code``/``message`` 字段，同时补上信封字段。"""
+    return jsonify({
+        "code": code,
+        "message": message,
+        "data": None,
+        "error": {"code": code, "message": message},
+        "meta": {"traceId": _trace_id()},
+    }), http_status
 
 
 def _require_token():
@@ -97,33 +138,126 @@ def _run_job(job: Job) -> None:
             job.status = "SUCCEEDED"
             job.updated_at = time.time()
     except Exception as e:  # 单作业失败不能影响服务
+        spec = classify_exception(e)
         with _LOCK:
             job.status = "FAILED"
-            job.error_code = "ADAPTER_ERROR"
+            job.error_code = spec.code
             job.error_message = str(e)[:500]
             job.updated_at = time.time()
 
 
+# ----------------------------------------------------------------------
+# 健康检查与能力
+# ----------------------------------------------------------------------
 @app.get("/health")
 def health():
-    return jsonify({"code": 0, "msg": "ok", "adapters": ["stub"]})
+    """服务存活 + Registry 状态。
+
+    **只读本地注册表，绝不触发平台采集请求**（SOURCE-02 §02-05 硬规则）。
+    """
+    registry = get_registry()
+    payload = registry.health_payload()
+    return jsonify({
+        # —— 旧字段（兼容期保留）——
+        "code": 0,
+        "msg": "ok",
+        "adapters": [a["connectorCode"] for a in payload["adapters"]],
+        # —— 新结构 ——
+        "registry": payload,
+        "data": payload,
+        "error": None,
+        "meta": {"traceId": _trace_id()},
+    })
 
 
 @app.get("/v1/capabilities")
 def capabilities():
-    stub = StubAdapter()
-    cap = stub.capabilities
+    """能力清单。
+
+    * ``items`` —— 旧结构，字段与语义保持不变（兼容期）；
+    * ``connectors`` —— SOURCE-02 §02-03 v1 Schema 的平台能力文档；
+    * ``data`` —— 与 ``connectors`` 相同，放在统一信封里。
+    """
+    registry = get_registry()
+    items = registry.legacy_items()
+    connectors = registry.v1_documents()
     return jsonify({
-        "items": [{
-            "sourceCode": stub.source_code,
-            "comments": cap.comments,
-            "keywordSearch": cap.keyword_search,
-            "status": cap.status,
-            "note": cap.note,
-        }]
+        "code": 0,
+        "msg": "ok",
+        "items": items,
+        "schemaVersion": SCHEMA_VERSION,
+        "connectors": connectors,
+        "data": {"schemaVersion": SCHEMA_VERSION, "connectors": connectors},
+        "error": None,
+        "meta": {"traceId": _trace_id()},
     })
 
 
+@app.get("/v1/adapters")
+def adapters():
+    """Observed 适配器清单（含加载状态与能力数）。"""
+    registry = get_registry()
+    views = registry.adapter_views()
+    data = {
+        "schemaVersion": SCHEMA_VERSION,
+        "adapters": views,
+        "diagnostics": registry.diagnostics(),
+    }
+    return jsonify(_envelope(data))
+
+
+@app.get("/v1/adapters/<connector_code>")
+def adapter_detail(connector_code: str):
+    """单个适配器详情 + 它的 Observed 能力。"""
+    registry = get_registry()
+    entry = registry.adapters.entry(connector_code)
+    if entry is None:
+        return _error_envelope(40400, f"接入实现不存在: {connector_code}", 404)
+    specs = registry.observed_specs(connector_code)
+    view = entry.to_metadata().to_v1()
+    view["capabilities"] = [s.to_v1() for s in specs]
+    view["capabilityCount"] = len(specs)
+    data = {
+        "schemaVersion": SCHEMA_VERSION,
+        "adapter": view,
+        "diagnostics": [d.to_v1() for d in registry.capabilities.diagnostics(connector_code)],
+    }
+    return jsonify(_envelope(data))
+
+
+@app.get("/v1/adapters/<connector_code>/capabilities")
+def adapter_capabilities(connector_code: str):
+    """该接入的 Observed 能力清单（SOURCE-02 §02-03 Schema）。
+
+    非平台接入（如链路验证替身）没有 ``sourceCode``，因此不产出 v1 平台文档，
+    只返回空能力清单 + 说明。
+    """
+    registry = get_registry()
+    entry = registry.adapters.entry(connector_code)
+    if entry is None:
+        return _error_envelope(40400, f"接入实现不存在: {connector_code}", 404)
+    specs = registry.observed_specs(connector_code)
+    if not entry.platform_scoped:
+        data = {
+            "schemaVersion": SCHEMA_VERSION,
+            "connectorCode": connector_code,
+            "capabilities": [],
+            "note": "非平台接入（链路验证替身），不产出 sourceCode 与 v1 平台文档",
+        }
+    else:
+        data = {
+            "schemaVersion": SCHEMA_VERSION,
+            "sourceCode": entry.source_code,
+            "connectorCode": connector_code,
+            "connectorVersion": entry.connector_version,
+            "capabilities": [s.to_v1() for s in specs],
+        }
+    return jsonify(_envelope(data))
+
+
+# ----------------------------------------------------------------------
+# 作业（兼容期：仍为 stub 实现）
+# ----------------------------------------------------------------------
 @app.post("/v1/jobs")
 def create_job():
     denied = _require_token()
