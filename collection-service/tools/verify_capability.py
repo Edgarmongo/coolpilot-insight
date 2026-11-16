@@ -51,7 +51,8 @@ def _now() -> str:
 # ----------------------------------------------------------------------
 # 验证器
 # ----------------------------------------------------------------------
-def _verify_comment(video_id: str, max_comments: int) -> tuple[bool, dict[str, Any], str]:
+def _verify_comment(video_id: str, max_comments: int,
+                    keyword: str | None = None) -> tuple[bool, dict[str, Any], str]:
     """评论采集：验证能真正拿到评论且带 cid。"""
     from app.adapters.douyin.collector import collect_comments
 
@@ -73,7 +74,8 @@ def _verify_comment(video_id: str, max_comments: int) -> tuple[bool, dict[str, A
     return ok, observed, message
 
 
-def _verify_reply(video_id: str, max_comments: int) -> tuple[bool, dict[str, Any], str]:
+def _verify_reply(video_id: str, max_comments: int,
+                  keyword: str | None = None) -> tuple[bool, dict[str, Any], str]:
     """楼中楼：验证接口的 reply_comment 字段能带回嵌套回复。
 
     这是**读取**评论下的回复，不是发布回复——本契约不含任何写能力。
@@ -94,7 +96,8 @@ def _verify_reply(video_id: str, max_comments: int) -> tuple[bool, dict[str, Any
     return ok, observed, message
 
 
-def _verify_detail(video_id: str, max_comments: int) -> tuple[bool, dict[str, Any], str]:
+def _verify_detail(video_id: str, max_comments: int,
+                   keyword: str | None = None) -> tuple[bool, dict[str, Any], str]:
     """内容详情：验证能取到标题与作者。"""
     from app.adapters.douyin.collector import collect_content_detail
 
@@ -110,6 +113,31 @@ def _verify_detail(video_id: str, max_comments: int) -> tuple[bool, dict[str, An
     return ok, observed, message
 
 
+def _verify_keyword_search(_video_id: str, max_items: int,
+                           keyword: str | None = None) -> tuple[bool, dict[str, Any], str]:
+    """关键词搜索：验证能按关键词真的搜到视频。
+
+    这条能力此前**一直没有验证器**，因此永远停在 ``UNVERIFIED``——
+    不是"没顾上"，而是"风控行为未知，不敢给它盖章"。
+    现在补上验证器，只有真实搜到带 awemeId 的结果才算通过。
+    """
+    from app.adapters.douyin.search import run_search
+
+    kw = (keyword or "足球").strip()
+    results = run_search(kw, min(max_items, 20))
+    with_id = [r for r in results if r.get("awemeId")]
+    observed = {
+        "keyword": kw,
+        "found": len(results),
+        "withAwemeId": len(with_id),
+        "sample": [r.get("awemeId") for r in with_id[:3]],
+    }
+    ok = bool(with_id)
+    message = (f"关键词「{kw}」搜到 {len(with_id)} 个视频" if ok
+               else f"关键词「{kw}」未搜到任何带 awemeId 的结果（可能被风控或页面结构变化）")
+    return ok, observed, message
+
+
 #: ``(connectorCode, capabilityCode)`` → 验证器。
 #: **没有验证器的能力无法被提升为 VERIFIED**——这是刻意的：
 #: 关键词搜索的风控行为未知，在评估清楚之前只能停在 UNVERIFIED。
@@ -117,6 +145,7 @@ VERIFIERS: dict[tuple[str, str], Callable[[str, int], tuple[bool, dict[str, Any]
     ("DOUYIN_PUBLIC", "COMMENT"): _verify_comment,
     ("DOUYIN_PUBLIC", "COMMENT_REPLY"): _verify_reply,
     ("DOUYIN_PUBLIC", "CONTENT_DETAIL"): _verify_detail,
+    ("DOUYIN_PUBLIC", "KEYWORD_SEARCH"): _verify_keyword_search,
 }
 
 
@@ -124,6 +153,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="能力真实验证工具")
     parser.add_argument("--video", required=True, help="用于验证的视频 ID 或链接")
     parser.add_argument("--max", type=int, default=30, help="单次采集上限")
+    parser.add_argument("--keyword", default=None,
+                        help="关键词搜索验证使用的关键词（仅 KEYWORD_SEARCH 验证器用）")
     parser.add_argument("--connector", default="DOUYIN_PUBLIC")
     parser.add_argument("--out", default=EVIDENCE_FILE, help="证据文件输出路径")
     args = parser.parse_args(argv)
@@ -155,7 +186,7 @@ def main(argv: list[str] | None = None) -> int:
             continue
         print(f"[verify] 验证 {connector_code}/{capability_code} …")
         try:
-            ok, observed, message = verifier(args.video, args.max)
+            ok, observed, message = verifier(args.video, args.max, args.keyword)
         except Exception as e:  # noqa: BLE001 —— 验证失败不是脚本失败
             print(f"[verify]   异常：{type(e).__name__}: {e}")
             ok, observed, message = False, {"error": f"{type(e).__name__}: {e}"}, "验证过程异常"
