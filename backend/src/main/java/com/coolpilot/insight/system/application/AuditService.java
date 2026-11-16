@@ -146,21 +146,43 @@ public class AuditService {
         return JSON.writeValueAsString(Map.of(TEXT_FIELD, detail));
     }
 
+    /**
+     * 失败计数。**整个方法是一个异常隔离区**。
+     *
+     * <p>它被调用的时机永远在"审计已经出问题之后"，因此这里再抛异常，
+     * 异常会从 {@code audit()} 的 catch 块里向外穿透（catch 块内的异常
+     * 不会被它自己捕获），直接落到业务调用方身上——
+     * 那等于"审计的旁路故障反向破坏了已经成功的业务"。
+     *
+     * <p>所以：{@code getIfAvailable()} 也必须放进 try。它看起来只是个 getter，
+     * 但在容器未就绪/依赖解析失败时会抛 {@code BeansException}。
+     *
+     * <p>边界要清楚（不吞掉程序错误）：
+     * <ul>
+     *   <li>指标组件不可用 → WARN（一行，带异常类型），业务继续；</li>
+     *   <li>计数注册失败 → WARN，业务继续；</li>
+     *   <li>任何情况下都**不向调用方抛出**。</li>
+     * </ul>
+     */
     private void countFailure(String action, String stage) {
-        MeterRegistry registry = meterRegistry == null ? null : meterRegistry.getIfAvailable();
-        if (registry == null) {
-            return;
-        }
         try {
+            MeterRegistry registry = meterRegistry == null ? null : meterRegistry.getIfAvailable();
+            if (registry == null) {
+                log.debug("[audit][METRICS_UNAVAILABLE] action={} stage={} 无 MeterRegistry，计数跳过",
+                        action, stage);
+                return;
+            }
             Counter.builder("audit.failures")
                     .description("审计写入/序列化失败次数")
                     .tag("stage", stage)
                     .tag("action", action == null ? "unknown" : action)
                     .register(registry)
                     .increment();
-        } catch (Exception e) {
-            // 指标注册失败不能再抛：否则"可观测性"本身成了新的故障点
-            log.warn("[audit] 指标计数失败 action={}: {}", action, e.getMessage());
+        } catch (RuntimeException e) {
+            // 注意这里只捕获 RuntimeException（指标 API 的实际抛出类型），
+            // 不写 catch (Throwable)：Error（OOM 等）不该被审计旁路吞掉。
+            log.warn("[audit][METRICS_FAILED] action={} stage={} 计数失败: {}",
+                    action, stage, e.toString());
         }
     }
 

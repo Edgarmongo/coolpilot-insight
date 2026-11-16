@@ -5,6 +5,8 @@ import com.coolpilot.insight.system.infrastructure.persistence.AuditLogMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -105,6 +107,75 @@ class AuditServiceTest {
 
         assertThatCode(() -> service.audit("LOGIN", "USER", 1L, null))
                 .doesNotThrowAnyException();
+    }
+
+    // ------------------------------------------------------------------
+    // A-1：失败路径的异常隔离
+    // ------------------------------------------------------------------
+    @Test
+    @DisplayName("指标组件不可用（provider 抛异常）→ 审计不向业务抛")
+    void metricProviderFailureDoesNotBreakBusiness() {
+        RecordingMapper mapper = new RecordingMapper();
+        mapper.failWith = new IllegalStateException("JSON 列拒收");
+        ObjectProvider<MeterRegistry> broken = new ObjectProvider<>() {
+            @Override
+            public MeterRegistry getObject(Object... args) {
+                throw new IllegalStateException("容器未就绪");
+            }
+
+            @Override
+            public MeterRegistry getIfAvailable() {
+                throw new IllegalStateException("容器未就绪");
+            }
+
+            @Override
+            public MeterRegistry getIfUnique() {
+                return null;
+            }
+
+            @Override
+            public MeterRegistry getObject() {
+                throw new IllegalStateException("容器未就绪");
+            }
+        };
+        AuditService service = new AuditService(mapper, new PermissionService(null), broken);
+
+        assertThatCode(() -> service.audit("LOGIN", "USER", 1L, null))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("指标注册失败（registry 抛异常）→ 审计不向业务抛")
+    void metricRegistrationFailureDoesNotBreakBusiness() {
+        RecordingMapper mapper = new RecordingMapper();
+        mapper.failWith = new IllegalStateException("JSON 列拒收");
+        MeterRegistry brokenRegistry = new SimpleMeterRegistry() {
+            @Override
+            protected Counter newCounter(Meter.Id id) {
+                throw new IllegalStateException("registry down");
+            }
+        };
+        AuditService service = new AuditService(mapper, new PermissionService(null),
+                provider(brokenRegistry));
+
+        assertThatCode(() -> service.audit("LOGIN", "USER", 1L, null))
+                .doesNotThrowAnyException();
+        // 证明真的走到了抛异常那条分支：计数器没被注册出来
+        assertThat(brokenRegistry.find("audit.failures").counter()).isNull();
+    }
+
+    @Test
+    @DisplayName("正常计数：序列化与写入两个 stage 各自可数")
+    void countsBothStages() {
+        RecordingMapper mapper = new RecordingMapper();
+        mapper.failWith = new IllegalStateException("boom");
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        AuditService service = service(mapper, registry);
+
+        service.audit("LOGIN", "USER", 1L, null);
+
+        assertThat(registry.get("audit.failures").tag("stage", "write")
+                .tag("action", "LOGIN").counter().count()).isEqualTo(1.0);
     }
 
     // ------------------------------------------------------------------
