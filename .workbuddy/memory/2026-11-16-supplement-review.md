@@ -1,5 +1,31 @@
 # 2026-11-16 工作日志
 
+## SOURCE-04-03-FIX-03：契约统一 + 非法实现状态 fail-closed（36eeb87）
+
+独立复核判 PASS WITH FINDINGS（3 MEDIUM）。本轮只做 P1 三项，FIX-04 待评审通过后再动。
+
+### F1-2 非法 implementationStatus（最重要）
+原实现只读不校验，Python 拼错或新增状态会被当成正常值 → 可能判可执行。
+修成两层：解析层 `CapabilityStatus.isKnown()` 缺失/null/非法一律 BROKEN_CAPABILITY
+拒绝整份快照（不设默认值、不做大小写归一、不跳过单条）；核对层白名单兜底。
+报告里写明"拒绝整份而非跳过单条"的理由：跳过等于能力静默消失，更难发现。
+
+### F1-1 UNVERIFIED + 已接受证据被放行
+契约写"按不可执行处理"，实现只有 if(IMPLEMENTED) 一个分支。
+改成白名单：只有 VERIFIED/DEGRADED 能继续。**改结构而不补值**——
+F1-1 与 F1-2 是"没被点名就放行"的两次发作，点名式守卫必然随枚举增长而漏。
+新增 unverifiedDetail 区分三种语境（本地测试/数据自相矛盾/不在枚举内）。
+
+### F2-1 §2.7 旧 Reason
+04-04 §2.7 与 §3.2 第 4 行冲突，而 §2.7 正是 04-06 迁移最可能读的章节。
+已改为 DESIRED_UNPARSEABLE，并连带同步 §3.2.1 的格/新增行/铁律 4、EFFECTIVE-REASON 第 16 行。
+
+测试 Java 259/259（+6）、Python 76/76、5 容器 healthy、真实链路无回归。
+
+**仍未做**：F1-3（ADR 示例 / DEGRADED 忽略 reason）、F1-4（注释步号）、
+F2-3 与 O1 的诊断测试 —— 全属 FIX-04；L1~L5 单独核查。
+
+
 ## SOURCE-04-03 修复：FIX-01（H1）+ FIX-02（M1/M2）
 
 评审 edcb034 判 FAIL（H1 HIGH）。按用户裁决分两个独立任务修复，方案 A。
