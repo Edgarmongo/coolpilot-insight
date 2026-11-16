@@ -202,7 +202,8 @@ public final class DesiredCapabilityParser {
         return (v == null || v.isNull()) ? null : v.asText();
     }
 
-    private static int majorOf(String version) {
+    /** 取版本串的主版本号；无法解析返回 {@code 0}。 */
+    public static int majorOf(String version) {
         if (version == null || version.isBlank()) {
             return 0;
         }

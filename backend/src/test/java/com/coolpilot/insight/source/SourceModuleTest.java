@@ -81,8 +81,15 @@ class SourceModuleTest extends AbstractIntegrationTest {
         assertThat(douyin.getCapability())
                 .as("关键词搜索未验证，必须是 false，不能假装可用")
                 .containsEntry("keywordSearch", false);
-        assertThat(douyin.getCapability()).containsEntry("commentStatus", "AVAILABLE");
-        assertThat(douyin.getCapability()).containsEntry("keywordStatus", "PENDING");
+
+        // 兼容期字段的语义在 SOURCE-04-06 之后变了：库中已是 v2，
+        // capability 由 Desired **派生**（SOURCE-04-04 §2.7 · E3），
+        // 不再原样回显旧文档，因此旧状态词 commentStatus / keywordStatus 不再出现。
+        // 它们的信息没有丢：keywordSearch=false 就是 KEYWORD_SEARCH 的 desiredStatus=DISABLED，
+        // 而"实现到什么程度"由 Observed 的 implementationStatus 表达（ADR-008 §2.4）。
+        assertThat(douyin.getCapability())
+                .as("旧状态词不得回到 Desired 的兼容视图（它本就属于 Observed）")
+                .doesNotContainKeys("commentStatus", "keywordStatus");
     }
 
     @Test

@@ -1,11 +1,14 @@
 package com.coolpilot.insight.source.controller;
 
+import com.coolpilot.insight.common.security.RequirePermission;
 import com.coolpilot.insight.common.security.RequireRole;
 import com.coolpilot.insight.common.web.Result;
 import com.coolpilot.insight.source.application.KeywordService;
+import com.coolpilot.insight.source.application.SourceCapabilityService;
 import com.coolpilot.insight.source.application.SourceQueryService;
 import com.coolpilot.insight.source.dto.DataSourceView;
 import com.coolpilot.insight.source.dto.KeywordView;
+import com.coolpilot.insight.source.dto.SourceCapabilityDetailView;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,10 +33,14 @@ import java.util.Map;
 public class SourceController {
 
     private final SourceQueryService sourceQueryService;
+    private final SourceCapabilityService sourceCapabilityService;
     private final KeywordService keywordService;
 
-    public SourceController(SourceQueryService sourceQueryService, KeywordService keywordService) {
+    public SourceController(SourceQueryService sourceQueryService,
+                            SourceCapabilityService sourceCapabilityService,
+                            KeywordService keywordService) {
         this.sourceQueryService = sourceQueryService;
+        this.sourceCapabilityService = sourceCapabilityService;
         this.keywordService = keywordService;
     }
 
@@ -49,6 +56,39 @@ public class SourceController {
                                              @RequestBody Map<String, String> body) {
         sourceQueryService.updateStatus(code, body.get("status"));
         return Result.ok("已更新");
+    }
+
+    /**
+     * 三态明细（SOURCE-04-06）。
+     *
+     * <p>只读，但需要授权：Observed 与诊断会暴露运行时内部结构（模块路径、函数标识）。
+     */
+    @RequireRole(role = 0)
+    @RequirePermission("source:capability:view")
+    @GetMapping("/sources/{code}/capabilities")
+    public Result<SourceCapabilityDetailView> capabilities(@PathVariable String code) {
+        return Result.ok(sourceCapabilityService.detail(code));
+    }
+
+    /**
+     * 覆盖写入 Desired（SOURCE-04-06）。
+     *
+     * <p>请求体收**原始字符串**，不用 DTO record 也不用 {@code JsonNode}：
+     * <ul>
+     *   <li>DTO 会让 Jackson 做类型转换（数字 {@code 123} → 字符串 {@code "123"}、
+     *       布尔 {@code true} → {@code "true"}），那正是"猜测字段含义"；</li>
+     *   <li>{@code JsonNode} 会绑定到框架当前使用的 Jackson 代际（本项目运行时是
+     *       Jackson 3），而校验器与解析器统一用 Jackson 2 —— 两代混用会在
+     *       消息转换阶段就失败，且报错位置与原因无关，极难排查。</li>
+     * </ul>
+     * 原始字符串交给 {@code SourceCapabilityService} 用同一套 Jackson 2 解析并逐字段判类型。
+     */
+    @RequireRole(role = 1)
+    @RequirePermission("source:capability:manage")
+    @PutMapping("/sources/{code}/capabilities")
+    public Result<SourceCapabilityDetailView> replaceCapabilities(@PathVariable String code,
+                                                                  @RequestBody(required = false) String body) {
+        return Result.ok(sourceCapabilityService.replaceDesired(code, body));
     }
 
     @RequireRole(role = 0)

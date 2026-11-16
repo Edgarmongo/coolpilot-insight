@@ -32,12 +32,12 @@
 |---|---|---|---|
 | SOURCE-04-01 | 修正 `AccountVerificationService` 探活目标 | P0 | ✅ **已完成**（补充审查中） |
 | SOURCE-04-02 | Java 消费 Python Registry（**含快照一致性**） | P0 | ✅ **已实施，待评审**（`SOURCE-04-02-IMPLEMENTATION.md`） |
-| SOURCE-04-03 | Desired / Observed / Effective 核对 | P0 | 待执行 |
-| SOURCE-04-04 | Desired v2 结构与状态语义定稿 | P0 | 🟡 **设计已冻结 v2，评审通过**（`SOURCE-04-04-TASKCARD.md` + `ADR-008` + `SOURCE-04-04-EFFECTIVE-REASON.md`） |
+| SOURCE-04-03 | Desired / Observed / Effective 核对 | P0 | ✅ **已实施**（FIX-04-M1/L1 后待独立评审关闭；`SOURCE-04-03-*.md`） |
+| SOURCE-04-04 | Desired v2 结构与状态语义定稿 | P0 | ✅ **设计已冻结 + 迁移已落地**（V31；`SOURCE-04-04-TASKCARD.md` + `ADR-008` + `SOURCE-04-04-EFFECTIVE-REASON.md`） |
 | SOURCE-04-05 | Collection Service 部署架构决策 | P0 | ✅ **已完成**（ADR-007） |
-| SOURCE-04-06 | Java 数据源管理 API | P1 | 待执行 |
+| SOURCE-04-06 | Java 数据源管理 API | P1 | ✅ **已实施**（`SOURCE-04-06-IMPLEMENTATION.md`） |
 | SOURCE-04-07 | 数据源管理前端 | P1 | **推迟**（用户明确要求本轮不做前端） |
-| SOURCE-04-08 | 集成测试与回归 | P0 | 待执行 |
+| SOURCE-04-08 | 集成测试与回归 | P0 | 🟡 **部分验证**：跨服务 HTTP / Java 全量 315 / 部署回归已做；Python 全量与生产链路未跑（见 `SOURCE-04-06-IMPLEMENTATION.md` §4） |
 
 > **SOURCE-08 的追踪不合并掉**：Desired/Observed 状态核对的**架构决策与验收要求**
 > 仍保留在 SOURCE-08 名下（`ADR-006` + 本卡 04-03 的推导规则表）。

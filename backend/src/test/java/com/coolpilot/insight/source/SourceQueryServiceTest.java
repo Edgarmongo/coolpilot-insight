@@ -206,5 +206,10 @@ class SourceQueryServiceTest {
         public int updateStatus(String code, String status) {
             throw new UnsupportedOperationException("测试不需要改状态");
         }
+
+        @Override
+        public int updateCapabilityJson(String code, String json) {
+            throw new UnsupportedOperationException("测试不需要写能力声明");
+        }
     }
 }

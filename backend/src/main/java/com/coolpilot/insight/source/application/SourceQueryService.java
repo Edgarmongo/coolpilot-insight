@@ -5,6 +5,7 @@ import com.coolpilot.insight.common.exception.ErrorCode;
 import com.coolpilot.insight.integration.capability.SnapshotCache;
 import com.coolpilot.insight.source.domain.DataSource;
 import com.coolpilot.insight.source.domain.DesiredCapabilitySet;
+import com.coolpilot.insight.source.domain.DesiredSchema;
 import com.coolpilot.insight.source.dto.DataSourceView;
 import com.coolpilot.insight.source.infrastructure.persistence.DataSourceMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -87,14 +88,14 @@ public class SourceQueryService {
         v.setStatus(ds.getStatus());
         v.setRemark(ds.getRemark());
 
-        // 兼容期：旧结构原样返回，老前端不受影响
-        v.setCapability(parseCapability(ds.getCapabilityJson()));
-
         // Desired：业务声明（v1/v2 双读）
         DesiredCapabilitySet desired = DesiredCapabilityParser.parse(
                 ds.getCapabilityJson(), ds.getCode());
         v.setDesired(desired.capabilities());
         v.setDesiredError(desired.error());
+
+        // 兼容期：旧结构字段只读，v2 行由 Desired 派生（不再原样回显 v2 文档）
+        v.setCapability(legacyCapability(ds.getCapabilityJson(), desired));
 
         // Observed 新鲜度：必须如实暴露，不能把 STALE 当正常
         v.setSnapshotState(read.state().name());
@@ -104,6 +105,34 @@ public class SourceQueryService {
         v.setEffective(reconciler.reconcile(
                 ds, desired, read, accountAvailability.hasUsableAccount(ds.getId())));
         return v;
+    }
+
+    /**
+     * 旧结构（{@code comments} 等）的**派生输出**（SOURCE-04-04 §2.7 · E3）。
+     *
+     * <p>v2 行不再原样回显：{@code capability_json} 已经是 v2 文档，
+     * 若把整份文档塞进 {@code capability} 字段，老前端读到的是
+     * {@code {schemaVersion, capabilities}} 而不是它认识的三个布尔——
+     * 这不是兼容，是形状变了但没告诉调用方。
+     *
+     * <p>v1 行原样返回：迁移未覆盖的行仍有真实的旧结构，改写它等于伪造。
+     */
+    private Map<String, Object> legacyCapability(String rawJson, DesiredCapabilitySet desired) {
+        if (DesiredCapabilityParser.majorOf(desired.schemaVersion())
+                < DesiredSchema.SUPPORTED_MAJOR) {
+            return parseCapability(rawJson);
+        }
+        Map<String, Object> legacy = new LinkedHashMap<>();
+        legacy.put("comments", enabled(desired, "COMMENT"));
+        legacy.put("contentDetail", enabled(desired, "CONTENT_DETAIL"));
+        legacy.put("keywordSearch", enabled(desired, "KEYWORD_SEARCH"));
+        return legacy;
+    }
+
+    /** 任一 Connector 下声明为 ENABLED 即视为提供（旧的布尔字段是跨接入的粗粒度表达）。 */
+    private static boolean enabled(DesiredCapabilitySet desired, String code) {
+        return desired.capabilities().stream()
+                .anyMatch(c -> code.equals(c.code()) && c.enabled());
     }
 
     @SuppressWarnings("unchecked")
