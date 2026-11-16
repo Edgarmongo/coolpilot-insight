@@ -26,6 +26,26 @@ Docker Compose 四服务：`mysql` / `flask`(跑的是 **ai-service**) / `backen
 6. Maven 官方源不可达，本地/容器均用阿里云 https settings（`-s` 指定）。
 7. 容器映射 MySQL→3307、前端→5173（本机 3306/3000 被占）。
 8. Docker 挂载在 Windows Git Bash 下需 `MSYS_NO_PATHCONV=1`。
+9. **Jackson 两代并存**（2026-11-17）：Boot 4 的消息转换器是 Jackson 3（`tools.jackson`），
+   业务代码普遍用 Jackson 2（`com.fasterxml`）。`@RequestBody com.fasterxml...JsonNode`
+   会在**读请求体阶段**500（报"抽象类型无法实例化"，与业务无关）。
+   需要严格判定入参时收**原始字符串**，在 service 内用 Jackson 2 解析。
+10. `docker compose` 必须带 `--env-file .env`（`.env` 在仓库根，compose 文件在 `deploy/compose/`）。
+
+## 数据源能力模型（2026-11-17 落地 SOURCE-04-06/07）
+- Flyway 现到 **V33**。V31 把 `capability_json` 迁到 v2（单条 UPDATE、可重入、
+  整行迁移或整行不动）；V32 权限点 `source:capability:view|manage`；V33 启用 `/sources` 菜单。
+- 接口：`GET/PUT /api/v1/source/sources/{code}/capabilities`（三态明细 / 覆盖写 Desired）。
+- 写入口唯一闸门 `DesiredWriteValidator`：类型严格、未知字段拒收、拒写 v1、
+  `accessModes` 为空不填默认值、落库 JSON 由**校验后的模型**重新序列化（幂等）。
+- 只写 `capability_json` 一列，不碰 `status` 与 `ds_account.auth_status`。
+- 列表接口 `capability` 旧字段改为由 Desired **派生**（v2 行不再回显整份文档，
+  旧状态词 `commentStatus`/`keywordStatus` 不再输出）。
+
+## 待裁决（2026-11-17）
+`COMMENT_REPLY` 是否由 v1 的 `comments:true` 派生：04-04 §1.1 示例含 4 条、
+§2.2 映射规则只产 3 条。当前按 §2.2 不推定，运行时显示 `NOT_DECLARED`。
+
 
 ## 已验证事实
 - 抖音评论接口**返回 cid**（19/19），楼中楼 `reply_comment` 有效。
