@@ -93,6 +93,10 @@ services:
       INTERNAL_TOKEN: ${COLLECTION_INTERNAL_TOKEN:-}
       # 采集数据目录（与 backend 共享同一宿主目录）
       PY_DATAS_DIR: /app/collection-service/datas
+      # U1 A-API：采集前向 backend 拉跨次去重记忆（不直连数据库）
+      BACKEND_API_URL: ${BACKEND_API_URL:-http://backend:8080}
+      # api（默认）| csv（回滚到"读 CSV 历史"的旧行为）
+      COLLECT_DEDUP_SOURCE: ${COLLECT_DEDUP_SOURCE:-api}
       # 容器内 Chrome 无 GUI，需 headless
       CHROME_HEADLESS: "1"
       CHROME_BROWSER_PATH: /usr/bin/google-chrome

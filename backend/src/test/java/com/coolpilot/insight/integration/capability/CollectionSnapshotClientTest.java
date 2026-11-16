@@ -32,6 +32,20 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class CollectionSnapshotClientTest {
 
+    /**
+     * 真实往返用的内部令牌。
+     *
+     * <p>部署配置了 {@code COLLECTION_INTERNAL_TOKEN} 之后，采集服务的快照端点会拒绝匿名请求，
+     * 因此测试也必须带上令牌——这本身是对的：测试要模拟真实调用方，而不是走一条生产上不存在的匿名通道。
+     */
+    private static String token() {
+        String env = System.getenv("COLLECTION_TEST_TOKEN");
+        if (env == null || env.isBlank()) {
+            env = System.getenv("COLLECTION_INTERNAL_TOKEN");
+        }
+        return env == null ? "" : env.trim();
+    }
+
     private static String baseUrl() {
         String env = System.getenv("COLLECTION_TEST_URL");
         return (env == null || env.isBlank()) ? "http://localhost:5001" : env;
@@ -70,7 +84,7 @@ class CollectionSnapshotClientTest {
     @Test
     @DisplayName("真实 HTTP 往返：能拉到完整快照")
     void fetchesRealSnapshot() {
-        var result = new CollectionServiceClient(baseUrl(), "").fetchSnapshot();
+        var result = new CollectionServiceClient(baseUrl(), token()).fetchSnapshot();
 
         assertThat(result.ok())
                 .as("需要 cpi-collection 在 %s 运行（docker compose up -d collection）；"
@@ -89,8 +103,8 @@ class CollectionSnapshotClientTest {
     @Test
     @DisplayName("真实往返：连续两次请求 snapshotId 必须相同（内容未变）")
     void snapshotIdIsStableOverRealHttp() {
-        var first = new CollectionServiceClient(baseUrl(), "").fetchSnapshot();
-        var second = new CollectionServiceClient(baseUrl(), "").fetchSnapshot();
+        var first = new CollectionServiceClient(baseUrl(), token()).fetchSnapshot();
+        var second = new CollectionServiceClient(baseUrl(), token()).fetchSnapshot();
 
         assertThat(first.ok()).as(first.detail()).isTrue();
         assertThat(second.ok()).as(second.detail()).isTrue();
@@ -102,7 +116,7 @@ class CollectionSnapshotClientTest {
     @Test
     @DisplayName("真实往返：DOUYIN_PUBLIC 的能力与诊断可被关联查询")
     void resolvesConnectorAndDiagnostics() {
-        var result = new CollectionServiceClient(baseUrl(), "").fetchSnapshot();
+        var result = new CollectionServiceClient(baseUrl(), token()).fetchSnapshot();
         assertThat(result.ok()).as(result.detail()).isTrue();
         RegistrySnapshot snap = result.snapshot();
 
@@ -124,7 +138,7 @@ class CollectionSnapshotClientTest {
     @Test
     @DisplayName("真实往返：快照里没有作业运行结果（未触发平台采集）")
     void realSnapshotHasNoJobArtifacts() {
-        var result = new CollectionServiceClient(baseUrl(), "").fetchSnapshot();
+        var result = new CollectionServiceClient(baseUrl(), token()).fetchSnapshot();
         assertThat(result.ok()).as(result.detail()).isTrue();
 
         assertThat(result.snapshot().capabilities()).allSatisfy(doc ->

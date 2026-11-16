@@ -1,6 +1,6 @@
 # U1 · A-API 实施报告（含一个阻断性发现）
 
-> 状态：**接口与客户端已交付并验证；最后一步"接线"被证据机制阻断，未实施**
+> 状态：**已按 A 路线完成**——真实验证重签证据 → 接线 → 端到端验证（见 §八）
 > 基线：`00cda61`
 > 关联：`SOURCE-04-FOLLOWUP-REVIEW-02.md` §5、`SOURCE-04-U1-CID-STORE-DESIGN.md`
 
@@ -138,3 +138,60 @@ function_fingerprint(fn) = sha256(inspect.getsource(fn))     ← 函数源码
 `collector.py`（已回退）、U2、U4、SOURCE-05。未删除任何数据、未执行真实采集。
 
 部署说明：后端已重建并重启（含新接口）；`COLLECTION_INTERNAL_TOKEN` 保持为空 → 接口默认 401。
+
+
+---
+
+## 八、A 路线执行结果（2026-11-17 03:2x）
+
+### 8.1 做了什么
+
+1. **真实重验**：容器内执行 `python tools/verify_capability.py --video 7703721523349239951 --max 30 --out /tmp/evidence.json`
+   - COMMENT：通过，collected=19，cidCoverage **19/19**，pages=3
+   - COMMENT_REPLY：通过，读取 6 条楼中楼
+   - CONTENT_DETAIL：通过（未改其实现，指纹未变，作为对照）
+2. **重签证据**：用工具产出的记录覆盖 `verification_evidence.json`（不手改任何字段）
+3. **接线**：`collect_comments` 增加 `seen_cids/seen_fps`；executor 采集前调 `fetch_seen`
+4. **端到端**：真实跑两次任务
+
+### 8.2 证据变更（hash 变化本身就是"换了实现"的证明）
+
+| 能力 | implementationHash | verifiedAt |
+|---|---|---|
+| COMMENT | `173a2122…` → **`cffb5fb0…`** | 2026-11-16T19:29:54Z |
+| COMMENT_REPLY | `b0083529…` → **`0fd5f9da…`** | 2026-11-16T19:30:28Z |
+| CONTENT_DETAIL | `31b7bb1f…`（**未变**） | 2026-11-16T19:30:34Z |
+
+CONTENT_DETAIL 未变是重要对照：证明指纹是**按函数**变化的，不是整文件哈希。
+
+重签后注册表：三者 `VERIFIED` 且 `evidence.accepted=true`；准入恢复放行。
+
+### 8.3 端到端结果
+
+```
+job=dedup-e2e-1  status=SUCCEEDED collected=1 pages=3
+dedupSource=api  dedupSeen=20  finishedReason=NO_RESPONSE
+log: 去重记忆（接口）：total=20 pages=1 cid=20 指纹=0
+     （￣︶￣）↗ 本页新增 0 条，本次累计 1 条
+```
+
+- 采集前从 backend 拿到 **20 个 cid**（DB 里该视频的现有评论）
+- 19 条被正确跳过，只剩 1 条判为"新增"
+- 第二次任务：`collected=1`、`dedupSeen=20`、DB 仍为 **20 条**
+
+### 8.4 未能达成"第二次 collected=0"——原因已定位
+
+那 1 条不是漏网的去重失败，而是**一条内容为空的楼中楼回复**：
+
+| 证据 | 内容 |
+|---|---|
+| CSV 行 | `内容` 为空、`是否回复=1`、`回复数=1`、cid=`7703945686237299491` |
+| DB | 该 cid **不存在**（该视频 20 条全部 `dedup_strategy=CID`，无 FINGERPRINT 行） |
+| clean.py:66 | `filtered = [r for r in rows if 昵称 and 内容]` → **内容为空的行被丢弃** |
+| 结果 | 永不入库 → 下次采集仍是"新" → 循环 |
+
+也就是说：**去重（19/20）是对的，失的是"采到但入不了库"的那一条**。
+它属于 U2/U4 的问题域（空内容语义、采集-清洗口径不一致），本轮不动。
+
+**因此"第二次 collected=0"这个验收判据在当前数据上不成立**，
+需要先决定"空内容回复"该怎么处理（丢弃？保留？），再谈判据。这一点不能含糊过去。

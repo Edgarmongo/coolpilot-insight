@@ -16,6 +16,14 @@ from app.adapters.stub import StubAdapter  # noqa: E402
 from app.registry.capability import SCHEMA_VERSION  # noqa: E402
 from app.server import app  # noqa: E402
 
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _dedup_from_csv(monkeypatch):
+    """HTTP 层测试不发真实去重查询（A-API 由 test_dedup 覆盖）。"""
+    monkeypatch.setenv("COLLECT_DEDUP_SOURCE", "csv")
+
 
 def test_stub_adapter_returns_deterministic_comments():
     a = StubAdapter(content_id="v1", comment_count=3)

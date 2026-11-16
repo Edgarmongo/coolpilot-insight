@@ -56,6 +56,14 @@ class Job:
     #: 实际收到过几页数据。0 表示"一个数据包都没拿到"——那是连不上，不是采完了。
     pages: int = 0
 
+    #: 本次去重记忆来源与规模（U1 A-API）。用来解释"为什么 collected=0"。
+    dedup_source: str | None = None
+    dedup_seen: int = 0
+
+    #: 本次去重记忆来源与规模（U1 A-API）。用来解释"为什么 collected=0"。
+    dedup_source: str | None = None
+    dedup_seen: int = 0
+
     seq: int = 0
     created_at: float = field(default_factory=time.time)
     started_at: float | None = None
@@ -89,6 +97,10 @@ class Job:
             "errorMessage": self.error_message,
             "finishedReason": self.finished_reason,
             "pages": self.pages,
+            "dedupSource": self.dedup_source,
+            "dedupSeen": self.dedup_seen,
+            "dedupSource": self.dedup_source,
+            "dedupSeen": self.dedup_seen,
             "queuePosition": queue_position,
             "startedAt": self.started_at,
             "finishedAt": self.finished_at,

@@ -239,6 +239,8 @@ def collect_comments(
     save_dir: str | None = None,
     write_csv: bool = True,
     printer: Callable[[str], None] = print,
+    seen_cids: set[str] | None = None,
+    seen_fps: set[str] | None = None,
 ) -> CollectOutcome:
     """采集指定视频的评论。
 
@@ -250,6 +252,9 @@ def collect_comments(
     :param save_dir: CSV 落地目录，默认取 ``PY_DATAS_DIR``
     :param write_csv: 是否落盘 CSV（Registry 观测时可不落盘）
     :param printer: 输出函数，便于测试捕获
+    :param seen_cids: 跨次去重记忆（cid 集合），由调用方从 backend 接口取来；
+        ``None`` 表示回退到"读 CSV 历史"的旧行为。
+    :param seen_fps: 跨次去重记忆（内容指纹集合），与 ``seen_cids`` 同源。
     """
     target_dir = save_dir or SAVE_DIR
     resolved_id = extract_video_id(video_id) or (video_id or "").strip()
@@ -293,13 +298,22 @@ def collect_comments(
 
         outcome.meta = capture_video_meta(dp, resolved_id, target_dir)
 
-        seen_cids: set[str] = set()
-        seen_fps: set[str] = set()
-        if write_csv:
-            seen_cids, seen_fps = load_existing_cids(csv_path)
-            if seen_cids or seen_fps:
-                printer(f"  检测到历史数据：{len(seen_cids)} 个 cid / {len(seen_fps)} 条指纹，本次将自动跳过重复")
-            ensure_header(csv_path)
+        if seen_cids is not None or seen_fps is not None:
+            # U1 A-API：记忆由 backend 提供，CSV 只承担"本次产物"职责。
+            # 这条路径下 CSV 被清洗删除也不会失忆——正是本次改造的目的。
+            seen_cids = set(seen_cids or ())
+            seen_fps = set(seen_fps or ())
+            printer(f"  去重记忆来自接口：{len(seen_cids)} 个 cid / {len(seen_fps)} 条指纹")
+            if write_csv:
+                ensure_header(csv_path)
+        else:
+            seen_cids = set()
+            seen_fps = set()
+            if write_csv:
+                seen_cids, seen_fps = load_existing_cids(csv_path)
+                if seen_cids or seen_fps:
+                    printer(f"  检测到历史数据：{len(seen_cids)} 个 cid / {len(seen_fps)} 条指纹，本次将自动跳过重复")
+                ensure_header(csv_path)
 
         dp.run_js(f'var c={CONTAINER_JS}; if(c) c.scrollTop = 600;')
         time.sleep(3)

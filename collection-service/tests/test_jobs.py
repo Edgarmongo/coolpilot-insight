@@ -25,6 +25,16 @@ from app.registry.capability import (
 CONNECTOR = "DOUYIN_PUBLIC"
 
 
+@pytest.fixture(autouse=True)
+def _dedup_from_csv(monkeypatch):
+    """执行体测试统一走 CSV 记忆。
+
+    A-API 路径会真的去连 backend，单测里既慢又不稳定；API 客户端本身
+    由 tests/test_dedup.py 覆盖，执行体侧的接线由下面两条专门的用例覆盖。
+    """
+    monkeypatch.setenv("COLLECT_DEDUP_SOURCE", "csv")
+
+
 # ----------------------------------------------------------------------
 # 假注册表：只实现派发用到的三个接口，避免测试被真实装配牵着走
 # ----------------------------------------------------------------------
@@ -441,3 +451,64 @@ def test_zero_items_without_any_page_stays_partial(monkeypatch):
     job, _ = run_once([], monkeypatch, finished_reason="NO_RESPONSE", pages=0)
     assert job.status == PARTIAL
     assert "NO_RESPONSE" in (job.error_message or "")
+
+
+# ----------------------------------------------------------------------
+# 去重记忆接线（U1 A-API）
+# ----------------------------------------------------------------------
+class _FakeSeen:
+    def __init__(self, cids=(), fps=()):
+        self.cids = set(cids)
+        self.fingerprints = set(fps)
+        self.total = len(self.cids) + len(self.fingerprints)
+        self.pages = 1
+        self.truncated = False
+
+
+def test_executor_passes_api_seen_sets_to_collector(monkeypatch):
+    """接口给的历史必须真的传到采集函数，否则接线等于没接。"""
+    from app.jobs import dedup as dedup_mod
+
+    monkeypatch.setenv("COLLECT_DEDUP_SOURCE", "api")
+    monkeypatch.setattr(dedup_mod, "fetch_seen",
+                        lambda _id: _FakeSeen(cids=["c1", "c2"], fps=["f" * 40]))
+
+    captured = {}
+
+    def fn(video_id, max_comments, **kwargs):
+        captured.update(kwargs)
+        return make_outcome([ROW_WITH_CID])
+
+    reg = registry_with([spec()], functions={"app.fake.collect": fn})
+    job = make_job()
+    build_runner(reg, "/tmp")(job)
+
+    assert job.dedup_source == "api"
+    assert job.dedup_seen == 3
+    assert captured["seen_cids"] == {"c1", "c2"}
+    assert captured["seen_fps"] == {"f" * 40}
+
+
+def test_executor_fails_closed_when_dedup_unavailable(monkeypatch):
+    """拿不到历史 → 作业失败，**不允许**退化成"没有历史"继续盲采。"""
+    from app.jobs import dedup as dedup_mod
+
+    def boom(_id):
+        raise dedup_mod.DedupUnavailable("去重接口不可达: refused")
+
+    monkeypatch.setenv("COLLECT_DEDUP_SOURCE", "api")
+    monkeypatch.setattr(dedup_mod, "fetch_seen", boom)
+
+    called = {"n": 0}
+
+    def fn(*a, **k):
+        called["n"] += 1
+        return make_outcome([])
+
+    reg = registry_with([spec()], functions={"app.fake.collect": fn})
+    job = make_job()
+    build_runner(reg, "/tmp")(job)
+
+    assert job.status == FAILED
+    assert job.error_code == "DEDUP_SOURCE_UNAVAILABLE"
+    assert called["n"] == 0, "拿不到去重记忆时不得启动采集"

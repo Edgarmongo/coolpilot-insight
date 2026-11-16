@@ -19,6 +19,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT" || exit 1
 
 COMPOSE="docker compose --env-file .env -f deploy/compose/docker-compose.yml"
+
+# 内部令牌：测试与脚本里的真实往返都要用（.env 被 gitignore，不入库）
+TOKEN_VALUE=$(grep '^COLLECTION_INTERNAL_TOKEN=' .env 2>/dev/null | cut -d= -f2-)
 PASS=0
 FAIL=0
 declare -a RESULTS
@@ -70,7 +73,9 @@ if [ "${SKIP_JAVA:-0}" = "1" ]; then
   record "mvn test" fail "被 SKIP_JAVA 跳过（本次结果不可作为回归证据）"
 else
   JAVA_LOG=$(mktemp)
-  ( cd backend && mvn -s ../deploy/docker/maven-settings.xml -o test ) > "$JAVA_LOG" 2>&1
+  # 部署配置了内部令牌后，真实往返测试必须带令牌（测试读 COLLECTION_INTERNAL_TOKEN）
+  ( cd backend && COLLECTION_INTERNAL_TOKEN="$TOKEN_VALUE" \
+      mvn -s ../deploy/docker/maven-settings.xml -o test ) > "$JAVA_LOG" 2>&1
   JAVA_RC=$?
   SUMMARY=$(grep -E '^\[INFO\] Tests run: [0-9]+, Failures' "$JAVA_LOG" | tail -1)
   if [ $JAVA_RC -eq 0 ]; then
@@ -105,8 +110,9 @@ fi
 
 echo
 echo "=========== 4. 跨服务链路 ==========="
+# 采集服务的快照端点要求内部令牌（配置了 COLLECTION_INTERNAL_TOKEN 时）
 SNAP_CODE=$(docker exec cpi-backend sh -c \
-  'curl -s -o /tmp/s.json -w "%{http_code}" http://collection:5001/v1/registry/snapshot -H "X-Internal-Token: $FLASK_INTERNAL_TOKEN"')
+  'curl -s -o /tmp/s.json -w "%{http_code}" http://collection:5001/v1/registry/snapshot -H "X-Internal-Token: $COLLECTION_INTERNAL_TOKEN"')
 if [ "$SNAP_CODE" = "200" ]; then
   SNAP_ID=$(docker exec cpi-backend python3 -c \
     "import json;print(json.load(open('/tmp/s.json'))['data']['snapshotId'][:20])" 2>/dev/null)

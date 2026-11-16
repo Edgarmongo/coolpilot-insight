@@ -5,7 +5,7 @@
     "DOUYIN_PUBLIC": {
       "COMMENT": {
         "implementationStatus": "VERIFIED",
-        "verifiedAt": "2026-11-16T08:44:15Z",
+        "verifiedAt": "2026-11-16T19:29:54Z",
         "method": "REAL_PLATFORM_RUN",
         "scope": {
           "sourceCode": "DOUYIN",
@@ -18,7 +18,7 @@
           ],
           "contractVersion": "1.0",
           "adapterFunction": "app.adapters.douyin.collector.collect_comments",
-          "implementationHash": "173a2122d97d74ef252309b51b7c167ef975678b8a596e77420171d6616fff4b"
+          "implementationHash": "cffb5fb0efe15a08e0ab884c58e1d92d2b505e783dbcbd149c7aa396129f9b72"
         },
         "observed": {
           "target": "7703721523349239951",
@@ -28,11 +28,11 @@
           "pages": 3
         },
         "message": "评论采集成功且全部带 cid",
-        "contentHash": "4360a431b2be7768ab160bc5c90017a06398fcae01e21c05b8c93484b8b8e3c8"
+        "contentHash": "0bc454e8a71c5f2d02a0968c9f5bb947524be4c4a9cecfecaa6db0818e2a87da"
       },
       "COMMENT_REPLY": {
         "implementationStatus": "VERIFIED",
-        "verifiedAt": "2026-11-16T08:44:48Z",
+        "verifiedAt": "2026-11-16T19:30:28Z",
         "method": "REAL_PLATFORM_RUN",
         "scope": {
           "sourceCode": "DOUYIN",
@@ -45,7 +45,7 @@
           ],
           "contractVersion": "1.0",
           "adapterFunction": "app.adapters.douyin.collector.collect_comments",
-          "implementationHash": "b0083529c8e7a855c07a5686b025e06d72e6e94a386c19c8d9d28f5cea1d7c00"
+          "implementationHash": "0fd5f9dadfd3bffa857fc85ec637e6e2a970d51fbcbf4979472e2cfd583d6a32"
         },
         "observed": {
           "target": "7703721523349239951",
@@ -54,11 +54,11 @@
           "finishedReason": "NO_RESPONSE"
         },
         "message": "读取到 6 条楼中楼回复",
-        "contentHash": "c9e9e13233c4ac2d22f1478ddbb4cd92e4f643b9745308d56facac416d3443f4"
+        "contentHash": "f25c2bb2c89fcfba8bf9328a762e0d7dc2a3dee3e631c65d1bf97e6a81e8e4f4"
       },
       "CONTENT_DETAIL": {
         "implementationStatus": "VERIFIED",
-        "verifiedAt": "2026-11-16T08:44:56Z",
+        "verifiedAt": "2026-11-16T19:30:34Z",
         "method": "REAL_PLATFORM_RUN",
         "scope": {
           "sourceCode": "DOUYIN",
@@ -79,9 +79,9 @@
           "title": "云南球盲热情的送大连球迷水杯大连球迷还回去说大连扔的#球迷看台文化 #球赛名场面 #球迷看台 #云南玉溪 #大连英博 - 抖音"
         },
         "message": "取到视频详情",
-        "contentHash": "bde2e6f2a97c138dc990d806130fd7140402b2e7be74ae4bea9704801b0d377f"
+        "contentHash": "5f25c5ac3f373cdb873200b364640b4c8de5d6b64e4370f42898515bf96d9a4b"
       }
     }
   },
-  "updatedAt": "2026-11-16T08:44:56Z"
+  "updatedAt": "2026-11-16T19:30:34Z"
 }

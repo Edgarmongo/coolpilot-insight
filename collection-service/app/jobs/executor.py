@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from app.jobs import dedup as dedup_mod
+from app.jobs import dedup as dedup_mod
 from app.jobs import dispatch as dispatch_mod
 from app.jobs.queue import Job, SUCCEEDED, PARTIAL, CANCELLED, FAILED
 
@@ -30,6 +32,20 @@ class CapabilityNotDispatchable(Exception):
 def _collect_comments(job: Job, fn: Callable[..., Any],
                      save_dir: str) -> tuple[list[dict[str, Any]], bool, str]:
     """``COMMENT`` / ``COMMENT_REPLY`` → ``collect_comments``。"""
+    # 去重记忆默认走 backend 接口（U1 A-API）。
+    # 拿不到就抛 DedupUnavailable —— **不**静默降级为"读 CSV"，
+    # 那等于回到"清洗删掉 CSV 就失忆"的老问题。
+    seen = None
+    if dedup_mod.source_mode() == "api":
+        seen = dedup_mod.fetch_seen(job.external_content_id)
+        job.dedup_source = "api"
+        job.dedup_seen = len(seen.cids) + len(seen.fingerprints)
+        job.log(f"  去重记忆（接口）：total={seen.total} pages={seen.pages} "
+                f"cid={len(seen.cids)} 指纹={len(seen.fingerprints)}")
+    else:
+        job.dedup_source = "csv"
+        job.log("  去重记忆（CSV 回退）：只读本次产物目录里的历史文件")
+
     outcome = fn(
         job.external_content_id,
         job.max_items,
@@ -37,6 +53,8 @@ def _collect_comments(job: Job, fn: Callable[..., Any],
         save_dir=save_dir,
         write_csv=True,
         printer=job.log,
+        seen_cids=(seen.cids if seen else None),
+        seen_fps=(seen.fingerprints if seen else None),
     )
     rows = getattr(outcome, "comments", None) or []
     reason = str(getattr(outcome, "finished_reason", "") or "")
