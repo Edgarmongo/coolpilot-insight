@@ -131,6 +131,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET 未配置，请在 .env 中设置随机字符串（openssl rand -hex 32）}
       # 首次启动用于把哨兵管理员置为可用密码；留空则管理员保持禁用
       ADMIN_INIT_PASSWORD: ${ADMIN_INIT_PASSWORD:-}
+      # 日志级别：默认 INFO。排查期用 APP_LOG_LEVEL=DEBUG 启动，事后恢复默认。
+      APP_LOG_LEVEL: ${APP_LOG_LEVEL:-INFO}
       # 服务间调用令牌（Flask 拒绝无此头的请求）
       FLASK_INTERNAL_TOKEN: ${FLASK_INTERNAL_TOKEN:-}
       # 容器内固定路径

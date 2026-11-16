@@ -99,4 +99,6 @@ app:
 
 logging:
   level:
-    com.dy.comment: debug
+    # 包名写错会导致"日志配置看着生效、其实一条都不输出"（旧值 com.dy.comment 已不存在）。
+    # 默认 INFO；排查期用 APP_LOG_LEVEL=DEBUG 打开，事后恢复。
+    com.coolpilot.insight: ${APP_LOG_LEVEL:INFO}
