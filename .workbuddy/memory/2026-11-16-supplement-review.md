@@ -1,5 +1,46 @@
 # 2026-11-16 工作日志
 
+## SOURCE-04-03 实施：Desired / Observed / Effective 核对
+
+FIX-01 通过后启动 04-03。实现三态核对并接入 `/api/v1/source/sources`。
+
+### 新增模型
+- `EffectiveStatus`：冻结八值 + **白名单**准入（AVAILABLE+NONE / DEGRADED）
+- `EffectiveReason`：20 值，`REACHABLE` 标出 19 个可达（FUNCTION_NOT_CALLABLE 预留）
+- `EffectiveCapability`：compact constructor 强制 executable 与 (status,reason) 一致，
+  非法组合在构造时即抛，不靠调用方自觉
+- `DesiredCapability` / `DesiredCapabilitySet`：**不含任何实现状态**
+- `DesiredCapabilityParser`：v1/v2 双读。v1 用确定性映射
+  （comments/contentDetail/keywordSearch → 三条 v2 形状），
+  connectorCode 由 sourceCode 显式映射（不用 adapter_code 拼，避免大小写误判）
+
+### 核心：CapabilityReconciler
+19 步短路，顺序严格按 EFFECTIVE-REASON §4。候选集合取 **Desired ∪ Observed**：
+只看 Desired 会漏 NOT_DECLARED，只看 Observed 会漏"声明了但没加载"。
+
+### 两处必要的连带改动
+1. `SnapshotCache` 的 `lastError(String)` → `failure(SnapshotFailure)`。
+   原因：04-03 要区分 REGISTRY_UNREACHABLE 与 SCHEMA_UNSUPPORTED，
+   原来只有字符串，要区分只能 contains —— 正是第一轮 H1 否决过的做法。
+2. `SourceAccountMapper` 加 `selectBySourceId`（原只有全表 selectAll）。
+
+### 运行时验证（真实容器，三种状态）
+- FRESH：COMMENT/CONTENT_DETAIL = AVAILABLE，KEYWORD_SEARCH/COMMENT_REPLY = NOT_DECLARED
+- UNAVAILABLE（停 collection + 重启 backend）：全部 UNKNOWN/REGISTRY_UNREACHABLE，
+  全部不可执行 —— N7-4 的运行时证据
+- 恢复：自动回到 FRESH + AVAILABLE，无需手工干预
+
+### 真实发现（不是缺陷）
+COMMENT_REPLY 在 Python 侧已 VERIFIED，但 Effective 判 NOT_DECLARED ——
+因为库中 capability_json 是 v1，没有这个字段。这恰恰证明核对工作正常：
+它把"Python 有、Java 没登记"显式暴露出来，而不是被旧布尔值掩盖。
+迁移到 v2（04-06）后补声明即可。
+
+### 结果
+Java **241/241**（原 197 + Reconciler 34 + Parser 10）；Python 76/76；5 容器 healthy。
+零改动：库/Flyway(V30)/Schema/前端/账号状态机全部未动。
+
+
 ## SOURCE-04-02-FIX-01 关闭评审遗留（N1 / N2 + N7 冻结）
 
 04-02 验收通过，但保留 N1、N2 待处理；本轮按用户要求只做前置修复，

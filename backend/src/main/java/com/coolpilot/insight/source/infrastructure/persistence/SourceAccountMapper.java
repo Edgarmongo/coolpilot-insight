@@ -18,6 +18,9 @@ public interface SourceAccountMapper {
     @Select("SELECT * FROM ds_account WHERE id = #{id}")
     SourceAccount selectById(@Param("id") Long id);
 
+    @Select("SELECT * FROM ds_account WHERE source_id = #{sourceId} ORDER BY id")
+    List<SourceAccount> selectBySourceId(@Param("sourceId") Long sourceId);
+
     @Select("SELECT * FROM ds_account WHERE source_id = #{sourceId} AND external_account_id = #{externalId}")
     SourceAccount selectByExternal(@Param("sourceId") Long sourceId,
                                    @Param("externalId") String externalId);

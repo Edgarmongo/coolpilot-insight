@@ -2,7 +2,9 @@ package com.coolpilot.insight.source.application;
 
 import com.coolpilot.insight.common.exception.BizException;
 import com.coolpilot.insight.common.exception.ErrorCode;
+import com.coolpilot.insight.integration.capability.SnapshotCache;
 import com.coolpilot.insight.source.domain.DataSource;
+import com.coolpilot.insight.source.domain.DesiredCapabilitySet;
 import com.coolpilot.insight.source.dto.DataSourceView;
 import com.coolpilot.insight.source.infrastructure.persistence.DataSourceMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,13 +32,32 @@ public class SourceQueryService {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private final DataSourceMapper dataSourceMapper;
+    private final SnapshotCache snapshotCache;
+    private final AccountAvailability accountAvailability;
+    private final CapabilityReconciler reconciler;
 
-    public SourceQueryService(DataSourceMapper dataSourceMapper) {
+    public SourceQueryService(DataSourceMapper dataSourceMapper,
+                              SnapshotCache snapshotCache,
+                              AccountAvailability accountAvailability,
+                              CapabilityReconciler reconciler) {
         this.dataSourceMapper = dataSourceMapper;
+        this.snapshotCache = snapshotCache;
+        this.accountAvailability = accountAvailability;
+        this.reconciler = reconciler;
     }
 
+    /**
+     * 列表。
+     *
+     * <p>**一次请求只取一份 Observed 快照**，所有数据源共用——
+     * 否则同一屏里不同行可能来自不同版本的 Registry，形成混合快照
+     * （SOURCE-04-02 §B 的硬约束）。
+     */
     public List<DataSourceView> list() {
-        return dataSourceMapper.selectAll().stream().map(this::toView).toList();
+        SnapshotCache.SnapshotRead read = snapshotCache.get();
+        return dataSourceMapper.selectAll().stream()
+                .map(ds -> toView(ds, read))
+                .toList();
     }
 
     public DataSourceView findByCode(String code) {
@@ -44,7 +65,7 @@ public class SourceQueryService {
         if (ds == null) {
             throw new BizException(ErrorCode.NOT_FOUND, "数据源不存在: " + code);
         }
-        return toView(ds);
+        return toView(ds, snapshotCache.get());
     }
 
     public void updateStatus(String code, String status) {
@@ -56,7 +77,7 @@ public class SourceQueryService {
         }
     }
 
-    private DataSourceView toView(DataSource ds) {
+    private DataSourceView toView(DataSource ds, SnapshotCache.SnapshotRead read) {
         DataSourceView v = new DataSourceView();
         v.setId(ds.getId());
         v.setCode(ds.getCode());
@@ -65,7 +86,22 @@ public class SourceQueryService {
         v.setAdapterCode(ds.getAdapterCode());
         v.setStatus(ds.getStatus());
         v.setRemark(ds.getRemark());
+
+        // 兼容期：旧结构原样返回，老前端不受影响
         v.setCapability(parseCapability(ds.getCapabilityJson()));
+
+        // Desired：业务声明（v1/v2 双读）
+        DesiredCapabilitySet desired = DesiredCapabilityParser.parse(
+                ds.getCapabilityJson(), ds.getCode());
+        v.setDesired(desired.capabilities());
+
+        // Observed 新鲜度：必须如实暴露，不能把 STALE 当正常
+        v.setSnapshotState(read.state().name());
+        v.setSnapshotDetail(read.detail());
+
+        // Effective：三态核对（派生结论，不落库）
+        v.setEffective(reconciler.reconcile(
+                ds, desired, read, accountAvailability.hasUsableAccount(ds.getId())));
         return v;
     }
 

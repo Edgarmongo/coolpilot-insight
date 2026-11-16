@@ -108,7 +108,7 @@ public class SnapshotCache {
 
         if (e == null) {
             return new SnapshotRead(null, SnapshotCacheState.UNAVAILABLE, false,
-                    "无可用快照", tooRecent, "尚未成功获取过快照");
+                    "无可用快照", tooRecent, null);
         }
         Duration age = Duration.between(e.fetchedAt(), Instant.now());
         // 用 Duration 比较而不是 getSeconds()：后者会截断，
@@ -116,13 +116,14 @@ public class SnapshotCache {
         boolean withinTtl = age.compareTo(Duration.ofSeconds(ttlSeconds)) <= 0;
 
         if (e.stale()) {
+            String reason = e.failure() == null ? "未知失败" : e.failure().detail();
             return new SnapshotRead(e.snapshot(), SnapshotCacheState.STALE, false,
-                    "快照已过期（最近一次刷新失败：" + e.lastError() + "）",
-                    tooRecent, e.lastError());
+                    "快照已过期（最近一次刷新失败：" + reason + "）",
+                    tooRecent, e.failure());
         }
         if (!withinTtl) {
             return new SnapshotRead(e.snapshot(), SnapshotCacheState.STALE, false,
-                    "快照超过 TTL（" + ttlSeconds + "s）未刷新", tooRecent, null);
+                    "快照超过 TTL（" + ttlSeconds + "s）未刷新", tooRecent, e.failure());
         }
         return new SnapshotRead(e.snapshot(), SnapshotCacheState.FRESH, true,
                 "快照新鲜", tooRecent, null);
@@ -243,9 +244,10 @@ public class SnapshotCache {
         }
 
         this.lastFailureAt = now;
+        SnapshotFailure failure = SnapshotFailure.of(result.kind(), result.detail());
         Entry prev = this.entry;
         if (prev != null) {
-            this.entry = new Entry(prev.snapshot(), prev.fetchedAt(), true, result.detail());
+            this.entry = new Entry(prev.snapshot(), prev.fetchedAt(), true, failure);
             log.warn("[capability] 快照刷新失败（{}），保留历史快照并标记 STALE: {}",
                     result.kind(), result.detail());
         } else {
@@ -288,7 +290,8 @@ public class SnapshotCache {
     }
 
     /** 缓存条目。字段全部 final，替换即整体替换。 */
-    record Entry(RegistrySnapshot snapshot, Instant fetchedAt, boolean stale, String lastError) {
+    record Entry(RegistrySnapshot snapshot, Instant fetchedAt, boolean stale,
+                 SnapshotFailure failure) {
     }
 
     /**
@@ -311,11 +314,11 @@ public class SnapshotCache {
      * @param usableForExecution  唯一可用于执行准入的判据，由 {@code state == FRESH} 派生
      * @param detail              人类可读说明
      * @param lastAttemptTooRecent 上次失败距今过近，本次不应再重试
-     * @param lastError           最近一次失败原因
+     * @param failure             最近一次失败的结构化描述；无失败为 {@code null}
      */
     public record SnapshotRead(RegistrySnapshot snapshot, SnapshotCacheState state,
                                boolean usableForExecution, String detail,
-                               boolean lastAttemptTooRecent, String lastError) {
+                               boolean lastAttemptTooRecent, SnapshotFailure failure) {
 
         /** 强制不变量：非 FRESH 不得标记可执行；UNAVAILABLE 不得携带快照。 */
         public SnapshotRead {
