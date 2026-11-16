@@ -205,12 +205,44 @@ class CapabilityReconcilerTest {
 
     @Test
     @DisplayName("④b SCHEMA_UNSUPPORTED —— Desired 不可解析")
-    void reasonSchemaUnsupportedByDesired() {
+    void desiredUnparseableIsNotSchemaUnsupported() {
         var read = fresh(snapshotWith(cap("COMMENT", "VERIFIED", goodEvidence())));
         var r = one(DesiredCapabilitySet.unsupported("schemaVersion 3.0 不支持"), read);
 
         assertThat(r.effectiveStatus()).isEqualTo(EffectiveStatus.UNKNOWN);
-        assertThat(r.effectiveReason()).isEqualTo(EffectiveReason.SCHEMA_UNSUPPORTED);
+        assertThat(r.effectiveReason())
+                .as("Desired 是 Java 库内配置，不能用 Observed 快照的故障码（评审 M1）")
+                .isEqualTo(EffectiveReason.DESIRED_UNPARSEABLE);
+        assertThat(r.effectiveReason()).isNotEqualTo(EffectiveReason.SCHEMA_UNSUPPORTED);
+        assertThat(r.executable()).isFalse();
+    }
+
+    @Test
+    @DisplayName("M1 两边都坏且无任何候选时，不产出任何一行（不伪造结论）")
+    void bothBrokenWithoutCandidatesYieldsNoRows() {
+        // Desired 读不懂 ⇒ 拿不到能力码；Registry 不可达 ⇒ 没有 Observed 骨架。
+        // 此时**任何一条 Effective 都无从标注**，只能返回空集合。
+        //
+        // 这是"不猜测"的正确表现：不能因为想显示点什么，就凭空造出一个能力码。
+        // 代价是调用方看不到原因，因此 DataSourceView 额外暴露 desiredError +
+        // snapshotState —— 行级结论为空，但故障域仍然可辨（评审 M1 的完整闭环）。
+        var read = unavailable(SnapshotFailure.of(
+                CollectionServiceClient.FetchResult.Kind.UNREACHABLE, "连接超时"));
+        var out = reconciler.reconcile(source("ENABLED"),
+                DesiredCapabilitySet.unsupported("capability_json 非法 JSON"), read, true);
+
+        assertThat(out).isEmpty();
+    }
+
+    @Test
+    @DisplayName("M1 快照 STALE 也优先于 Desired 不可解析（冻结顺序 4 < 5）")
+    void staleOutranksDesiredUnparseable() {
+        var snap = snapshotWith(cap("COMMENT", "VERIFIED", goodEvidence()));
+        var read = stale(snap, null);
+        var r = one(DesiredCapabilitySet.unsupported("capability_json 非法 JSON"), read);
+
+        assertThat(r.effectiveReason()).isEqualTo(EffectiveReason.OBSERVED_STALE);
+        assertThat(r.executable()).isFalse();
     }
 
     @Test
@@ -542,9 +574,9 @@ class CapabilityReconcilerTest {
     @Test
     @DisplayName("⑫ FUNCTION_NOT_CALLABLE 当前不可达：诊断一律映射为 FUNCTION_UNRESOLVED")
     void functionNotCallableIsUnreachable() {
-        // 枚举层面：20 个值都在，但只有 19 个可达
-        assertThat(EffectiveReason.ALL).hasSize(20);
-        assertThat(EffectiveReason.REACHABLE).hasSize(19);
+        // 枚举层面：21 个值都在，但只有 20 个可达
+        assertThat(EffectiveReason.ALL).hasSize(21);
+        assertThat(EffectiveReason.REACHABLE).hasSize(20);
         assertThat(EffectiveReason.REACHABLE)
                 .doesNotContain(EffectiveReason.FUNCTION_NOT_CALLABLE);
 

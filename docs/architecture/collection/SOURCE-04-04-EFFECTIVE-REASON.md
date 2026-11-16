@@ -21,7 +21,12 @@
 
 ---
 
-## 二、20 值完整定义表
+## 二、21 值完整定义表
+
+> **2026-11-16 增补**：原为 20 值。`SOURCE-04-03-FIX-02` 新增第 21 值
+> `DESIRED_UNPARSEABLE`，用于把"Java 自己的 Desired 配置读不懂"与
+> "Python 快照结构不兼容"区分开（原实现借用 `SCHEMA_UNSUPPORTED`，
+> 会把排障方向指向错误的服务）。该值的完整论证与唯一性检查见 §九。
 
 > **数据来源缩写**：
 > `D` = Desired（`ds_source.capability_json`）
@@ -49,11 +54,12 @@
 | 13 | `CAPABILITY_DISABLED` | 能力被 Python 侧**显式禁用** | `C.implementationStatus = DISABLED` | `C` | `UNREGISTERED` |
 | 14 | `PLATFORM_UNSUPPORTED` | 平台**客观不支持**该能力 | `C.implementationStatus = UNSUPPORTED` | `C` | `UNREGISTERED` |
 | 15 | `ACCESS_MODE_UNSUPPORTED` | Observed 的 `accessModes` **不包含** Desired 要求的模式 | `Desired.accessModes ⊄ C.accessModes` | `D` + `C` | `UNREGISTERED` |
-| 16 | `VERIFICATION_REQUIRED` | **能力已注册，但从未获得有效验证证据** | `C.implementationStatus = UNVERIFIED` **且** `C.evidence = null` | `C` | `UNKNOWN` |
-| 17 | `EVIDENCE_EXPIRED` | 验证证据**超过有效期** | `UNVERIFIED` **且** `C.evidence.rejectionReason = EVIDENCE_EXPIRED` | `C` | `UNKNOWN` |
-| 18 | `EVIDENCE_INVALID` | 证据**完整性或有效性校验失败**（篡改 / 实现变更 / 版本或范围不符 / 结构非法） | `UNVERIFIED` **且** `rejectionReason ∈ {EVIDENCE_TAMPERED, EVIDENCE_STALE, EVIDENCE_VERSION_MISMATCH, EVIDENCE_SCOPE_MISMATCH, EVIDENCE_MALFORMED}` | `C` | `UNKNOWN` |
+| 16 | `VERIFICATION_REQUIRED` | **能力已注册，但从未获得有效验证证据** | `C.implementationStatus ∈ {UNVERIFIED, IMPLEMENTED}`（含证据为 `null`；`IMPLEMENTED` 即便有证据也归此，见 §九·铁律） | `C` | `UNKNOWN` |
+| 17 | `EVIDENCE_EXPIRED` | 验证证据**超过有效期** | **任意未被 13/14 拦下的状态** 且 `C.evidence.rejectionReason = EVIDENCE_EXPIRED` | `C` | `UNKNOWN` |
+| 18 | `EVIDENCE_INVALID` | 证据**完整性或有效性校验失败**（篡改 / 实现变更 / 版本或范围不符 / 结构非法） | **任意未被 13/14 拦下的状态** 且 `rejectionReason ∈ {EVIDENCE_TAMPERED, EVIDENCE_STALE, EVIDENCE_VERSION_MISMATCH, EVIDENCE_SCOPE_MISMATCH, EVIDENCE_MALFORMED}` | `C` | `UNKNOWN` |
 | 19 | `ACCOUNT_REQUIRED` | 需要 `AUTHENTICATED` 但**无可用账号** | `Desired.accessModes ⊇ {AUTHENTICATED}` **且** 该 Source 下无 `status=ACTIVE && auth_status=VALID` 的账号 | `D` + `AC` | `ACCOUNT_REQUIRED` |
-| 20 | `DEGRADED` | 能力可用但受限 | `C.implementationStatus = DEGRADED` | `C` | `DEGRADED` |
+| 20 | `DEGRADED` | 能力可用但受限 | `C.implementationStatus = DEGRADED` **且** 证据已接受（`accepted=true`） | `C` | `DEGRADED` |
+| 21 | `DESIRED_UNPARSEABLE` | **Java 侧 Desired 配置无法解析**（非法 JSON / 未知主版本 / 结构或枚举非法 / 重复能力） | `DesiredCapabilityParser` 返回 `supported=false` **且** 快照为 `FRESH` | `D` | `UNKNOWN` |
 
 ### 2.1 评审点名的五个易混值，定义边界
 
@@ -103,7 +109,7 @@ if fn is None:
 （如 `FUNCTION_NOT_FOUND` / `FUNCTION_NOT_CALLABLE`），属 SOURCE-03 契约演进，
 需单独评审。**本轮不动**。
 
-### 3.2 其余 19 值交叉审查结论（无重复）
+### 3.2 其余 20 值交叉审查结论（无重复；新增值的唯一性另见 §九）
 
 | 对 | 语义差异 | 数据源可区分 | 结论 |
 |---|---|---|---|
@@ -147,24 +153,30 @@ if fn is None:
 | 2 | `REGISTRY_UNREACHABLE` | 没有 Observed 数据，后续一切判定都无依据 |
 | 3 | `SCHEMA_UNSUPPORTED` | 拿到了但读不懂，等同无依据 |
 | 4 | `OBSERVED_STALE` | 有依据但过期，仍不足以判定 |
-| 5 | `NOT_DECLARED` | 业务没声明 → 不需要关心 Python 状态 |
-| 6 | `ADAPTER_NOT_LOADED` | Connector 级失败，优先于能力级判定 |
-| 7 | `CONNECTOR_VERSION_MISMATCH` | 接入版本不符，能力清单不可信 |
-| 8 | `CONTRACT_VERSION_MISMATCH` | 单能力契约不符 |
-| 9 | `CAPABILITY_NOT_REGISTERED` | 到这一步才确认"能力真的不在" |
-| 10 | `FUNCTION_UNRESOLVED` | 有声明但实现不成立 |
-| 11 | `CAPABILITY_DISABLED` | Python 主动禁用 |
-| 12 | `PLATFORM_UNSUPPORTED` | 平台客观不支持 |
-| 13 | `ACCESS_MODE_UNSUPPORTED` | 能力在，但访问模式不覆盖 |
-| 14 | `VERIFICATION_REQUIRED` | 未验证 |
-| 15 | `EVIDENCE_EXPIRED` | 证据过期 |
-| 16 | `EVIDENCE_INVALID` | 证据无效 |
-| 17 | `ACCOUNT_REQUIRED` | 前面都过了，只是没账号 |
-| 18 | `DEGRADED` | 可用但受限 |
-| 19 | `NONE` | 全部通过 |
+| 5 | `DESIRED_UNPARSEABLE` | Java 自己的配置读不懂；排在快照之后，因为"服务不可达"是更前置的未知 |
+| 6 | `NOT_DECLARED` | 业务没声明 → 不需要关心 Python 状态 |
+| 7 | `ADAPTER_NOT_LOADED` | Connector 级失败，优先于能力级判定 |
+| 8 | `CONNECTOR_VERSION_MISMATCH` | 接入版本不符，能力清单不可信 |
+| 9 | `CONTRACT_VERSION_MISMATCH` | 单能力契约不符 |
+| 10 | `CAPABILITY_NOT_REGISTERED` | 到这一步才确认"能力真的不在" |
+| 11 | `FUNCTION_UNRESOLVED` | 有声明但实现不成立 |
+| 12 | `CAPABILITY_DISABLED` | Python 主动禁用 |
+| 13 | `PLATFORM_UNSUPPORTED` | 平台客观不支持 |
+| 14 | `ACCESS_MODE_UNSUPPORTED` | 能力在，但访问模式不覆盖 |
+| 15 | `VERIFICATION_REQUIRED` | 未验证（含 `IMPLEMENTED`：本地测试通过 ≠ 真实平台验证） |
+| 16 | `EVIDENCE_EXPIRED` | 证据过期 |
+| 17 | `EVIDENCE_INVALID` | 证据无效 |
+| 18 | `ACCOUNT_REQUIRED` | 前面都过了，只是没账号 |
+| 19 | `DEGRADED` | 可用但受限（须持有已接受证据） |
+| 20 | `NONE` | 全部通过 |
 
 > **`VERIFICATION_REQUIRED` / `EVIDENCE_*` 排在 `ACCOUNT_REQUIRED` 之前**：
 > 没验证的能力，即使有账号也不能执行。先判更基础的缺失。
+>
+> **`DESIRED_UNPARSEABLE` 为什么排在第 5 位而不是第 1 位**（`SOURCE-04-03-FIX-02`）：
+> 它是 Java 自身配置的问题，看起来可以最先判。但它排在 `REGISTRY_UNREACHABLE` 之后，
+> 原因是"服务不可达"意味着 **连判定依据都没有**，此时把结论归因为"你的配置读不懂"
+> 会误导排查方向。先报更基础的未知，再报配置错误。
 
 ---
 
@@ -194,7 +206,8 @@ if fn is None:
 | 17 | `EVIDENCE_EXPIRED` | `UNVERIFIED` + `rejectionReason=EVIDENCE_EXPIRED` | `UNKNOWN` |
 | 18 | `EVIDENCE_INVALID` | `UNVERIFIED` + `rejectionReason=EVIDENCE_TAMPERED` | `UNKNOWN` |
 | 19 | `ACCOUNT_REQUIRED` | 能力只 `AUTHENTICATED` + 无 ACTIVE&VALID 账号 | `ACCOUNT_REQUIRED` |
-| 20 | `DEGRADED` | `implementationStatus=DEGRADED` | `DEGRADED` / 降级执行 |
+| 20 | `DEGRADED` | `implementationStatus=DEGRADED` + 证据已接受 | `DEGRADED` / 降级执行 |
+| 21 | `DESIRED_UNPARSEABLE` | `capability_json` 为非法 JSON / `schemaVersion=3.0` / v2 重复能力，且快照 FRESH | `UNKNOWN` / 不可执行；detail 指明是 Desired 问题 |
 
 **附加断言（每个用例都要带）**：
 
@@ -238,3 +251,53 @@ if (cap.status().equals("UNKNOWN")) {
   按 §3.1 标注为预留并用手工注入构造）；
 - 04-03 的判定顺序必须与 §4 逐行一致，**不得**为方便实现调整顺序；
 - 任何顺序调整都必须回改本文档并说明理由。
+
+
+---
+
+## 九、2026-11-16 增补：第 21 值 `DESIRED_UNPARSEABLE`
+
+> 来源：`SOURCE-04-03-CODE-REVIEW.md` M1。原实现把"Desired 读不懂"映射为
+> `SCHEMA_UNSUPPORTED`——那是 Observed 快照的故障码，会让排障方向指向 Python 服务，
+> 而真正该查的是 `ds_source.capability_json`。
+
+### 9.1 为什么必须新增，而不是复用
+
+| 候选 | 为什么不行 |
+|---|---|
+| `SCHEMA_UNSUPPORTED` | 语义是"Python 返回的快照结构不可用"。Desired 是 Java 库内数据，故障域完全不同 |
+| `NOT_DECLARED` | 事实错误：配置存在，只是读不懂。"未声明"会让运维以为没人配过 |
+| `OBSERVED_STALE` | 与快照新鲜度无关 |
+| `UNKNOWN` 状态 + 空 reason | 违反 ADR-008：`UNKNOWN` 必须带精确原因，否则"服务挂了"和"配置坏了"无法区分 |
+
+### 9.2 五项治理检查（沿用 §一 的标准）
+
+| 检查项 | 结论 |
+|---|---|
+| **语义唯一** | 只表达"Java 侧 Desired 配置无法解析"，不含任何 Observed 含义 |
+| **无重复** | 与 20 个既有值逐一比对：`SCHEMA_UNSUPPORTED` 指快照、`NOT_DECLARED` 指缺失、`OBSERVED_STALE` 指新鲜度，均不同 |
+| **可追溯** | 触发点是唯一入口 `DesiredCapabilityParser.parse()` 返回 `supported=false` |
+| **可测试** | 四种输入各有用例：非法 JSON、未知主版本、v2 结构非法、重复能力 |
+| **可扩展** | 新增不改变任何既有值的含义 |
+
+### 9.3 与状态枚举的关系
+
+`effectiveStatus` 仍取 `UNKNOWN`——**八值枚举零改动**。
+理由：配置坏了意味着"无法获得可靠判断"，正是 `UNKNOWN` 的定义；
+它不落在 `UNREGISTERED`（不是"没登记"），也不落在 `VERSION_MISMATCH`（不是版本问题）。
+
+### 9.4 优先级（第 5 位）的论证
+
+见 §四 的注：排在 `OBSERVED_STALE` 之后、`NOT_DECLARED` 之前。
+两个边界都要说清：
+
+- **不能排第 1**：服务不可达时连判定依据都没有，此时报"你的配置读不懂"会把
+  排查方向从"服务挂了"引到"配置错了"。
+- **必须早于 `NOT_DECLARED`**：配置整体读不懂时，逐条判"未声明"是伪结论——
+  我们根本不知道它声明了什么。
+
+### 9.5 已知边界
+
+`DESIRED_UNPARSEABLE` 是**全局**结论：一个 Source 的 Desired 解析失败，
+该 Source 下所有候选能力都返回同一 reason。这是有意的——
+配置是一份文档，读不懂就整份不可信，不应部分采信。

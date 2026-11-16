@@ -239,19 +239,20 @@ cd backend && mvn -s ../deploy/docker/maven-settings.xml -o test
 | 1 | Registry 不可达 | `UNKNOWN` | `REGISTRY_UNREACHABLE` |
 | 2 | Schema 主版本不支持 / 响应非法 | `UNKNOWN` | `SCHEMA_UNSUPPORTED` |
 | 3 | 仅有过期缓存（stale 超 TTL） | `UNKNOWN` | `OBSERVED_STALE` |
-| 4 | Desired 未声明该能力 | `UNREGISTERED` | `NOT_DECLARED` |
-| 5 | Adapter 未加载 | `ADAPTER_MISSING` | `ADAPTER_NOT_LOADED` |
-| 6 | Adapter 版本与锁定要求不符 | `VERSION_MISMATCH` | `CONNECTOR_VERSION_MISMATCH` |
-| 7 | Contract 主版本不兼容 | `VERSION_MISMATCH` | `CONTRACT_VERSION_MISMATCH` |
-| 8 | Capability 未注册（且无相关诊断） | `UNREGISTERED` | `CAPABILITY_NOT_REGISTERED` |
-| 9 | 函数不存在 / 不可调用（诊断 `INVALID_IMPLEMENTATION`） | `UNREGISTERED` | `FUNCTION_UNRESOLVED` / `FUNCTION_NOT_CALLABLE` |
-| 10 | 能力被 Python 禁用 / 平台不支持 | `UNREGISTERED` | `CAPABILITY_DISABLED` / `PLATFORM_UNSUPPORTED` |
-| 11 | 访问模式不覆盖 | `UNREGISTERED` | `ACCESS_MODE_UNSUPPORTED` |
-| 12 | **已注册但未获真实平台验证**（`UNVERIFIED` / `IMPLEMENTED`） | `UNKNOWN` | `VERIFICATION_REQUIRED` |
-| 13 | 证据过期 / 无效（**任意状态**，不受 `implementationStatus` 限制） | `UNKNOWN` | `EVIDENCE_EXPIRED` / `EVIDENCE_INVALID` |
-| 14 | 需 AUTHENTICATED 且无可用账号 | `ACCOUNT_REQUIRED` | `ACCOUNT_REQUIRED` |
-| 15 | 可用但受限（**且持有已接受证据**） | `DEGRADED` | `DEGRADED` |
-| 16 | 正常可用（**`VERIFIED` 且证据已接受**，上述全通过） | `AVAILABLE` | `NONE` |
+| 4 | **Desired 配置不可解析**（非法 JSON / 未知版本 / 结构非法 / 重复能力） | `UNKNOWN` | `DESIRED_UNPARSEABLE` |
+| 5 | Desired 未声明该能力 | `UNREGISTERED` | `NOT_DECLARED` |
+| 6 | Adapter 未加载 | `ADAPTER_MISSING` | `ADAPTER_NOT_LOADED` |
+| 7 | Adapter 版本与锁定要求不符 | `VERSION_MISMATCH` | `CONNECTOR_VERSION_MISMATCH` |
+| 8 | Contract 主版本不兼容 | `VERSION_MISMATCH` | `CONTRACT_VERSION_MISMATCH` |
+| 9 | Capability 未注册（且无相关诊断） | `UNREGISTERED` | `CAPABILITY_NOT_REGISTERED` |
+| 10 | 函数不存在 / 不可调用（诊断 `INVALID_IMPLEMENTATION`） | `UNREGISTERED` | `FUNCTION_UNRESOLVED` / `FUNCTION_NOT_CALLABLE` |
+| 11 | 能力被 Python 禁用 / 平台不支持 | `UNREGISTERED` | `CAPABILITY_DISABLED` / `PLATFORM_UNSUPPORTED` |
+| 12 | 访问模式不覆盖 | `UNREGISTERED` | `ACCESS_MODE_UNSUPPORTED` |
+| 13 | **已注册但未获真实平台验证**（`UNVERIFIED` / `IMPLEMENTED`） | `UNKNOWN` | `VERIFICATION_REQUIRED` |
+| 14 | 证据过期 / 无效（**任意状态**，不受 `implementationStatus` 限制） | `UNKNOWN` | `EVIDENCE_EXPIRED` / `EVIDENCE_INVALID` |
+| 15 | 需 AUTHENTICATED 且无可用账号 | `ACCOUNT_REQUIRED` | `ACCOUNT_REQUIRED` |
+| 16 | 可用但受限（**且持有已接受证据**） | `DEGRADED` | `DEGRADED` |
+| 17 | 正常可用（**`VERIFIED` 且证据已接受**，上述全通过） | `AVAILABLE` | `NONE` |
 
 > **注意 1**：Schema 的 `effectiveStatus` 枚举里**没有** `UNAVAILABLE`。
 > 用户示意表里的 `UNAVAILABLE` 对应到正式枚举是 `ADAPTER_MISSING` / `UNREGISTERED`，
@@ -267,11 +268,16 @@ cd backend && mvn -s ../deploy/docker/maven-settings.xml -o test
 > **必须同时看 `effectiveReason`**，只显示 `effectiveStatus` 会误导。
 >
 > **注意 4（2026-11-16，SOURCE-04-03-FIX-01）**：`implementationStatus` 是**六值**枚举，
-> 准入推导必须对全部六值有结论。原表第 16 行把 `IMPLEMENTED` 与 `VERIFIED` 并列判
+> 准入推导必须对全部六值有结论。原表末行把 `IMPLEMENTED` 与 `VERIFIED` 并列判
 > `AVAILABLE`，且证据校验只对 `UNVERIFIED`/`VERIFIED` 生效，导致
 > **本地测试通过即被放行、证据被拒也被放行**（失败开放）。
 > 现已按 `SOURCE-04-04-TASKCARD.md` §3.2.1 的「实现状态 × 证据矩阵」修订：
 > 证据闸门对所有未被禁用/不支持拦下的状态一律生效，`IMPLEMENTED` 永不产出 `AVAILABLE`。
+>
+> **注意 5（2026-11-16，SOURCE-04-03-FIX-02）**：新增第 4 行 `DESIRED_UNPARSEABLE`。
+> 此前"Desired 读不懂"被映射为 `SCHEMA_UNSUPPORTED`（Observed 快照的故障码），
+> 会把排障方向指向采集服务；该判定也原本排在快照判定之前，导致"服务不可达"
+> 被误报成"配置坏了"。现已下移并改用专属原因码。
 
 **执行准入（与 Effective 并列，不是状态）**
 - Java 未在 Desired 中声明的能力 → Python 可观测，但**不允许执行**；

@@ -138,6 +138,69 @@ class DesiredCapabilityParserTest {
     }
 
     @Test
+    // ==================================================================
+    // M2：重复能力必须拒绝整份文档（不允许数组顺序决定行为）
+    // ==================================================================
+    private static String capEntry(String connector, String code, String status, String source) {
+        return "{\"sourceCode\":\"" + source + "\",\"connectorCode\":\"" + connector
+                + "\",\"code\":\"" + code + "\",\"category\":\"COMMENT\","
+                + "\"accessModes\":[\"PUBLIC\"],\"desiredStatus\":\"" + status + "\"}";
+    }
+
+    private static String v2Doc(String... entries) {
+        return "{\"schemaVersion\":\"2.0\",\"capabilities\":[" + String.join(",", entries) + "]}";
+    }
+
+    @Test
+    @DisplayName("M2 同一 connectorCode+code 出现两次（均 ENABLED）→ 拒绝整份文档")
+    void rejectsDuplicateEnabled() {
+        var set = DesiredCapabilityParser.parse(v2Doc(
+                capEntry("DOUYIN_PUBLIC", "COMMENT", "ENABLED", "DOUYIN"),
+                capEntry("DOUYIN_PUBLIC", "COMMENT", "ENABLED", "DOUYIN")), "DOUYIN");
+
+        assertThat(set.supported()).isFalse();
+        assertThat(set.error()).contains("重复能力").contains("DOUYIN_PUBLIC/COMMENT");
+    }
+
+    @Test
+    @DisplayName("M2 ENABLED + DISABLED 重复 → 同样拒绝（不能让顺序决定结果）")
+    void rejectsDuplicateContradictory() {
+        var set = DesiredCapabilityParser.parse(v2Doc(
+                capEntry("DOUYIN_PUBLIC", "COMMENT", "ENABLED", "DOUYIN"),
+                capEntry("DOUYIN_PUBLIC", "COMMENT", "DISABLED", "DOUYIN")), "DOUYIN");
+
+        assertThat(set.supported())
+                .as("若允许，则数组顺序（编辑器行为）会决定能力是否可用")
+                .isFalse();
+        assertThat(set.error()).contains("重复能力");
+    }
+
+    @Test
+    @DisplayName("M2 不同 Connector 的相同 code → 允许（不同键，不同能力）")
+    void allowsSameCodeInDifferentConnector() {
+        var set = DesiredCapabilityParser.parse(v2Doc(
+                capEntry("DOUYIN_PUBLIC", "COMMENT", "ENABLED", "DOUYIN"),
+                capEntry("DOUYIN_AUTH", "COMMENT", "ENABLED", "DOUYIN")), "DOUYIN");
+
+        assertThat(set.supported()).isTrue();
+        assertThat(set.capabilities()).hasSize(2);
+        assertThat(set.find("DOUYIN_PUBLIC", "COMMENT")).isPresent();
+        assertThat(set.find("DOUYIN_AUTH", "COMMENT")).isPresent();
+    }
+
+    @Test
+    @DisplayName("M2 同 code 但 sourceCode 不同、connectorCode 相同 → 仍拒绝（下游会撞键）")
+    void rejectsSameConnectorWithDifferentSource() {
+        // 一个 Desired 文档只属于一个 Source；两条目的 sourceCode 不同本身就是
+        // 矛盾配置，且下游按 connectorCode+code 匹配，它们必然冲突。
+        var set = DesiredCapabilityParser.parse(v2Doc(
+                capEntry("DOUYIN_PUBLIC", "COMMENT", "ENABLED", "DOUYIN"),
+                capEntry("DOUYIN_PUBLIC", "COMMENT", "ENABLED", "XIAOHONGSHU")), "DOUYIN");
+
+        assertThat(set.supported()).isFalse();
+        assertThat(set.error()).contains("重复能力");
+    }
+
     @DisplayName("非法 JSON / 空值不抛异常，而是 supported=false / empty")
     void malformedInputHandling() {
         assertThat(DesiredCapabilityParser.parse("{not json", "DOUYIN").supported()).isFalse();

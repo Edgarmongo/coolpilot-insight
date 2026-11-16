@@ -36,6 +36,14 @@ public final class EffectiveReason {
     public static final String OBSERVED_STALE = "OBSERVED_STALE";
 
     // ---- Desired ----
+    /**
+     * Java 侧 Desired 配置无法解析（非法 JSON / 未知主版本 / 结构或枚举非法 / 重复能力）。
+     *
+     * <p><b>不要</b>用 {@link #SCHEMA_UNSUPPORTED} 代替：那个码指的是 Python 快照结构，
+     * 借用它会把排障方向指向采集服务，而真正该查的是 {@code ds_source.capability_json}
+     * （SOURCE-04-03 评审 M1）。
+     */
+    public static final String DESIRED_UNPARSEABLE = "DESIRED_UNPARSEABLE";
     /** Desired 未声明该能力（或 desiredStatus=DISABLED）。 */
     public static final String NOT_DECLARED = "NOT_DECLARED";
 
@@ -81,11 +89,11 @@ public final class EffectiveReason {
     /** 可用但受限。 */
     public static final String DEGRADED = "DEGRADED";
 
-    /** 全部 20 个取值。 */
+    /** 全部 21 个取值。 */
     public static final List<String> ALL = List.of(
             NONE,
             SOURCE_DISABLED, REGISTRY_UNREACHABLE, SCHEMA_UNSUPPORTED, OBSERVED_STALE,
-            NOT_DECLARED,
+            DESIRED_UNPARSEABLE, NOT_DECLARED,
             ADAPTER_NOT_LOADED, CONNECTOR_VERSION_MISMATCH, CONTRACT_VERSION_MISMATCH,
             CAPABILITY_NOT_REGISTERED, FUNCTION_UNRESOLVED, FUNCTION_NOT_CALLABLE,
             CAPABILITY_DISABLED, PLATFORM_UNSUPPORTED, ACCESS_MODE_UNSUPPORTED,
@@ -93,10 +101,11 @@ public final class EffectiveReason {
             ACCOUNT_REQUIRED, DEGRADED);
 
     /**
-     * 当前**可达**的原因（19 个）——即可由真实输入触发的。
+     * 当前**可达**的原因（20 个）——即可由真实输入触发的。
      *
      * <p>{@link #FUNCTION_NOT_CALLABLE} 不在其中，见其 javadoc。
-     * 验收要求：这 19 个各有一条正向推导测试，第 20 个有一条"不可达"测试。
+     * 验收要求：这 20 个各有一条正向推导测试，
+     * {@link #FUNCTION_NOT_CALLABLE} 有一条"不可达"测试。
      */
     public static final Set<String> REACHABLE = Set.copyOf(
             ALL.stream().filter(r -> !FUNCTION_NOT_CALLABLE.equals(r)).toList());

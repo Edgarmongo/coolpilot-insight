@@ -8,8 +8,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * {@code ds_source.capability_json} 的解析器，**同时兼容 v1 与 v2**。
@@ -144,6 +146,11 @@ public final class DesiredCapabilityParser {
             return DesiredCapabilitySet.unsupported("v2 缺少 capabilities 数组");
         }
         List<DesiredCapability> caps = new ArrayList<>();
+        // 重复检测用**下游真正的匹配键**（connectorCode + code），不是数组下标。
+        // 两条同键声明无论 desiredStatus 是否相同都拒绝：
+        // 允许"先声明 ENABLED 再声明 DISABLED"就等于让数组顺序决定系统行为，
+        // 而文档顺序是编辑器行为，不是业务意图（评审 M2）。
+        Set<String> seen = new HashSet<>();
         for (JsonNode n : arr) {
             String code = text(n, "code");
             String connector = text(n, "connectorCode");
@@ -154,6 +161,13 @@ public final class DesiredCapabilityParser {
             if (connector == null || connector.isBlank()) {
                 return DesiredCapabilitySet.unsupported(
                         "v2 能力 " + code + " 缺少 connectorCode（多 Connector 必须逐条声明）");
+            }
+            // 整份文档拒绝，不做"保留第一条"的静默去重。
+            // 不同的 connectorCode 即便 code 相同也是不同能力，允许共存。
+            if (!seen.add(connector + "/" + code)) {
+                return DesiredCapabilitySet.unsupported(
+                        "v2 存在重复能力: " + connector + "/" + code
+                                + "（同一 connectorCode + code 只能声明一次）");
             }
             if (!DesiredCapability.ENABLED.equals(status)
                     && !DesiredCapability.DISABLED.equals(status)) {

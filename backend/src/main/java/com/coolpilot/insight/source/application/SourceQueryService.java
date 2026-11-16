@@ -94,6 +94,7 @@ public class SourceQueryService {
         DesiredCapabilitySet desired = DesiredCapabilityParser.parse(
                 ds.getCapabilityJson(), ds.getCode());
         v.setDesired(desired.capabilities());
+        v.setDesiredError(desired.error());
 
         // Observed 新鲜度：必须如实暴露，不能把 STALE 当正常
         v.setSnapshotState(read.state().name());

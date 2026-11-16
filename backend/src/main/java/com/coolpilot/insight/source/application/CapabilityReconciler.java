@@ -107,11 +107,6 @@ public class CapabilityReconciler {
             return new Blocked(EffectiveStatus.SOURCE_DISABLED,
                     EffectiveReason.SOURCE_DISABLED, "Source 已停用，不允许新执行");
         }
-        // Desired 不可解析 → 无法核对
-        if (!desired.supported()) {
-            return new Blocked(EffectiveStatus.UNKNOWN,
-                    EffectiveReason.SCHEMA_UNSUPPORTED, "Desired 不可解析: " + desired.error());
-        }
         // ②③④ 快照状态
         if (read == null || read.state() == SnapshotCache.SnapshotCacheState.UNAVAILABLE) {
             String detail = read == null ? "无快照读取结果" : read.detail();
@@ -121,6 +116,16 @@ public class CapabilityReconciler {
         if (read.state() != SnapshotCache.SnapshotCacheState.FRESH) {
             // STALE：区分"服务不可达"与"响应不合法"，二者都是 UNKNOWN 但原因不同
             return new Blocked(EffectiveStatus.UNKNOWN, staleReason(read), read.detail());
+        }
+        // ⑤ Desired 不可解析 —— 排在快照之后，因为"服务不可达"是更前置的未知：
+        // 此时连判定依据都没有，报"你的配置读不懂"会把排查方向引偏
+        // （SOURCE-04-03-EFFECTIVE-REASON §四 的顺序论证）。
+        //
+        // 用 DESIRED_UNPARSEABLE 而不是 SCHEMA_UNSUPPORTED：后者指 Python 快照结构，
+        // 借用它会让运维去查采集服务，而真正该查的是 capability_json（评审 M1）。
+        if (!desired.supported()) {
+            return new Blocked(EffectiveStatus.UNKNOWN,
+                    EffectiveReason.DESIRED_UNPARSEABLE, "Desired 不可解析: " + desired.error());
         }
         return null;
     }
@@ -148,7 +153,7 @@ public class CapabilityReconciler {
                                          Map<String, RegistrySnapshot.AdapterView> adapters,
                                          Candidate c,
                                          boolean hasUsableAccount) {
-        // ⑤ Desired 未声明（不存在，或 desiredStatus=DISABLED）
+        // ⑥ Desired 未声明（不存在，或 desiredStatus=DISABLED）
         java.util.Optional<DesiredCapability> decl = desired.find(c.connectorCode, c.code);
         if (decl.isEmpty() || !decl.get().enabled()) {
             String why = decl.isPresent()
@@ -159,7 +164,7 @@ public class CapabilityReconciler {
         }
         DesiredCapability dc = decl.get();
 
-        // ⑥ Adapter 未加载 / 不是真实平台接入
+        // ⑦ Adapter 未加载 / 不是真实平台接入
         RegistrySnapshot.AdapterView adapter = adapters.get(c.connectorCode);
         if (adapter == null) {
             return EffectiveCapability.of(c.code, c.category,
@@ -172,7 +177,7 @@ public class CapabilityReconciler {
                     "接入 " + c.connectorCode + " 加载失败: " + adapter.errorMessage());
         }
 
-        // ⑦ Connector 版本（仅在 Desired 锁定版本时判定）
+        // ⑧ Connector 版本（仅在 Desired 锁定版本时判定）
         if (dc.adapterVersion() != null && !dc.adapterVersion().isBlank()
                 && !dc.adapterVersion().equals(adapter.connectorVersion())) {
             return EffectiveCapability.of(c.code, c.category,
@@ -180,7 +185,7 @@ public class CapabilityReconciler {
                     "锁定版本 " + dc.adapterVersion() + "，实际 " + adapter.connectorVersion());
         }
 
-        // ⑧ 能力契约主版本
+        // ⑨ 能力契约主版本
         CapabilityItem observed = findObserved(snap, c.connectorCode, c.code);
         if (observed != null && majorOf(observed.contractVersion()) != SUPPORTED_CONTRACT_MAJOR
                 && majorOf(observed.contractVersion()) > 0) {
@@ -189,11 +194,11 @@ public class CapabilityReconciler {
                     "能力契约版本 " + observed.contractVersion() + " 主版本不兼容");
         }
 
-        // ⑨ Registry 中不存在该能力
+        // ⑩ Registry 中不存在该能力
         if (observed == null) {
             RegistrySnapshot.Diagnostic diag = snap.findDiagnostic(c.connectorCode, c.code);
             if (diag != null && diag.isFunctionProblem()) {
-                // ⑩ 有诊断说明"声明了但函数不成立"——这不是"没注册"
+                // ⑪ 有诊断说明"声明了但函数不成立"——这不是"没注册"
                 return EffectiveCapability.of(c.code, c.category,
                         EffectiveStatus.UNREGISTERED, EffectiveReason.FUNCTION_UNRESOLVED,
                         "实现函数无法解析: " + diag.detail());
@@ -203,7 +208,7 @@ public class CapabilityReconciler {
                     "Registry 中不存在该能力，且无相关诊断");
         }
 
-        // ⑪⑫ Python 显式禁用 / 平台不支持
+        // ⑫⑬ Python 显式禁用 / 平台不支持
         String impl = observed.implementationStatus();
         if ("DISABLED".equals(impl)) {
             return EffectiveCapability.of(c.code, c.category,
@@ -216,7 +221,7 @@ public class CapabilityReconciler {
                     "平台不支持该能力");
         }
 
-        // ⑬ 访问模式不覆盖
+        // ⑭ 访问模式不覆盖
         List<String> usableModes = intersectModes(dc.accessModes(), observed.accessModes());
         if (usableModes.isEmpty()) {
             return EffectiveCapability.of(c.code, c.category,
@@ -224,7 +229,7 @@ public class CapabilityReconciler {
                     "Desired 要求 " + dc.accessModes() + "，Observed 仅支持 " + observed.accessModes());
         }
 
-        // ⑭⑮⑯ 验证证据 —— **对所有未被 ⑪⑫ 拦下的状态一律生效**
+        // ⑮⑯⑰ 验证证据 —— **对所有未被 ⑫⑬ 拦下的状态一律生效**
         //
         // 首版只在 UNVERIFIED / VERIFIED 时校验，导致 IMPLEMENTED 与 DEGRADED
         // 整段跳过证据校验，落入第 ⑲ 步判 AVAILABLE；`evidence.accepted=false`
@@ -254,7 +259,7 @@ public class CapabilityReconciler {
                     "实现状态为 IMPLEMENTED（本地测试通过），尚未取得真实平台验证");
         }
 
-        // ⑰ 需要认证但无可用账号（仅当没有 PUBLIC 可用时的确无法执行）
+        // ⑱ 需要认证但无可用账号（仅当没有 PUBLIC 可用时的确无法执行）
         if (usableModes.contains(MODE_AUTHENTICATED) && !usableModes.contains(MODE_PUBLIC)
                 && !hasUsableAccount) {
             return EffectiveCapability.of(c.code, c.category,
@@ -262,14 +267,14 @@ public class CapabilityReconciler {
                     "该能力只支持已认证访问，但没有可用账号");
         }
 
-        // ⑱ 可用但受限
+        // ⑲ 可用但受限
         if ("DEGRADED".equals(impl)) {
             return EffectiveCapability.of(c.code, c.category,
                     EffectiveStatus.DEGRADED, EffectiveReason.DEGRADED,
                     "可用但受限（分页/限流等）");
         }
 
-        // ⑲ 正常可用 —— 必须前面全部通过
+        // ⑳ 正常可用 —— 必须前面全部通过
         return EffectiveCapability.of(c.code, c.category,
                 EffectiveStatus.AVAILABLE, EffectiveReason.NONE, "全部准入条件通过");
     }

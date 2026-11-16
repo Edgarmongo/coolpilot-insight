@@ -286,7 +286,7 @@ v1 没有 `accessModes` 概念。迁移时**取保守值**：
 | 层 | 字段 | 值域 | 治理 |
 |---|---|---|---|
 | 准入分类 | `effectiveStatus` | SOURCE-02 冻结八值 | **不得增删改** |
-| 精确原因 | `effectiveReason` | Java 内部枚举（20 值，见 §3.3） | 随实现演进 |
+| 精确原因 | `effectiveReason` | Java 内部枚举（21 值，见 §3.3） | 随实现演进 |
 
 **为什么加 `effectiveReason` 不违反枚举冻结**：两者都只在 Java 侧计算与展示；
 Python 的 `/v1/capabilities` 只输出 Observed，**从不输出** `effectiveStatus`。
@@ -300,30 +300,37 @@ Python 的 `/v1/capabilities` 只输出 Observed，**从不输出** `effectiveSt
 | 1 | **Registry 不可达** | 超时 / 5xx / 连接失败 | `UNKNOWN` | `REGISTRY_UNREACHABLE` | ❌ |
 | 2 | Registry 响应非法 | JSON 坏 / 缺 schemaVersion / 主版本 > 1 | `UNKNOWN` | `SCHEMA_UNSUPPORTED` | ❌ |
 | 3 | 仅有过期缓存 | 本次刷新失败，只有 stale | `UNKNOWN` | `OBSERVED_STALE` | ❌ |
-| 4 | **Desired 未声明** | 可能已加载 | `UNREGISTERED` | `NOT_DECLARED` | ❌ |
-| 5 | **Adapter 未加载** | `loadStatus=FAILED` | `ADAPTER_MISSING` | `ADAPTER_NOT_LOADED` | ❌ |
-| 6 | Adapter 版本不匹配（仅在锁定时） | `connectorVersion` ≠ 锁定值 | `VERSION_MISMATCH` | `CONNECTOR_VERSION_MISMATCH` | ❌ |
-| 7 | Contract 主版本不兼容 | `contractVersion` 主版本不符 | `VERSION_MISMATCH` | `CONTRACT_VERSION_MISMATCH` | ❌ |
-| 8 | **Capability 未注册** | Observed 无此能力，且无相关诊断 | `UNREGISTERED` | `CAPABILITY_NOT_REGISTERED` | ❌ |
-| 9 | **函数不存在** | 有声明，诊断 `INVALID_IMPLEMENTATION`（属性不存在/模块无法导入） | `UNREGISTERED` | `FUNCTION_UNRESOLVED` | ❌ |
-| 10 | **函数不可调用** | 引用指向非 callable | `UNREGISTERED` | `FUNCTION_NOT_CALLABLE` | ❌ |
-| 11 | 能力被 Python 显式禁用 | `implementationStatus=DISABLED` | `UNREGISTERED` | `CAPABILITY_DISABLED` | ❌ |
-| 12 | 平台不支持 | `implementationStatus=UNSUPPORTED` | `UNREGISTERED` | `PLATFORM_UNSUPPORTED` | ❌ |
-| 13 | 访问模式不覆盖 | Observed `accessModes` 不含 Desired 要求的模式 | `UNREGISTERED` | `ACCESS_MODE_UNSUPPORTED` | ❌ |
-| 14 | **已注册但未获真实平台验证** | `implementationStatus ∈ {UNVERIFIED, IMPLEMENTED}`（见 §3.2.1） | `UNKNOWN` | `VERIFICATION_REQUIRED` | ❌ |
-| 15 | **证据已过期** | 任意状态 + `evidence.rejectionReason=EVIDENCE_EXPIRED` | `UNKNOWN` | `EVIDENCE_EXPIRED` | ❌ |
-| 16 | **证据被判无效** | 任意状态 + `rejectionReason ∈ {EVIDENCE_TAMPERED, EVIDENCE_STALE, EVIDENCE_VERSION_MISMATCH, EVIDENCE_SCOPE_MISMATCH, EVIDENCE_MALFORMED}` | `UNKNOWN` | `EVIDENCE_INVALID` | ❌ |
-| 17 | 需要账号但无可用账号 | 只支持 AUTHENTICATED，无 `isUsable` 账号 | `ACCOUNT_REQUIRED` | `ACCOUNT_REQUIRED` | ❌ |
-| 18 | 可用但受限 | `implementationStatus=DEGRADED` **且持有已接受证据** | `DEGRADED` | `DEGRADED` | ⚠️ 降级执行 |
-| 19 | 正常可用 | `implementationStatus=VERIFIED` **且** 证据已接受 且上述全通过 | `AVAILABLE` | `NONE` | ✅ |
+| 4 | **Desired 配置不可解析** | 与 Python 无关；`capability_json` 非法 JSON / 未知主版本 / 结构或枚举非法 / 重复能力 | `UNKNOWN` | `DESIRED_UNPARSEABLE` | ❌ |
+| 5 | **Desired 未声明** | 可能已加载 | `UNREGISTERED` | `NOT_DECLARED` | ❌ |
+| 6 | **Adapter 未加载** | `loadStatus=FAILED` | `ADAPTER_MISSING` | `ADAPTER_NOT_LOADED` | ❌ |
+| 7 | Adapter 版本不匹配（仅在锁定时） | `connectorVersion` ≠ 锁定值 | `VERSION_MISMATCH` | `CONNECTOR_VERSION_MISMATCH` | ❌ |
+| 8 | Contract 主版本不兼容 | `contractVersion` 主版本不符 | `VERSION_MISMATCH` | `CONTRACT_VERSION_MISMATCH` | ❌ |
+| 9 | **Capability 未注册** | Observed 无此能力，且无相关诊断 | `UNREGISTERED` | `CAPABILITY_NOT_REGISTERED` | ❌ |
+| 10 | **函数不存在** | 有声明，诊断 `INVALID_IMPLEMENTATION`（属性不存在/模块无法导入） | `UNREGISTERED` | `FUNCTION_UNRESOLVED` | ❌ |
+| 11 | **函数不可调用** | 引用指向非 callable | `UNREGISTERED` | `FUNCTION_NOT_CALLABLE` | ❌ |
+| 12 | 能力被 Python 显式禁用 | `implementationStatus=DISABLED` | `UNREGISTERED` | `CAPABILITY_DISABLED` | ❌ |
+| 13 | 平台不支持 | `implementationStatus=UNSUPPORTED` | `UNREGISTERED` | `PLATFORM_UNSUPPORTED` | ❌ |
+| 14 | 访问模式不覆盖 | Observed `accessModes` 不含 Desired 要求的模式 | `UNREGISTERED` | `ACCESS_MODE_UNSUPPORTED` | ❌ |
+| 15 | **已注册但未获真实平台验证** | `implementationStatus ∈ {UNVERIFIED, IMPLEMENTED}`（见 §3.2.1） | `UNKNOWN` | `VERIFICATION_REQUIRED` | ❌ |
+| 16 | **证据已过期** | 任意状态 + `evidence.rejectionReason=EVIDENCE_EXPIRED` | `UNKNOWN` | `EVIDENCE_EXPIRED` | ❌ |
+| 17 | **证据被判无效** | 任意状态 + `rejectionReason ∈ {EVIDENCE_TAMPERED, EVIDENCE_STALE, EVIDENCE_VERSION_MISMATCH, EVIDENCE_SCOPE_MISMATCH, EVIDENCE_MALFORMED}` | `UNKNOWN` | `EVIDENCE_INVALID` | ❌ |
+| 18 | 需要账号但无可用账号 | 只支持 AUTHENTICATED，无 `isUsable` 账号 | `ACCOUNT_REQUIRED` | `ACCOUNT_REQUIRED` | ❌ |
+| 19 | 可用但受限 | `implementationStatus=DEGRADED` **且持有已接受证据** | `DEGRADED` | `DEGRADED` | ⚠️ 降级执行 |
+| 20 | 正常可用 | `implementationStatus=VERIFIED` **且** 证据已接受 且上述全通过 | `AVAILABLE` | `NONE` | ✅ |
 
-> **2026-11-16 修订（SOURCE-04-03-FIX-01，H1）**：原第 19 行写作
+> **2026-11-16 修订（SOURCE-04-03-FIX-01，H1）**：原表末行写作
 > `∈ {VERIFIED, IMPLEMENTED}`，把 `IMPLEMENTED`（本地测试通过）与 `VERIFIED`
 > （真实平台运行验证）等同，导致**未上过真实平台的实现被直接判为可执行**。
-> 同一缺陷还有第二个入口：原第 14~16 步把证据校验写成"仅当 `UNVERIFIED` / `VERIFIED`
+> 同一缺陷还有第二个入口：原第 14~16 行把证据校验写成"仅当 `UNVERIFIED` / `VERIFIED`
 > 才执行"，于是 `IMPLEMENTED` 与 `DEGRADED` 完全跳过证据校验，
 > `evidence.accepted=false` 也会被放行——**失败开放**。
 > 本次修订同时关闭这两个入口，裁决依据见 §3.2.1。
+>
+> **2026-11-16 修订（SOURCE-04-03-FIX-02，M1）**：新增第 4 行
+> `DESIRED_UNPARSEABLE`。在此之前，"Desired 读不懂"被映射为 `SCHEMA_UNSUPPORTED`
+> ——那是 Observed 快照的故障码，会把人引向采集服务。同时把该判定从
+> 判定链**最前面**移到快照判定**之后**：服务不可达时连依据都没有，
+> 此时报"你的配置读不懂"是误导（顺序论证见 `SOURCE-04-04-EFFECTIVE-REASON.md` §四）。
 
 ### 3.2.1 实现状态 × 证据矩阵（穷举，不得只覆盖常见两值）
 
@@ -334,14 +341,14 @@ Python 的 `/v1/capabilities` 只输出 Observed，**从不输出** `effectiveSt
 |---|---|---|---|
 | `UNVERIFIED` | ⚠️ 不可能（证据接受即升 `VERIFIED`）；若出现按**不可执行**处理 | `UNKNOWN` + `VERIFICATION_REQUIRED` | `UNKNOWN` + `EVIDENCE_EXPIRED` / `EVIDENCE_INVALID` |
 | `IMPLEMENTED` | **`UNKNOWN` + `VERIFICATION_REQUIRED`**（本地测试通过 ≠ 真实平台验证） | `UNKNOWN` + `VERIFICATION_REQUIRED` | `UNKNOWN` + `EVIDENCE_EXPIRED` / `EVIDENCE_INVALID` |
-| `VERIFIED` | 继续第 17~19 步（可判 `AVAILABLE`） | `UNKNOWN` + `VERIFICATION_REQUIRED`（协议异常：`VERIFIED` 必须带证据） | `UNKNOWN` + `EVIDENCE_EXPIRED` / `EVIDENCE_INVALID` |
+| `VERIFIED` | 继续第 18~20 步（可判 `AVAILABLE`） | `UNKNOWN` + `VERIFICATION_REQUIRED`（协议异常：`VERIFIED` 必须带证据） | `UNKNOWN` + `EVIDENCE_EXPIRED` / `EVIDENCE_INVALID` |
 | `DEGRADED` | `DEGRADED` + `DEGRADED`（降级执行） | `UNKNOWN` + `VERIFICATION_REQUIRED` | `UNKNOWN` + `EVIDENCE_EXPIRED` / `EVIDENCE_INVALID` |
-| `DISABLED` | 第 11 步已返回，不进本矩阵 | 同左 | 同左 |
-| `UNSUPPORTED` | 第 12 步已返回，不进本矩阵 | 同左 | 同左 |
+| `DISABLED` | 第 12 步已返回，不进本矩阵 | 同左 | 同左 |
+| `UNSUPPORTED` | 第 13 步已返回，不进本矩阵 | 同左 | 同左 |
 
 **三条铁律**：
 
-1. **证据闸门对所有未被第 11/12 步拦下的状态一律生效**。不存在"某个状态可以跳过证据校验"。
+1. **证据闸门对所有未被第 12/13 步拦下的状态一律生效**。不存在"某个状态可以跳过证据校验"。
    `DEGRADED` 尤其不能例外——"降级"是性能/限流语义，不是"证据无效也可以跑"的许可证。
 2. **`IMPLEMENTED` 永不产出 `AVAILABLE`**。它表示"代码写好、本地测过"，与
    "在真实平台跑通并留下证据"是两件事。Schema 的 `VERIFIED` 才对应后者。
@@ -353,10 +360,10 @@ Python 的 `/v1/capabilities` 只输出 Observed，**从不输出** `effectiveSt
 > 无需扩充 `effectiveStatus`（八值冻结），也无需把它误归为 `UNREGISTERED`
 > ——它确实注册了。
 
-### 3.3 `effectiveReason` 枚举（20 值，Java 内部模型）
+### 3.3 `effectiveReason` 枚举（21 值，Java 内部模型）
 
 `NONE` / `SOURCE_DISABLED` / `REGISTRY_UNREACHABLE` / `SCHEMA_UNSUPPORTED` /
-`OBSERVED_STALE` / `NOT_DECLARED` / `ADAPTER_NOT_LOADED` /
+`OBSERVED_STALE` / **`DESIRED_UNPARSEABLE`** / `NOT_DECLARED` / `ADAPTER_NOT_LOADED` /
 `CONNECTOR_VERSION_MISMATCH` / `CONTRACT_VERSION_MISMATCH` /
 `CAPABILITY_NOT_REGISTERED` / `FUNCTION_UNRESOLVED` / `FUNCTION_NOT_CALLABLE` /
 `CAPABILITY_DISABLED` / `PLATFORM_UNSUPPORTED` / `ACCESS_MODE_UNSUPPORTED` /
@@ -364,6 +371,10 @@ Python 的 `/v1/capabilities` 只输出 Observed，**从不输出** `effectiveSt
 `ACCOUNT_REQUIRED` / `DEGRADED`
 
 > 这些是**诊断原因**，不进入 `implementationStatus` / `effectiveStatus` 枚举。
+>
+> `DESIRED_UNPARSEABLE` 为 `SOURCE-04-03-FIX-02` 新增（原 20 值）。
+> 它替代了此前借用 `SCHEMA_UNSUPPORTED` 的错误做法——后者指 Python 快照结构，
+> 借用会让排障方向指向采集服务。完整论证见 `SOURCE-04-04-EFFECTIVE-REASON.md` §九。
 
 ### 3.4 三种「不执行」的语义分野（本次修订最关键的一张表）
 

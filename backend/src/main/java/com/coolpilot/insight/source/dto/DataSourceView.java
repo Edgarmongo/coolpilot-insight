@@ -39,6 +39,15 @@ public class DataSourceView {
     /** Desired：业务声明。 */
     private List<DesiredCapability> desired;
 
+    /**
+     * Desired 解析失败的原因；解析成功时为 {@code null}。
+     *
+     * <p>为什么必须单独暴露：Desired 整份读不懂时，候选集合为空，
+     * {@code effective} 会是空列表——此时"没有行"既可能是"没配能力"也可能是
+     * "配置坏了"。这个字段让调用方能区分，而不是去猜（评审 M1）。
+     */
+    private String desiredError;
+
     /** Effective：核对结论。 */
     private List<EffectiveCapability> effective;
 
