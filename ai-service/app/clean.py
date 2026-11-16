@@ -26,8 +26,10 @@ from analysis_engine import get_analyzer
 
 try:                      # 以脚本方式运行（生产路径）：sys.path[0] 是本目录
     from redact import error_summary
-except ImportError:       # 以包方式导入（测试/工具）：app.redact
+    from rows import keep_row
+except ImportError:       # 以包方式导入（测试/工具）：app.redact / app.rows
     from app.redact import error_summary
+    from app.rows import keep_row
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATAS_DIR = os.environ.get('PY_DATAS_DIR') or os.path.join(BASE_DIR, 'Datas')
@@ -63,7 +65,8 @@ def parse_csv(filepath):
 
 def clean_data(rows):
     """空值剔除、批内去重、表情标签清理、时间标准化。"""
-    filtered = [r for r in rows if (r.get('昵称') or '').strip() and (r.get('内容') or '').strip()]
+    # 过滤规则见 app/rows.py（含为什么"空内容但有 cid"要保留）
+    filtered = [r for r in rows if keep_row(r)]
 
     seen = set()
     unique = []
@@ -85,8 +88,12 @@ def clean_data(rows):
             dt += ':00'
         r['日期'] = dt
 
-    print(f"  清洗后: {len(unique)} 条 (剔除空值 {len(rows) - len(filtered)}, 去重 {len(filtered) - len(unique)})")
-    return [r for r in unique if r['内容']]
+    # 注意：这里不能再用 `if r['内容']` 二次过滤。
+    # 表情标签被 BRACKET_PATTERN 清掉后会变空，但那类行若带 cid 仍是平台实体，
+    # 丢掉它就会回到"采得到、入不了库、下次再被判为新增"的老问题。
+    kept = [r for r in unique if r['内容'] or (r.get('CID') or '').strip()]
+    print(f"  清洗后: {len(kept)} 条 (剔除空值 {len(rows) - len(filtered)}, 去重 {len(filtered) - len(unique)})")
+    return kept
 
 
 def dedup_key_for(aweme_id, row):
@@ -196,13 +203,18 @@ def insert_to_db(aweme_id, rows, source_item_id=None):
                     success += 1
                 # 规则情感基线：让看板在 AI 分析前也能展示情感分布
                 if profile_id:
-                    score = analyzer.analyze_with_score(row['内容']) \
-                        if hasattr(analyzer, 'analyze_with_score') else None
-                    if score is None:
-                        label = analyzer.analyze(row['内容'])
-                        confidence = None
+                    text = (row['内容'] or '').strip()
+                    if not text:
+                        # 空内容没有情感可言，不走分词器（空串进分析器也没有意义）
+                        label, confidence = 'neutral', None
                     else:
-                        label, confidence = score
+                        score = analyzer.analyze_with_score(text) \
+                            if hasattr(analyzer, 'analyze_with_score') else None
+                        if score is None:
+                            label = analyzer.analyze(text)
+                            confidence = None
+                        else:
+                            label, confidence = score
                     comment_id = cursor.lastrowid
                     if not comment_id:
                         cursor.execute(
