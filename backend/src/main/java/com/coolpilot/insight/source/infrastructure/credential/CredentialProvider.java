@@ -11,6 +11,14 @@ package com.coolpilot.insight.source.infrastructure.credential;
  */
 public interface CredentialProvider {
 
+    /**
+     * 凭证存储本身是否可用（目录存在且可读）。
+     *
+     * <p>与"某个凭证不存在"是两个不同的问题：目录没挂载属部署异常，
+     * 不能据此判定每个账号都无效。
+     */
+    boolean isStorageAvailable();
+
     /** 该引用是否已配置（不读取内容）。 */
     boolean isConfigured(String ref);
 

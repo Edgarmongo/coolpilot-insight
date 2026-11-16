@@ -27,3 +27,7 @@ target/
 collection-service/datas/*
 !collection-service/datas/.gitkeep
 deploy/backup/*
+
+# 凭证目录：只保留占位文件，凭证内容禁止入库
+runtime/secrets/**
+!runtime/secrets/account/.gitkeep

@@ -30,6 +30,11 @@ public class LocalSecretCredentialProvider implements CredentialProvider {
     }
 
     @Override
+    public boolean isStorageAvailable() {
+        return Files.isDirectory(secretDir) && Files.isReadable(secretDir);
+    }
+
+    @Override
     public boolean isConfigured(String ref) {
         Path p = resolvePath(ref);
         return p != null && Files.isReadable(p);

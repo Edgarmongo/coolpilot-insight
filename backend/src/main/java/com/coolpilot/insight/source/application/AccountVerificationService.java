@@ -57,6 +57,14 @@ public class AccountVerificationService {
             throw new BizException(ErrorCode.NOT_FOUND, "账号不存在");
         }
 
+        // 0) 凭证存储本身不可用 → 部署异常，保持原状态，不要把账号批量判成 INVALID
+        if (!credentialProvider.isStorageAvailable()) {
+            log.warn("[verify] 凭证目录不可用，账号 {} 状态保持不变", accountId);
+            return new VerifyResult(accountId, a.getAuthStatus(), false,
+                    "SECRET_STORAGE_UNAVAILABLE",
+                    "凭证存储目录不可用（未挂载或不可读），未改变账号状态", SCOPE_CONFIG_ONLY);
+        }
+
         // 1) 过期优先：这是时间上的确定事实，不该被"凭证缺失"掩盖
         if (a.getExpiresAt() != null && a.getExpiresAt().isBefore(LocalDateTime.now())) {
             return fail(a, "EXPIRED", "CREDENTIAL_EXPIRED", "授权已于 " + a.getExpiresAt() + " 过期");
