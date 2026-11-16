@@ -169,14 +169,17 @@ CSV 列名与落盘路径、进度文件、`VIDEO|` stdout 协议全部不变）
 
 ## 03-01-F 需要 SOURCE-04 接手的事项（本任务不处理）
 
-1. **collection-service 进程化**：决定是独立容器、还是并入 backend 容器作为子进程。
-   这直接决定 Java 侧要不要从"子进程调脚本"切到"HTTP 调采集服务"。
-2. **`AccountVerificationService` 的探活目标错配**（本文件 缺陷 1）——
-   采集服务真正可达之前不能改 URL，否则账号状态会被批量误判。
-3. **Java `ds_source.capability_json` 与 `effectiveStatus` 枚举的口径统一**
-   （`PENDING` 不在枚举内）。
-4. **`/v1/jobs` 仍是 stub 实现**：本任务保留该端点与 stub 行为不动
-   （"不擅自删除旧接口或旧 Adapter"），改由 Registry 派发属 SOURCE-04。
+> **2026-11-16 更新**：第 2、3 项已在 SOURCE-03 补充审查中提前落地，
+> 详见 `SOURCE-03-SUPPLEMENT-REVIEW.md`。当前真实状态：
+
+| # | 事项 | 当前状态 |
+|---|---|---|
+| 1 | **collection-service 进程化**：独立容器 vs 并入 backend | ✅ 已定：**方案 A 独立容器**（`ADR-007`），`cpi-collection` 已部署并实测 |
+| 2 | **`AccountVerificationService` 探活目标错配** | ✅ 已修：`ServiceHealthProbe` 显式绑定服务名；AI / 采集两服务独立判断；不可达不改 `auth_status` |
+| 3 | **Java `ds_source.capability_json` 与 `effectiveStatus` 枚举口径统一**（`PENDING` 不在枚举内） | ⏳ **仍未做** → SOURCE-04-04 |
+| 4 | **`/v1/jobs` 仍是 stub 实现** | ⏳ **仍未做** → SOURCE-06（本任务按"不擅自删除旧接口或旧 Adapter"保留该端点与 stub 行为不动） |
+| 5 | **Java 消费 Python `/v1/capabilities`** | ⏳ **仍未做** → SOURCE-04-02（SOURCE-03 审计已确认：当时无任何调用方） |
+| 6 | **Desired / Observed / Effective 核对** | ⏳ **仍未做** → SOURCE-04-03（架构决策与验收要求仍归 SOURCE-08 名下） |
 
 ---
 

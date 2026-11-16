@@ -31,6 +31,7 @@ from app.registry.bootstrap import (  # noqa: E402
     load_evidence,
 )
 from app.registry.capability import (  # noqa: E402
+    SCHEMA_VERSION,
     AccessMode,
     CapabilityCategory,
     CapabilityCode,
@@ -245,7 +246,7 @@ def test_v1_documents_pass_json_schema():
 def test_v1_document_shape():
     registry = build_registry()
     doc = next(d for d in registry.v1_documents() if d["connectorCode"] == "DOUYIN_PUBLIC")
-    assert doc["schemaVersion"] == "1.0"
+    assert doc["schemaVersion"] == SCHEMA_VERSION
     assert doc["sourceCode"] == "DOUYIN"
     assert doc["connectorVersion"] == "1.0.0"
     codes = {c["code"] for c in doc["capabilities"]}

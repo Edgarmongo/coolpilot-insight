@@ -59,11 +59,23 @@ V8 给 `analysis_evidence` 补 `source_level`（实体有、V4 建表漏），�
   **都不是状态枚举**——别为了凑场景说明表扩枚举。
 - 已验证：DOUYIN_PUBLIC 的 COMMENT/COMMENT_REPLY/CONTENT_DETAIL = VERIFIED（有真实证据）；
   **KEYWORD_SEARCH 恒为 UNVERIFIED**（无验证器，风控未知）。
+- **采集服务已独立容器化（方案 A，`cpi-collection`，端口 5001）**：Dockerfile
+  `deploy/docker/collection.Dockerfile`；与 backend **共享同一宿主 CSV 目录**
+  （`collection-service/datas`）与 `chrome-data` 卷。约束：**两容器不得并发启动 Chrome**。
+- **探活必须分开**：`AccountVerificationService` 曾把 ai-service 当采集服务探活（两者都返 200，
+  错误长期未暴露）。现由 `integration/health/ServiceHealthProbe` 显式绑定服务名；
+  `COLLECTION_SERVICE` 不可达 → `SERVICE_UNAVAILABLE` 且**不改 auth_status**，
+  `AI_SERVICE` 不可达 → 不影响账号判定。配置键 `app.collection-service-url` / `app.ai-service-url`。
+- **契约 Schema 已升 1.1**：新增 `capabilities[].semantics`（枚举**仅 `READ`**）。
+  写能力在 Schema 里没有表达位置 ⇒ `COMMENT_REPLY` 只可能是"读取楼中楼回复"。
+- **验证证据 schema 2.0**：每条记录带 `contentHash`（记录本体哈希）
+  + `scope`（sourceCode/connectorCode/connectorVersion/capabilityCode/accessModes/contractVersion）
+  + `scope.implementationHash`（声明 + 目标函数源码指纹），TTL 默认 30 天
+  （`CAPABILITY_EVIDENCE_TTL_DAYS`）。篡改记录/改实现/改版本/超期 **四类都会被拒绝**并产生诊断。
+  `contentHash` 算法公开 → 能防误改，**不能防恶意伪造**（签名属 SOURCE-09）。
 - 生产采集仍走**子进程**：`python comment.py <id> <max>` → CSV `<aweme_id>.csv`（Java 读文件，
   不读 stdout）；`search.py` 的 stdout 协议 `VIDEO|aweme_id|title|author|likes|url` 被 DiscoveryService 解析。
   这三条是硬契约，改脚本时不得破坏。
-- **collection-service 的 HTTP 服务当前没有容器在跑**（compose 里 `flask` 容器跑的是 ai-service）。
-  `AccountVerificationService` 的探活因此实际探的是 ai-service —— 已知缺陷，留给 SOURCE-04。
 
 ## 快速改后端（免重建镜像）
 `mvn -s deploy/docker/maven-settings.xml -DskipTests compile` → zipfile 替换 `/app/app.jar` 里对应
@@ -74,4 +86,4 @@ V8 给 `analysis_evidence` 补 `source_level`（实体有、V4 建表漏），�
 
 ## 待验证
 `douyin_search.py` 真实关键词搜索（风控未知）；`file_asset` 未接入上传落库；
-collection-service 进程化方案（SOURCE-04）。
+Java 消费 Python `/v1/capabilities`（SOURCE-04-02）；Desired/Observed/Effective 核对（SOURCE-04-03）。

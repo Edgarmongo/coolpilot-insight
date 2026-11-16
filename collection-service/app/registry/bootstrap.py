@@ -24,6 +24,14 @@ from app.registry.capability import (
 )
 from app.registry.capability_registry import CapabilityRegistry
 from app.registry.errors import CollectorError
+from app.registry.evidence import (
+    EvidenceCheck,
+    EvidenceRecord,
+    EvidenceVerifier,
+    implementation_hash,
+    read_records,
+    ttl_days,
+)
 
 #: 验证证据文件位置（随代码分发，默认是空证据）。
 EVIDENCE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -37,6 +45,14 @@ class CollectionRegistry:
     adapters: AdapterRegistry = field(default_factory=AdapterRegistry)
     capabilities: CapabilityRegistry = field(default_factory=CapabilityRegistry)
     evidence: dict[str, Any] = field(default_factory=dict)
+    #: 解析后的证据记录：connectorCode -> capabilityCode -> EvidenceRecord
+    evidence_records: dict[str, dict[str, EvidenceRecord]] = field(default_factory=dict)
+    #: 证据校验器
+    verifier: EvidenceVerifier = field(default_factory=EvidenceVerifier)
+    #: 证据被拒绝的原因：(connectorCode, capabilityCode) -> (reason, detail)
+    evidence_rejections: dict[tuple[str, str], tuple[str, str]] = field(default_factory=dict)
+    #: 实现指纹缓存：(connectorCode, capabilityCode) -> hash
+    _hash_cache: dict[tuple[str, str], str] = field(default_factory=dict, repr=False)
 
     # ------------------------------------------------------------------
     # 证据
@@ -47,34 +63,111 @@ class CollectionRegistry:
         rec = conn.get(capability_code)
         return rec if isinstance(rec, dict) else None
 
+    def _adapter_entry(self, connector_code: str):
+        for entry in self.adapters.list():
+            if entry.connector_code == connector_code:
+                return entry
+        return None
+
+    def _current_implementation_hash(self, connector_code: str,
+                                     spec: CapabilitySpec) -> str:
+        """当前实现指纹。带缓存——同一份声明不必反复算哈希。"""
+        key = (connector_code, spec.code)
+        cached = self._hash_cache.get(key)
+        if cached is not None:
+            return cached
+        fn = self.capabilities.resolve(spec.adapter_function)
+        value = implementation_hash(spec, fn)
+        self._hash_cache[key] = value
+        return value
+
+    def _check_evidence(self, connector_code: str, spec: CapabilitySpec) -> EvidenceCheck:
+        """校验一条证据是否仍然适用于当前实现。"""
+        record = (self.evidence_records.get(connector_code) or {}).get(spec.code)
+        if record is None:
+            return EvidenceCheck.ok()
+
+        entry = self._adapter_entry(connector_code)
+        connector_version = entry.connector_version if entry else ""
+        source_code = entry.source_code if entry else ""
+        current_hash = self._current_implementation_hash(connector_code, spec)
+
+        check = self.verifier.verify(
+            record, spec,
+            connector_version=connector_version,
+            source_code=source_code,
+            current_implementation_hash=current_hash,
+        )
+        if not check.accepted:
+            self.evidence_rejections[(connector_code, spec.code)] = (
+                check.reason or "", check.detail)
+        else:
+            self.evidence_rejections.pop((connector_code, spec.code), None)
+        return check
+
     def apply_evidence(self, connector_code: str, spec: CapabilitySpec) -> CapabilitySpec:
         """把验证证据应用到能力声明上。
 
-        * 只有证据明确写 ``implementationStatus=VERIFIED`` 才提升；
-        * 代码里显式 ``DISABLED`` 的能力**不会**被证据抬起；
-        * ``verifiedAt`` 来自证据记录，而不是代码里的硬编码时间。
+        证据必须**通过全部校验**才生效：
+
+        * 记录本体未被改动（``contentHash``）；
+        * 适用范围与当前接入一致（平台、接入版本、契约版本、访问模式）；
+        * 实现指纹一致（声明或函数代码没变过）；
+        * 未超过有效期。
+
+        任一不满足，该条证据**不生效**，能力保持声明时的状态，
+        并在 diagnostics 中留下原因。
         """
-        rec = self._evidence_for(connector_code, spec.code)
-        if not rec:
+        record = (self.evidence_records.get(connector_code) or {}).get(spec.code)
+        if record is None:
             return spec
-        if rec.get("implementationStatus") != ImplementationStatus.VERIFIED:
+        if record.implementation_status != ImplementationStatus.VERIFIED:
             return spec
         if spec.implementation_status == ImplementationStatus.DISABLED:
             return spec
+
+        check = self._check_evidence(connector_code, spec)
+        if not check.accepted:
+            # 证据存在但没通过校验：能力保持声明状态，并把拒绝原因暴露出去
+            return self._with_evidence(spec, {
+                "verifiedAt": record.verified_at,
+                "method": record.method,
+                "scope": record.scope.to_dict(),
+                "contentHash": record.content_hash,
+                "accepted": False,
+                "rejectionReason": check.reason,
+                "rejectionDetail": check.detail,
+            })
+
+        return self._with_evidence(spec, {
+            "verifiedAt": record.verified_at,
+            "method": record.method,
+            "scope": record.scope.to_dict(),
+            "contentHash": record.content_hash,
+            "accepted": True,
+        }, verified=True)
+
+    @staticmethod
+    def _with_evidence(spec: CapabilitySpec, evidence: dict[str, Any],
+                       verified: bool = False) -> CapabilitySpec:
+        """复制一份声明并附上证据信息。"""
         return CapabilitySpec(
             code=spec.code,
             category=spec.category,
             name=spec.name,
             access_modes=spec.access_modes,
-            implementation_status=ImplementationStatus.VERIFIED,
+            implementation_status=(ImplementationStatus.VERIFIED if verified
+                                   else spec.implementation_status),
             contract_version=spec.contract_version,
             adapter_function=spec.adapter_function,
             input_schema=spec.input_schema,
             output_schema=spec.output_schema,
             limits=spec.limits,
             retry_policy=spec.retry_policy,
-            verified_at=rec.get("verifiedAt"),
+            verified_at=(evidence.get("verifiedAt") if verified else spec.verified_at),
             note=spec.note,
+            semantics=spec.semantics,
+            evidence=evidence,
         )
 
     # ------------------------------------------------------------------
@@ -167,6 +260,16 @@ class CollectionRegistry:
             "failedCount": len(self.adapters.failed()),
             "capabilityCount": len(self.capabilities.list_capabilities()),
             "degraded": bool(self.adapters.failed()),
+            "evidence": {
+                "recordCount": sum(len(v) for v in self.evidence_records.values()),
+                "acceptedCount": sum(
+                    1 for key, caps in self.evidence_records.items()
+                    for cap in caps
+                    if (key, cap) not in self.evidence_rejections
+                ),
+                "rejectedCount": len(self.evidence_rejections),
+                "ttlDays": ttl_days(),
+            },
         }
 
     def diagnostics(self) -> list[dict[str, Any]]:
@@ -180,6 +283,16 @@ class CollectionRegistry:
                 "capabilityCode": None,
                 "reason": DiagnosticReason.ADAPTER_NOT_LOADED,
                 "detail": entry.error_message or "",
+                "adapterFunction": None,
+            })
+        # 证据被拒绝：能力本身兑现了，但没有有效的验证证据支撑 VERIFIED
+        for (connector_code, capability_code), (reason, detail) in \
+                sorted(self.evidence_rejections.items()):
+            out.append({
+                "connectorCode": connector_code,
+                "capabilityCode": capability_code,
+                "reason": reason,
+                "detail": detail,
                 "adapterFunction": None,
             })
         return out
@@ -240,6 +353,7 @@ def build_registry(evidence_path: str | None = None) -> CollectionRegistry:
     这正是 03-06 要验收的场景之一。
     """
     registry = CollectionRegistry(evidence=load_evidence(evidence_path))
+    registry.evidence_records = read_records(registry.evidence)
 
     for item in LOADERS:
         entry = registry.adapters.register_loader(

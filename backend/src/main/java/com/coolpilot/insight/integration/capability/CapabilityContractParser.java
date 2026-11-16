@@ -177,7 +177,50 @@ public final class CapabilityContractParser {
                 text(cap, "adapterFunction"),
                 text(cap, "verifiedAt"),
                 limits,
-                policy);
+                policy,
+                text(cap, "semantics"),
+                parseEvidence(cap.get("evidence")));
+    }
+
+    /**
+     * 解析验证证据（SOURCE-02 v1.1）。
+     *
+     * <p>结构不认识或缺失时返回 {@code null}——"没有证据"与"证据无效"是两回事，
+     * 不能混为一谈。
+     */
+    private static CapabilityItem.Evidence parseEvidence(JsonNode node) {
+        if (node == null || !node.isObject()) {
+            return null;
+        }
+        CapabilityItem.Evidence.Scope scope = null;
+        JsonNode sc = node.get("scope");
+        if (sc != null && sc.isObject()) {
+            List<String> scopeModes = new ArrayList<>();
+            JsonNode sm = sc.get("accessModes");
+            if (sm != null && sm.isArray()) {
+                for (JsonNode m : sm) {
+                    scopeModes.add(m.asText());
+                }
+            }
+            scope = new CapabilityItem.Evidence.Scope(
+                    text(sc, "sourceCode"),
+                    text(sc, "connectorCode"),
+                    text(sc, "connectorVersion"),
+                    text(sc, "capabilityCode"),
+                    scopeModes,
+                    text(sc, "contractVersion"),
+                    text(sc, "adapterFunction"),
+                    text(sc, "implementationHash"));
+        }
+        JsonNode accepted = node.get("accepted");
+        return new CapabilityItem.Evidence(
+                accepted == null || accepted.isNull() ? null : accepted.asBoolean(),
+                text(node, "verifiedAt"),
+                text(node, "method"),
+                text(node, "contentHash"),
+                scope,
+                text(node, "rejectionReason"),
+                text(node, "rejectionDetail"));
     }
 
     /** 把 JSON 对象转成 Map，便于测试与调试。 */

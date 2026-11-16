@@ -174,13 +174,19 @@ cd /app/collection-service && /opt/venv/bin/python tools/verify_capability.py \
 | 能力 | 结果 | 证据 |
 |---|---|---|
 | `COMMENT` | ✅ VERIFIED | 采到 19 条，cid 覆盖 **19/19**，3 页 |
-| `COMMENT_REPLY` | ✅ VERIFIED | 楼中楼回复 **6** 条 |
+| `COMMENT_REPLY` | ✅ VERIFIED | **读取**楼中楼回复 **6** 条（只读能力，不含任何写操作） |
 | `CONTENT_DETAIL` | ✅ VERIFIED | 取到标题与描述 |
 | `KEYWORD_SEARCH` | ⛔ 保持 UNVERIFIED | **没有验证器**——风控行为未知，无法验证 |
 
 `KEYWORD_SEARCH` 保持 UNVERIFIED 是**机制保证**而不是人工约定：
 `tools/verify_capability.py` 的 `VERIFIERS` 表里没有它，
 没有验证器的能力**在机制上无法被提升为 VERIFIED**。
+
+> **2026-11-16 补充审查后**：证据文件升级为 schema 2.0，每条记录带
+> `contentHash`（记录本体哈希）+ `scope`（平台 / 接入 / 版本 / 访问模式 / 契约版本）
+> + `scope.implementationHash`（声明 + 目标函数指纹），并有 30 天有效期。
+> 篡改记录、改实现、改版本、超期——四类都会被拒绝并产生诊断。
+> 详见 `SOURCE-03-SUPPLEMENT-REVIEW.md` 审查项 1 与 3。
 
 ---
 

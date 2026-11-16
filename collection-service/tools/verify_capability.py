@@ -4,7 +4,7 @@
 起步；只有本工具在真实平台上跑通、并把证据写进
 ``app/registry/verification_evidence.json`` 之后，能力才会被提升为 ``VERIFIED``。
 
-用法（容器内）：
+用法（容器内）::
 
     cd /app/collection-service && /opt/venv/bin/python tools/verify_capability.py \
         --video 7703721523349239951 --max 30 --out /tmp/evidence.json
@@ -14,7 +14,10 @@
 * 每次只打**一个**视频的公开接口，不做批量、不做轮询，避免变成对平台的探测；
 * 只有存在验证器的能力才能被提升。没有验证器的能力（例如关键词搜索——
   其风控行为未知）永远停在 ``UNVERIFIED``；
-* 失败**不写证据**：没跑通就是没跑通，不留"半成功"记录。
+* 失败**不写证据**：没跑通就是没跑通，不留"半成功"记录；
+* 写出的每条证据都带**范围绑定**（平台、接入版本、契约版本、访问模式）与
+  **实现指纹**（声明 + 目标函数源码的哈希）。改了实现或改了声明，
+  旧证据自动失效；手工改了记录内容，``contentHash`` 校验会发现。
 """
 
 from __future__ import annotations
@@ -31,8 +34,14 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from app.registry.bootstrap import EVIDENCE_FILE, load_evidence  # noqa: E402
+from app.registry.bootstrap import EVIDENCE_FILE, build_registry, load_evidence  # noqa: E402
 from app.registry.capability import ImplementationStatus  # noqa: E402
+from app.registry.evidence import (  # noqa: E402
+    EVIDENCE_SCHEMA_VERSION,
+    build_record,
+    read_records,
+    write_records,
+)
 
 
 def _now() -> str:
@@ -65,7 +74,10 @@ def _verify_comment(video_id: str, max_comments: int) -> tuple[bool, dict[str, A
 
 
 def _verify_reply(video_id: str, max_comments: int) -> tuple[bool, dict[str, Any], str]:
-    """楼中楼：验证接口的 reply_comment 字段能带回嵌套回复。"""
+    """楼中楼：验证接口的 reply_comment 字段能带回嵌套回复。
+
+    这是**读取**评论下的回复，不是发布回复——本契约不含任何写能力。
+    """
     from app.adapters.douyin.collector import collect_comments
 
     outcome = collect_comments(video_id, max_comments, use_login=False, write_csv=False)
@@ -77,7 +89,7 @@ def _verify_reply(video_id: str, max_comments: int) -> tuple[bool, dict[str, Any
         "finishedReason": outcome.finished_reason,
     }
     ok = bool(replies)
-    message = (f"取到 {len(replies)} 条楼中楼回复" if ok
+    message = (f"读取到 {len(replies)} 条楼中楼回复" if ok
                else "未取到嵌套回复（该视频可能没有回复，或接口未返回 reply_comment）")
     return ok, observed, message
 
@@ -116,9 +128,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", default=EVIDENCE_FILE, help="证据文件输出路径")
     args = parser.parse_args(argv)
 
-    evidence = load_evidence(args.out)
-    records = evidence.setdefault("records", {})
-    conn = records.setdefault(args.connector, {})
+    registry = build_registry()
+    entries = {e.connector_code: e for e in registry.adapters.list()}
+    entry = entries.get(args.connector)
+    if entry is None:
+        print(f"[verify] 接入 {args.connector} 未加载")
+        return 2
+
+    specs = {s.code: s for s in entry.capabilities}
+
+    # 保留既有证据（其它接入 / 其它能力），只更新本次跑通的
+    records = read_records(load_evidence(args.out))
+    bucket = records.setdefault(args.connector, {})
 
     targets = [k for k in VERIFIERS if k[0] == args.connector]
     if not targets:
@@ -128,6 +149,10 @@ def main(argv: list[str] | None = None) -> int:
     exit_code = 0
     for connector_code, capability_code in targets:
         verifier = VERIFIERS[(connector_code, capability_code)]
+        spec = specs.get(capability_code)
+        if spec is None:
+            print(f"[verify]   跳过 {capability_code}：接入未声明该能力")
+            continue
         print(f"[verify] 验证 {connector_code}/{capability_code} …")
         try:
             ok, observed, message = verifier(args.video, args.max)
@@ -137,22 +162,24 @@ def main(argv: list[str] | None = None) -> int:
 
         print(f"[verify]   结果：{'通过' if ok else '未通过'} —— {message}")
         if ok:
-            conn[capability_code] = {
-                "implementationStatus": ImplementationStatus.VERIFIED,
-                "verifiedAt": _now(),
-                "method": "REAL_PLATFORM_RUN",
-                "observed": observed,
-                "message": message,
-            }
+            fn = registry.capabilities.resolve(spec.adapter_function)
+            bucket[capability_code] = build_record(
+                spec=spec,
+                connector_code=connector_code,
+                connector_version=entry.connector_version,
+                source_code=entry.source_code,
+                verified_at=_now(),
+                method="REAL_PLATFORM_RUN",
+                observed=observed,
+                message=message,
+                fn=fn,
+            )
         else:
             # 失败不写证据：没跑通就是没跑通
             exit_code = 1
 
-    evidence["schemaVersion"] = "1.0"
-    evidence["updatedAt"] = _now()
-    with open(args.out, "w", encoding="utf-8") as f:
-        json.dump(evidence, f, ensure_ascii=False, indent=2)
-    print(f"[verify] 证据已写入 {args.out}")
+    write_records(args.out, records, _now())
+    print(f"[verify] 证据已写入 {args.out}（schema {EVIDENCE_SCHEMA_VERSION}）")
     return exit_code
 
 

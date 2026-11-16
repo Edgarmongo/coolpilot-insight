@@ -168,17 +168,39 @@ Java ds_source.capability_json: comments / commentStatus / contentDetail / keywo
 
 ### 能力码枚举（首期）
 
-| category | code | 说明 |
-|---|---|---|
-| SEARCH | `KEYWORD_SEARCH` | 关键词搜索发现内容 |
-| CONTENT | `CONTENT_DETAIL` | 视频/笔记/文章详情 |
-| COMMENT | `COMMENT` | 评论列表 |
-| COMMENT | `COMMENT_REPLY` | 评论回复（楼中楼） |
-| USER | `AUTHOR_PROFILE` | 公开用户资料 |
-| USER | `AUTHOR_POSTS` | 公开作品列表 |
-| MEDIA | `MEDIA_DOWNLOAD` | 允许访问的媒体信息 |
+| category | code | 说明 | 语义 |
+|---|---|---|---|
+| SEARCH | `KEYWORD_SEARCH` | 关键词搜索发现内容 | READ |
+| CONTENT | `CONTENT_DETAIL` | 视频/笔记/文章详情 | READ |
+| COMMENT | `COMMENT` | 评论列表 | READ |
+| COMMENT | `COMMENT_REPLY` | **读取**评论下的楼中楼回复 | READ |
+| USER | `AUTHOR_PROFILE` | 公开用户资料 | READ |
+| USER | `AUTHOR_POSTS` | 公开作品列表 | READ |
+| MEDIA | `MEDIA_DOWNLOAD` | 允许访问的媒体信息 | READ |
 
 **注意**：监测（品牌/竞品/需求监测）**不是 Capability**，是 analysis 层对能力的组合调用。Capability 只表达"能从平台取到什么"。
+
+### 能力语义范围（v1.1 补充，SOURCE-03 审查项 2）
+
+**本契约只包含只读采集能力。**
+
+每条能力都必须声明 `semantics`，其**唯一合法值是 `READ`**：
+
+```json
+"semantics": { "type": "string", "enum": ["READ"] }
+```
+
+这一条不是命名约定，而是**结构性约束**：
+
+- 写操作（发布评论、点赞、关注、私信、下单……）在本契约的能力模型里
+  **没有表达位置**——枚举里只有 `READ`；
+- 因此 `COMMENT_REPLY` 具备 = 能**读**楼中楼回复，
+  它**永远不可能**被解读成"具备发布回复的能力"。
+
+> 历史上 `COMMENT_REPLY` 这个 code 曾被担心有歧义（"回复评论" vs "评论的回复"）。
+> 处置决定：**不改 code**，改契约维度——补 `semantics` 字段 + 中文名改为「楼中楼回复读取」
+> + 说明补「本能力不含任何写操作」。
+> 理由：改 code 破坏 Schema 1.x 兼容承诺，且逐个改名治标（`MEDIA_DOWNLOAD` 同样易被误读）。
 
 ### 实现状态枚举
 
@@ -192,6 +214,44 @@ Java ds_source.capability_json: comments / commentStatus / contentDetail / keywo
 | `UNSUPPORTED` | 平台不支持该能力 | ❌ |
 
 **硬规则**：`adapterFunction` 指向的函数不存在时，无论 `implementationStatus` 写什么，Effective 一律不是 AVAILABLE。这是"能力由实现推导"的落地。
+
+### 验证证据契约（v1.1 补充，SOURCE-03 审查项 1/3）
+
+`implementationStatus = VERIFIED` **不是**一句声明，它必须由**验证证据**支撑。
+证据由 `tools/verify_capability.py` 在真实平台上跑通后写出，schema 版本 **2.0**。
+
+每条证据记录携带两类绑定：
+
+| 绑定 | 字段 | 作用 |
+|---|---|---|
+| 记录本体完整性 | `contentHash` | 记录内容（时间 / 统计 / 结论 / scope）的 SHA-256。改动任一字段即被发现并拒绝 |
+| 适用范围 | `scope.sourceCode` / `connectorCode` / `connectorVersion` / `capabilityCode` / `accessModes` / `contractVersion` | 证据只在它所声明的范围内有效 |
+| 实现指纹 | `scope.implementationHash` | 能力声明 + 目标函数源码的联合哈希。**改了声明或改了实现，旧证据自动失效** |
+| 时间 | `verifiedAt` + TTL（默认 30 天，`CAPABILITY_EVIDENCE_TTL_DAYS` 可调） | 过期不再提升为 `VERIFIED` |
+
+**任一校验不通过，该条证据整体不生效**，能力回落为声明状态，
+并在 diagnostics 区留下原因码：
+
+`EVIDENCE_TAMPERED` / `EVIDENCE_STALE` / `EVIDENCE_EXPIRED` /
+`EVIDENCE_VERSION_MISMATCH` / `EVIDENCE_SCOPE_MISMATCH` / `EVIDENCE_MALFORMED`
+
+> 这些是**证据校验层的原因码**，不属于 `implementationStatus` / `effectiveStatus` 枚举。
+
+**必须如实理解的边界**：
+
+- `VERIFIED` 的含义是「**曾经**在某台机器、某个时间点、用这一版实现真实跑通过」，
+  它**不是**实时健康状态，**不是**当前可用的保证，
+  也不覆盖其它账号 / 其它接入 / 其它访问模式；
+- `contentHash` 的算法是公开的，它能发现**误改**，**不能**防恶意伪造。
+  真正的防伪依赖"证据只由验证工具产生"这一流程约束；
+  数字签名属 SOURCE-09 凭证与密钥治理的范围。
+
+### Schema 版本
+
+| 版本 | 变更 | 兼容性 |
+|---|---|---|
+| 1.0 | 初版：能力码 / 分类 / 访问模式 / 实现状态 / 契约版本 / 函数引用 / 入出参 / 限制 / 重试策略 | — |
+| 1.1 | 新增 `capabilities[].semantics`（枚举仅 `READ`）、`capabilities[].evidence` | 只加字段，向后兼容；Java 侧 `majorOf("1.1") == 1` 仍可解析 |
 
 ---
 

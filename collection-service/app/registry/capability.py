@@ -16,7 +16,12 @@ from dataclasses import dataclass, field
 from typing import Any, Final
 
 #: 顶层 Schema 版本。1.x 向后兼容（只加字段），2.0 破坏性变更。
-SCHEMA_VERSION: Final = "1.0"
+#:
+#: 1.1 —— 新增 ``capabilities[].semantics``（能力读写语义）。
+#:        本契约只描述"能从平台取到什么"，因此 semantics 的唯一合法值是 READ。
+#:        把这件事写进 Schema 而不是只写在文档里，是为了让"读取楼中楼回复"
+#:        与"发布评论回复"在结构上无法混淆——后者在本版本根本没有表达位置。
+SCHEMA_VERSION: Final = "1.1"
 
 #: Java 侧认识的最高 Schema 主版本。超过此值 Java 拒绝解析并标记 UNKNOWN。
 SUPPORTED_SCHEMA_MAJOR: Final = 1
@@ -53,7 +58,14 @@ class AccessMode:
 
 
 class CapabilityCode:
-    """能力码（对应 Schema ``capabilities[].code``）。"""
+    """能力码（对应 Schema ``capabilities[].code``）。
+
+    命名约定：``<对象>_<子对象>``，全部是**读取**能力，
+    读写语义由 :class:`CapabilitySemantics` 单独表达。
+
+    特别说明 ``COMMENT_REPLY``：它指**读取**评论下的楼中楼回复，
+    与"发布评论回复"是完全不同的能力。本契约不包含任何写能力。
+    """
 
     KEYWORD_SEARCH: Final = "KEYWORD_SEARCH"
     CONTENT_DETAIL: Final = "CONTENT_DETAIL"
@@ -84,6 +96,24 @@ class CapabilityCategory:
     MEDIA: Final = "MEDIA"
 
     ALL: Final = (SEARCH, CONTENT, COMMENT, USER, MEDIA)
+
+
+class CapabilitySemantics:
+    """能力的读写语义（对应 Schema ``capabilities[].semantics``）。
+
+    **本契约只表达只读采集能力。** 唯一合法值是 ``READ``：
+
+    * ``COMMENT``      —— 读取评论列表
+    * ``COMMENT_REPLY`` —— 读取评论下的楼中楼回复（**不是**发布回复）
+
+    写操作（发布评论、点赞、关注、私信等）**不在本契约的能力模型内**。
+    这一层不是靠命名约定，而是靠 Schema 的枚举约束——写能力没有表达位置，
+    因此"具备 COMMENT_REPLY"永远不会被误读成"具备发布回复"。
+    """
+
+    READ: Final = "READ"
+
+    ALL: Final = (READ,)
 
 
 class LoadStatus:
@@ -141,6 +171,10 @@ class CapabilitySpec:
     retry_policy: dict[str, Any] | None = None
     verified_at: str | None = None
     note: str = ""
+    #: 读写语义。本契约只支持只读能力，取值只能是 ``READ``。
+    semantics: str = CapabilitySemantics.READ
+    #: 验证证据的绑定信息与校验结论（可选）。存在证据记录时才输出。
+    evidence: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
         if self.code not in CapabilityCode.ALL:
@@ -154,6 +188,8 @@ class CapabilitySpec:
         for mode in self.access_modes:
             if mode not in AccessMode.ALL:
                 raise ValueError(f"未知访问模式: {mode}")
+        if self.semantics not in CapabilitySemantics.ALL:
+            raise ValueError(f"未知能力语义: {self.semantics}")
         if not self.adapter_function:
             raise ValueError(f"能力 {self.code} 必须绑定 adapterFunction")
 
@@ -184,6 +220,9 @@ class CapabilitySpec:
             out["verifiedAt"] = self.verified_at
         if self.note:
             out["note"] = self.note
+        out["semantics"] = self.semantics
+        if self.evidence is not None:
+            out["evidence"] = self.evidence
         return out
 
 

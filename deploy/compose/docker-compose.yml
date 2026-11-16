@@ -75,6 +75,45 @@ services:
     networks:
       - cpi-net
 
+  # ---------------- Collection Service（方案 A：独立容器） ----------------
+  collection:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/collection.Dockerfile
+    container_name: cpi-collection
+    restart: unless-stopped
+    environment:
+      # 采集服务自身的端口（容器内）
+      COLLECTION_PORT: 5001
+      # 服务间认证：Java 侧调用时必须带 X-Internal-Token；留空则不校验（仅本地开发）
+      INTERNAL_TOKEN: ${COLLECTION_INTERNAL_TOKEN:-}
+      # 采集数据目录（与 backend 共享同一宿主目录）
+      PY_DATAS_DIR: /app/collection-service/datas
+      # 容器内 Chrome 无 GUI，需 headless
+      CHROME_HEADLESS: "1"
+      CHROME_BROWSER_PATH: /usr/bin/google-chrome
+      CHROME_USER_DATA_DIR: /app/chrome-data
+      CHROME_NO_SANDBOX: "1"
+      TZ: Asia/Shanghai
+    volumes:
+      # CSV 持久化目录：与 backend 挂同一宿主路径，
+      # 保证「采集服务写 CSV → backend 读 CSV」的现有生产链路不被容器化打断
+      - ../../collection-service/datas:/app/collection-service/datas
+      # Chrome 用户数据目录：与 backend 共享同一卷，保留登录态。
+      # 约束：两个容器不得并发启动 Chrome（同一 profile 不能被两个 Chrome 同时占用）。
+      - chrome-data:/app/chrome-data
+    ports:
+      - "${COLLECTION_HOST_PORT:-5001}:5001"
+    healthcheck:
+      # 使用 /health 而非业务端点：/health 不触发任何平台请求
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5001/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    networks:
+      - cpi-net
+
   # ---------------- Spring Boot 后端 ----------------
   backend:
     build:
@@ -103,6 +142,14 @@ services:
       # Flask 由独立容器提供，无需本进程拉起
       FLASK_BASE_URL: http://flask:5000
       FLASK_AUTOSTART: "false"
+      # AI（分词 / 分析）服务地址——与采集服务是**两个不同的服务**。
+      # 本项目里 ai-service 跑在 flask 容器内，但账号验证必须显式指向它，
+      # 不能靠"两个 /health 都返 200"来蒙混过关。
+      AI_SERVICE_URL: http://flask:5000
+      # 采集服务（方案 A 独立容器）：Java 通过它查询 Registry。
+      # 与 FLASK_BASE_URL 分开——两者是不同服务，健康状态必须独立判断。
+      COLLECTION_SERVICE_URL: http://collection:5001
+      COLLECTION_INTERNAL_TOKEN: ${COLLECTION_INTERNAL_TOKEN:-}
       # 容器内 Chrome 无 GUI，需 headless
       CHROME_HEADLESS: "1"
       CHROME_BROWSER_PATH: /usr/bin/google-chrome
@@ -124,6 +171,8 @@ services:
       mysql:
         condition: service_healthy
       flask:
+        condition: service_started
+      collection:
         condition: service_started
     healthcheck:
       # 公开健康端点，不依赖登录 Token

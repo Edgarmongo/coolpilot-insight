@@ -77,6 +77,13 @@ app:
   flask-base-url: ${FLASK_BASE_URL:http://127.0.0.1:5000}
   # 是否由本进程自动拉起 Flask（容器部署时设为 false，改用独立 flask 服务）
   flask-autostart: ${FLASK_AUTOSTART:true}
+  # 采集服务地址（方案 A 独立容器）。**与 Flask 是两个不同的服务**，
+  # 健康状态必须分别判断，不能互相替代。
+  collection-service-url: ${COLLECTION_SERVICE_URL:http://127.0.0.1:5001}
+  # AI（分词 / 分析）服务地址
+  ai-service-url: ${AI_SERVICE_URL:http://127.0.0.1:5000}
+  # 采集服务间调用令牌（与采集服务的 INTERNAL_TOKEN 对应）
+  collection-internal-token: ${COLLECTION_INTERNAL_TOKEN:}
   # 首次启动把哨兵管理员置为可用密码；留空则账号保持不可登录
   admin-init-password: ${ADMIN_INIT_PASSWORD:}
 

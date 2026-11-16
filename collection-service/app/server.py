@@ -154,6 +154,11 @@ def health():
     """服务存活 + Registry 状态。
 
     **只读本地注册表，绝不触发平台采集请求**（SOURCE-02 §02-05 硬规则）。
+
+    本端点**保持公开**：容器健康检查需要在没有令牌的情况下探活，
+    且响应只含适配器元信息（模块名、版本、能力数量），不含任何凭证信息。
+    能力清单等业务端点（``/v1/capabilities``、``/v1/adapters*``）在配置了
+    ``INTERNAL_TOKEN`` 时要求携带 ``X-Internal-Token``。
     """
     registry = get_registry()
     payload = registry.health_payload()
@@ -178,6 +183,9 @@ def capabilities():
     * ``connectors`` —— SOURCE-02 §02-03 v1 Schema 的平台能力文档；
     * ``data`` —— 与 ``connectors`` 相同，放在统一信封里。
     """
+    denied = _require_token()
+    if denied is not None:
+        return denied
     registry = get_registry()
     items = registry.legacy_items()
     connectors = registry.v1_documents()
@@ -196,6 +204,9 @@ def capabilities():
 @app.get("/v1/adapters")
 def adapters():
     """Observed 适配器清单（含加载状态与能力数）。"""
+    denied = _require_token()
+    if denied is not None:
+        return denied
     registry = get_registry()
     views = registry.adapter_views()
     data = {
@@ -209,6 +220,9 @@ def adapters():
 @app.get("/v1/adapters/<connector_code>")
 def adapter_detail(connector_code: str):
     """单个适配器详情 + 它的 Observed 能力。"""
+    denied = _require_token()
+    if denied is not None:
+        return denied
     registry = get_registry()
     entry = registry.adapters.entry(connector_code)
     if entry is None:
@@ -232,6 +246,9 @@ def adapter_capabilities(connector_code: str):
     非平台接入（如链路验证替身）没有 ``sourceCode``，因此不产出 v1 平台文档，
     只返回空能力清单 + 说明。
     """
+    denied = _require_token()
+    if denied is not None:
+        return denied
     registry = get_registry()
     entry = registry.adapters.entry(connector_code)
     if entry is None:

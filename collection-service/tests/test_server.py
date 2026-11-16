@@ -13,6 +13,7 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
 from app.adapters.stub import StubAdapter  # noqa: E402
+from app.registry.capability import SCHEMA_VERSION  # noqa: E402
 from app.server import app  # noqa: E402
 
 
@@ -113,7 +114,7 @@ def test_health_reports_real_registry():
     body = r.get_json()
     assert body["code"] == 0
     registry = body["registry"]
-    assert registry["schemaVersion"] == "1.0"
+    assert registry["schemaVersion"] == SCHEMA_VERSION
     codes = {a["connectorCode"] for a in registry["adapters"]}
     assert "DOUYIN_PUBLIC" in codes
     assert "STUB_PUBLIC" in codes
@@ -153,7 +154,7 @@ def test_capabilities_exposes_v1_schema():
     r = c.get("/v1/capabilities")
     assert r.status_code == 200
     body = r.get_json()
-    assert body["schemaVersion"] == "1.0"
+    assert body["schemaVersion"] == SCHEMA_VERSION
     assert body["connectors"], "必须有 v1 平台文档"
     doc = next(d for d in body["connectors"] if d["connectorCode"] == "DOUYIN_PUBLIC")
     assert doc["sourceCode"] == "DOUYIN"
@@ -196,7 +197,7 @@ def test_adapter_detail_and_capabilities():
 
     caps = c.get("/v1/adapters/DOUYIN_PUBLIC/capabilities").get_json()["data"]
     assert caps["sourceCode"] == "DOUYIN"
-    assert caps["schemaVersion"] == "1.0"
+    assert caps["schemaVersion"] == SCHEMA_VERSION
     assert len(caps["capabilities"]) == 4
 
 

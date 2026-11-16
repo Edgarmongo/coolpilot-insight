@@ -45,7 +45,7 @@ class CapabilityContractTest {
     void parsesRealCapabilityResponse() throws IOException {
         ObservedCapabilities observed = CapabilityContractParser.parseCapabilities(sample());
 
-        assertThat(observed.schemaVersion()).isEqualTo("1.0");
+        assertThat(observed.schemaVersion()).isEqualTo("1.1");
         assertThat(observed.schemaMajor()).isEqualTo(1);
         assertThat(observed.schemaSupported()).isTrue();
         assertThat(observed.isUnknown()).isFalse();
@@ -129,7 +129,7 @@ class CapabilityContractTest {
         CapabilityItem broken = new CapabilityItem(
                 "COMMENT", "COMMENT", "缺函数", List.of("PUBLIC"),
                 CapabilityStatus.VERIFIED, "1.0", null, "2026-11-16T00:00:00Z",
-                null, null);
+                null, null, "READ", null);
 
         assertThat(broken.hasBoundFunction()).isFalse();
         assertThat(broken.statusAllowsExecution()).isTrue();
@@ -178,6 +178,82 @@ class CapabilityContractTest {
         ObservedCapabilities broken = CapabilityContractParser.parseCapabilities("{not json");
         assertThat(broken.isUnknown()).isTrue();
         assertThat(broken.documents()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("每条能力都声明只读语义 —— 写能力在本契约里没有表达位置")
+    void everyCapabilityIsReadOnly() throws IOException {
+        CapabilityDocument doc = CapabilityContractParser.parseCapabilities(sample())
+                .findByConnector("DOUYIN_PUBLIC");
+        assertThat(doc).isNotNull();
+
+        for (CapabilityItem item : doc.capabilities()) {
+            assertThat(item.semantics())
+                    .as("%s 必须声明只读语义", item.code())
+                    .isEqualTo("READ");
+        }
+    }
+
+    @Test
+    @DisplayName("验证证据被正确解析，且范围绑定完整")
+    void evidenceIsParsedWithScope() throws IOException {
+        CapabilityDocument doc = CapabilityContractParser.parseCapabilities(sample())
+                .findByConnector("DOUYIN_PUBLIC");
+        assertThat(doc).isNotNull();
+
+        CapabilityItem comment = doc.find("COMMENT");
+        assertThat(comment).isNotNull();
+        assertThat(comment.hasAcceptedEvidence())
+                .as("COMMENT 的证据必须通过校验")
+                .isTrue();
+        assertThat(comment.evidence().contentHash()).isNotBlank();
+        assertThat(comment.evidence().verifiedAt()).isNotBlank();
+
+        CapabilityItem.Evidence.Scope scope = comment.evidence().scope();
+        assertThat(scope).isNotNull();
+        assertThat(scope.sourceCode()).isEqualTo("DOUYIN");
+        assertThat(scope.connectorCode()).isEqualTo("DOUYIN_PUBLIC");
+        assertThat(scope.connectorVersion()).isEqualTo("1.0.0");
+        assertThat(scope.capabilityCode()).isEqualTo("COMMENT");
+        assertThat(scope.accessModes()).contains("PUBLIC", "AUTHENTICATED");
+        assertThat(scope.contractVersion()).isEqualTo("1.0");
+        assertThat(scope.implementationHash()).isNotBlank();
+
+        // 有有效证据 ⇒ 可执行
+        assertThat(comment.isExecutableWithEvidence()).isTrue();
+    }
+
+    @Test
+    @DisplayName("没有验证记录的能力不得被当成已验证")
+    void unverifiedHasNoAcceptedEvidence() throws IOException {
+        CapabilityDocument doc = CapabilityContractParser.parseCapabilities(sample())
+                .findByConnector("DOUYIN_PUBLIC");
+        assertThat(doc).isNotNull();
+
+        CapabilityItem search = doc.find("KEYWORD_SEARCH");
+        assertThat(search).isNotNull();
+        assertThat(search.hasAcceptedEvidence()).isFalse();
+        assertThat(search.isExecutableWithEvidence())
+                .as("没有证据就不得可执行")
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("证据被判无效时，即便状态是 VERIFIED 也不可执行")
+    void rejectedEvidenceMeansNotExecutable() {
+        CapabilityItem.Evidence rejected = new CapabilityItem.Evidence(
+                false, "2026-11-16T00:00:00Z", "REAL_PLATFORM_RUN", "hash",
+                null, "EVIDENCE_TAMPERED", "证据内容与 contentHash 不一致");
+        CapabilityItem item = new CapabilityItem(
+                "COMMENT", "COMMENT", "证据失效", List.of("PUBLIC"),
+                CapabilityStatus.VERIFIED, "1.0", "app.x.y", "2026-11-16T00:00:00Z",
+                null, null, "READ", rejected);
+
+        assertThat(item.isExecutable()).isTrue();
+        assertThat(item.hasAcceptedEvidence()).isFalse();
+        assertThat(item.isExecutableWithEvidence())
+                .as("证据无效 ⇒ 不得可执行")
+                .isFalse();
     }
 
     @Test

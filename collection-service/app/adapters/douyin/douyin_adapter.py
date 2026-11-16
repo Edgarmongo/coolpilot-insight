@@ -104,7 +104,7 @@ class DouyinPublicAdapter(PlatformAdapter):
             CapabilitySpec(
                 code=CapabilityCode.COMMENT_REPLY,
                 category=CapabilityCategory.COMMENT,
-                name="楼中楼回复采集",
+                name="楼中楼回复读取",
                 access_modes=(AccessMode.PUBLIC, AccessMode.AUTHENTICATED),
                 implementation_status=ImplementationStatus.UNVERIFIED,
                 contract_version="1.0",
@@ -132,7 +132,7 @@ class DouyinPublicAdapter(PlatformAdapter):
                     "maxAttempts": 3,
                     "retryableErrors": ["NETWORK", "RATE_LIMIT", "DATA", "SYSTEM"],
                 },
-                note="回复由评论接口的 reply_comment 字段随主评论一并返回，不单独翻页。",
+                note="只读取评论下的楼中楼回复，由评论接口的 reply_comment 字段随主评论一并返回，不单独翻页。本能力不含任何写操作。",
             ),
             CapabilitySpec(
                 code=CapabilityCode.CONTENT_DETAIL,
