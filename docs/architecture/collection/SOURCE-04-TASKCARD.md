@@ -305,6 +305,10 @@ for (var adapter : snapshot.adapters()) { ... }
 `VERIFIED` 与 `platformScoped` 正交：STUB 可能是 `VERIFIED`（如果给它写了证据），
 真实接入也可能是 `UNVERIFIED`。
 
+> **验收断言见「验收标准」的 N7-2 (a) / (b)**：未验证不得放行、已验证不得绕过。
+> 本条**不允许**只作为背景说明存在——`platformScoped`、`implementationStatus`、
+> `AVAILABLE` 是三个互不等价的维度，必须由断言锁定。
+
 **N7-3　`VERIFIED` 不等于当前可执行**
 
 `VERIFIED` 只说明"曾经用这一版实现真实跑通过"（见 `ADR-008` §3.3）。
@@ -359,7 +363,7 @@ cd backend && mvn -s ../deploy/docker/maven-settings.xml -o test
 ```
 
 **验收标准**
-- 新增 `CapabilityReconcilerTest`：**19 个当前可达 `effectiveReason` 逐条有正向用例**，
+- **N7-6**：新增 `CapabilityReconcilerTest`——**19 个当前可达 `effectiveReason` 逐条有正向用例**，
   `FUNCTION_NOT_CALLABLE` 提供**不可达性测试**（确认当前诊断不会产生该 reason）；
   依据 `SOURCE-04-04-EFFECTIVE-REASON.md` §5；
 - 判定顺序与 `SOURCE-04-04-EFFECTIVE-REASON.md` §4 逐行一致，**不得为实现方便调整**；
@@ -369,6 +373,16 @@ cd backend && mvn -s ../deploy/docker/maven-settings.xml -o test
 - 明确断言「计算只用单一快照，不混用两个端点的数据」；
 - **N7-1**：断言核对只遍历 `platformScopedAdapters()`；用一条含 STUB 的真实快照验证
   STUB 不产生任何 Effective 结果；
+- **N7-2**：两条**正交性**断言，缺一不可——
+  - **(a) 未验证不得放行**：`platformScoped=true` + `implementationStatus=UNVERIFIED`
+    ⇒ `effectiveStatus ≠ AVAILABLE`。
+    证明"真实平台接入"不等于"已验证"，未验证能力不会被误放行。
+  - **(b) 已验证不得绕过**：`platformScoped=true` + `implementationStatus=VERIFIED`
+    + 快照 `FRESH`，**仍不足以**推出 `AVAILABLE`；
+    必须同时满足 Desired 已声明、版本兼容、函数绑定、访问模式、账号等**全部**准入条件。
+    证明"已验证"不是免检通道。
+  - 两条合起来才说明：`platformScoped`、`implementationStatus`、`AVAILABLE`
+    是三个互不等价的维度。
 - **N7-3**：断言 `VERIFIED` 但快照 STALE 的能力**不可执行**；
 - **N7-4**：断言 `STALE` / `UNAVAILABLE` 快照下所有能力为 `UNKNOWN`，不得出现 `AVAILABLE`；
 - **N7-5**：断言准入判断里不存在 `!=` 形式的排除法。
