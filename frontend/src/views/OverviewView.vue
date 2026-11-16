@@ -10,6 +10,23 @@
       <div class="stat highlight"><div class="stat-value">{{ data.pendingReview }}</div><div class="stat-label">待复核</div></div>
     </div>
 
+    <div class="card" style="margin-top:16px;">
+      <div class="card-header">
+        <span class="card-title">系统状态</span>
+        <el-button link size="small" @click="loadHealth">刷新</el-button>
+      </div>
+      <div class="layer-row">
+        <div v-for="l in health.layers" :key="l.layer" class="layer">
+          <span class="dot" :class="'dot-' + (l.status || 'DOWN').toLowerCase()"></span>
+          <span class="layer-name">{{ l.name }}</span>
+          <span class="layer-status">{{ l.status }}</span>
+          <span class="layer-latency">{{ l.latencyMs }}ms</span>
+          <span class="layer-detail" :title="l.detail">{{ l.detail }}</span>
+        </div>
+        <div v-if="!health.layers.length" class="layer-empty">未获取到健康状态</div>
+      </div>
+    </div>
+
     <div class="grid2">
       <div class="card">
         <div class="card-header"><span class="card-title">近 14 天评论趋势</span></div>
@@ -56,7 +73,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
-import { overviewApi } from '../api'
+import { overviewApi, systemApi } from '../api'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '../stores/user'
 
@@ -67,14 +84,26 @@ const data = ref({
   approved: 0, corrected: 0, todayTokens: 0, todayCost: 0,
   trend: [], topVideos: [], painPointTop: [],
 })
+const health = ref({ status: '', layers: [] })
 const trendRef = ref()
 const painRef = ref()
 let trendChart = null
 let painChart = null
 
+async function loadHealth() {
+  try {
+    const res = await systemApi.healthLayers()
+    health.value = res.data || { status: '', layers: [] }
+  } catch (e) {
+    // 健康接口本身失败时不要拖垮总览页：留一条可见的提示即可
+    health.value = { status: 'DOWN', layers: [] }
+  }
+}
+
 async function load() {
   const res = await overviewApi.get()
   data.value = { ...data.value, ...res.data }
+  loadHealth()
   await nextTick()
   renderTrend()
   renderPain()
@@ -168,4 +197,15 @@ onUnmounted(() => {
 .mini-label { display: block; font-size: 12px; color: var(--text-secondary); }
 .mini-value { display: block; font-size: 20px; font-weight: 600; color: #0F172A; margin-top: 4px; }
 .cost { margin-top: 16px; font-size: 13px; color: var(--text-secondary); }
+.layer-row { display: flex; flex-direction: column; gap: 8px; }
+.layer { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #909399; flex: none; }
+.dot-up { background: #67c23a; }
+.dot-degraded { background: #e6a23c; }
+.dot-down { background: #f56c6c; }
+.layer-name { width: 210px; color: #303133; }
+.layer-status { width: 80px; font-weight: 600; }
+.layer-latency { width: 70px; color: #909399; }
+.layer-detail { color: #909399; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.layer-empty { color: #909399; font-size: 13px; }
 </style>

@@ -149,3 +149,8 @@ export const sourceApi = {
   /** 覆盖写 Desired（只接受 v2 文档） */
   saveCapabilities: (code, doc) => request.put(`/v1/source/sources/${code}/capabilities`, doc),
 }
+
+/** 分层健康检查（SOURCE-05）：每层给出状态、耗时与原因 */
+export const systemApi = {
+  healthLayers: () => request.get('/system/health/layers'),
+}
