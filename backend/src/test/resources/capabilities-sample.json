@@ -1,0 +1,602 @@
+{
+  "code": 0,
+  "connectors": [
+    {
+      "capabilities": [
+        {
+          "accessModes": [
+            "PUBLIC",
+            "AUTHENTICATED"
+          ],
+          "adapterFunction": "app.adapters.douyin.collector.collect_comments",
+          "category": "COMMENT",
+          "code": "COMMENT",
+          "contractVersion": "1.0",
+          "evidence": {
+            "accepted": true,
+            "contentHash": "4360a431b2be7768ab160bc5c90017a06398fcae01e21c05b8c93484b8b8e3c8",
+            "method": "REAL_PLATFORM_RUN",
+            "scope": {
+              "accessModes": [
+                "PUBLIC",
+                "AUTHENTICATED"
+              ],
+              "adapterFunction": "app.adapters.douyin.collector.collect_comments",
+              "capabilityCode": "COMMENT",
+              "connectorCode": "DOUYIN_PUBLIC",
+              "connectorVersion": "1.0.0",
+              "contractVersion": "1.0",
+              "implementationHash": "173a2122d97d74ef252309b51b7c167ef975678b8a596e77420171d6616fff4b",
+              "sourceCode": "DOUYIN"
+            },
+            "verifiedAt": "2026-11-16T08:44:15Z"
+          },
+          "implementationStatus": "VERIFIED",
+          "inputSchema": {
+            "properties": {
+              "maxComments": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "useLogin": {
+                "type": "boolean"
+              },
+              "videoId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "videoId"
+            ],
+            "type": "object"
+          },
+          "limits": {
+            "maxComments": 300,
+            "maxPageSize": 20,
+            "supportsPagination": true
+          },
+          "name": "视频评论采集",
+          "note": "匿名态受平台限制，页数与条数有上限；登录态可提高上限。",
+          "outputSchema": {
+            "properties": {
+              "comments": {
+                "type": "array"
+              },
+              "finishedReason": {
+                "type": "string"
+              },
+              "videoId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "videoId",
+              "comments"
+            ],
+            "type": "object"
+          },
+          "retryPolicy": {
+            "maxAttempts": 3,
+            "retryableErrors": [
+              "NETWORK",
+              "RATE_LIMIT",
+              "DATA",
+              "SYSTEM"
+            ]
+          },
+          "semantics": "READ",
+          "verifiedAt": "2026-11-16T08:44:15Z"
+        },
+        {
+          "accessModes": [
+            "PUBLIC",
+            "AUTHENTICATED"
+          ],
+          "adapterFunction": "app.adapters.douyin.collector.collect_comments",
+          "category": "COMMENT",
+          "code": "COMMENT_REPLY",
+          "contractVersion": "1.0",
+          "evidence": {
+            "accepted": true,
+            "contentHash": "c9e9e13233c4ac2d22f1478ddbb4cd92e4f643b9745308d56facac416d3443f4",
+            "method": "REAL_PLATFORM_RUN",
+            "scope": {
+              "accessModes": [
+                "PUBLIC",
+                "AUTHENTICATED"
+              ],
+              "adapterFunction": "app.adapters.douyin.collector.collect_comments",
+              "capabilityCode": "COMMENT_REPLY",
+              "connectorCode": "DOUYIN_PUBLIC",
+              "connectorVersion": "1.0.0",
+              "contractVersion": "1.0",
+              "implementationHash": "b0083529c8e7a855c07a5686b025e06d72e6e94a386c19c8d9d28f5cea1d7c00",
+              "sourceCode": "DOUYIN"
+            },
+            "verifiedAt": "2026-11-16T08:44:48Z"
+          },
+          "implementationStatus": "VERIFIED",
+          "inputSchema": {
+            "properties": {
+              "maxComments": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "videoId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "videoId"
+            ],
+            "type": "object"
+          },
+          "limits": {
+            "maxComments": 300,
+            "maxPageSize": 20,
+            "supportsPagination": false
+          },
+          "name": "楼中楼回复读取",
+          "note": "只读取评论下的楼中楼回复，由评论接口的 reply_comment 字段随主评论一并返回，不单独翻页。本能力不含任何写操作。",
+          "outputSchema": {
+            "properties": {
+              "replies": {
+                "type": "array"
+              }
+            },
+            "type": "object"
+          },
+          "retryPolicy": {
+            "maxAttempts": 3,
+            "retryableErrors": [
+              "NETWORK",
+              "RATE_LIMIT",
+              "DATA",
+              "SYSTEM"
+            ]
+          },
+          "semantics": "READ",
+          "verifiedAt": "2026-11-16T08:44:48Z"
+        },
+        {
+          "accessModes": [
+            "PUBLIC"
+          ],
+          "adapterFunction": "app.adapters.douyin.collector.collect_content_detail",
+          "category": "CONTENT",
+          "code": "CONTENT_DETAIL",
+          "contractVersion": "1.0",
+          "evidence": {
+            "accepted": true,
+            "contentHash": "bde2e6f2a97c138dc990d806130fd7140402b2e7be74ae4bea9704801b0d377f",
+            "method": "REAL_PLATFORM_RUN",
+            "scope": {
+              "accessModes": [
+                "PUBLIC"
+              ],
+              "adapterFunction": "app.adapters.douyin.collector.collect_content_detail",
+              "capabilityCode": "CONTENT_DETAIL",
+              "connectorCode": "DOUYIN_PUBLIC",
+              "connectorVersion": "1.0.0",
+              "contractVersion": "1.0",
+              "implementationHash": "31b7bb1f699b82b76213f8d668808144d5dd56f37c09b27e8f9fff8b43a0d5d4",
+              "sourceCode": "DOUYIN"
+            },
+            "verifiedAt": "2026-11-16T08:44:56Z"
+          },
+          "implementationStatus": "VERIFIED",
+          "inputSchema": {
+            "properties": {
+              "videoId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "videoId"
+            ],
+            "type": "object"
+          },
+          "name": "视频详情采集",
+          "note": "只读取公开页面上的标题、作者与点赞文案。",
+          "outputSchema": {
+            "properties": {
+              "author": {
+                "type": "string"
+              },
+              "desc": {
+                "type": "string"
+              },
+              "videoId": {
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "retryPolicy": {
+            "maxAttempts": 2,
+            "retryableErrors": [
+              "NETWORK",
+              "PLATFORM",
+              "SYSTEM"
+            ]
+          },
+          "semantics": "READ",
+          "verifiedAt": "2026-11-16T08:44:56Z"
+        },
+        {
+          "accessModes": [
+            "PUBLIC"
+          ],
+          "adapterFunction": "app.adapters.douyin.search.run_search",
+          "category": "SEARCH",
+          "code": "KEYWORD_SEARCH",
+          "contractVersion": "1.0",
+          "implementationStatus": "UNVERIFIED",
+          "inputSchema": {
+            "properties": {
+              "keyword": {
+                "type": "string"
+              },
+              "limit": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "keyword"
+            ],
+            "type": "object"
+          },
+          "limits": {
+            "maxPageSize": 20,
+            "supportsPagination": true
+          },
+          "name": "关键词搜索发现",
+          "note": "从未在真实平台验证过（风控行为未知），固定保持 UNVERIFIED。",
+          "outputSchema": {
+            "items": {
+              "properties": {
+                "awemeId": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "retryPolicy": {
+            "maxAttempts": 2,
+            "retryableErrors": [
+              "NETWORK",
+              "RATE_LIMIT",
+              "SYSTEM"
+            ]
+          },
+          "semantics": "READ"
+        }
+      ],
+      "connectorCode": "DOUYIN_PUBLIC",
+      "connectorVersion": "1.0.0",
+      "schemaVersion": "1.1",
+      "sourceCode": "DOUYIN"
+    }
+  ],
+  "data": {
+    "connectors": [
+      {
+        "capabilities": [
+          {
+            "accessModes": [
+              "PUBLIC",
+              "AUTHENTICATED"
+            ],
+            "adapterFunction": "app.adapters.douyin.collector.collect_comments",
+            "category": "COMMENT",
+            "code": "COMMENT",
+            "contractVersion": "1.0",
+            "evidence": {
+              "accepted": true,
+              "contentHash": "4360a431b2be7768ab160bc5c90017a06398fcae01e21c05b8c93484b8b8e3c8",
+              "method": "REAL_PLATFORM_RUN",
+              "scope": {
+                "accessModes": [
+                  "PUBLIC",
+                  "AUTHENTICATED"
+                ],
+                "adapterFunction": "app.adapters.douyin.collector.collect_comments",
+                "capabilityCode": "COMMENT",
+                "connectorCode": "DOUYIN_PUBLIC",
+                "connectorVersion": "1.0.0",
+                "contractVersion": "1.0",
+                "implementationHash": "173a2122d97d74ef252309b51b7c167ef975678b8a596e77420171d6616fff4b",
+                "sourceCode": "DOUYIN"
+              },
+              "verifiedAt": "2026-11-16T08:44:15Z"
+            },
+            "implementationStatus": "VERIFIED",
+            "inputSchema": {
+              "properties": {
+                "maxComments": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "useLogin": {
+                  "type": "boolean"
+                },
+                "videoId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "videoId"
+              ],
+              "type": "object"
+            },
+            "limits": {
+              "maxComments": 300,
+              "maxPageSize": 20,
+              "supportsPagination": true
+            },
+            "name": "视频评论采集",
+            "note": "匿名态受平台限制，页数与条数有上限；登录态可提高上限。",
+            "outputSchema": {
+              "properties": {
+                "comments": {
+                  "type": "array"
+                },
+                "finishedReason": {
+                  "type": "string"
+                },
+                "videoId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "videoId",
+                "comments"
+              ],
+              "type": "object"
+            },
+            "retryPolicy": {
+              "maxAttempts": 3,
+              "retryableErrors": [
+                "NETWORK",
+                "RATE_LIMIT",
+                "DATA",
+                "SYSTEM"
+              ]
+            },
+            "semantics": "READ",
+            "verifiedAt": "2026-11-16T08:44:15Z"
+          },
+          {
+            "accessModes": [
+              "PUBLIC",
+              "AUTHENTICATED"
+            ],
+            "adapterFunction": "app.adapters.douyin.collector.collect_comments",
+            "category": "COMMENT",
+            "code": "COMMENT_REPLY",
+            "contractVersion": "1.0",
+            "evidence": {
+              "accepted": true,
+              "contentHash": "c9e9e13233c4ac2d22f1478ddbb4cd92e4f643b9745308d56facac416d3443f4",
+              "method": "REAL_PLATFORM_RUN",
+              "scope": {
+                "accessModes": [
+                  "PUBLIC",
+                  "AUTHENTICATED"
+                ],
+                "adapterFunction": "app.adapters.douyin.collector.collect_comments",
+                "capabilityCode": "COMMENT_REPLY",
+                "connectorCode": "DOUYIN_PUBLIC",
+                "connectorVersion": "1.0.0",
+                "contractVersion": "1.0",
+                "implementationHash": "b0083529c8e7a855c07a5686b025e06d72e6e94a386c19c8d9d28f5cea1d7c00",
+                "sourceCode": "DOUYIN"
+              },
+              "verifiedAt": "2026-11-16T08:44:48Z"
+            },
+            "implementationStatus": "VERIFIED",
+            "inputSchema": {
+              "properties": {
+                "maxComments": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "videoId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "videoId"
+              ],
+              "type": "object"
+            },
+            "limits": {
+              "maxComments": 300,
+              "maxPageSize": 20,
+              "supportsPagination": false
+            },
+            "name": "楼中楼回复读取",
+            "note": "只读取评论下的楼中楼回复，由评论接口的 reply_comment 字段随主评论一并返回，不单独翻页。本能力不含任何写操作。",
+            "outputSchema": {
+              "properties": {
+                "replies": {
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            },
+            "retryPolicy": {
+              "maxAttempts": 3,
+              "retryableErrors": [
+                "NETWORK",
+                "RATE_LIMIT",
+                "DATA",
+                "SYSTEM"
+              ]
+            },
+            "semantics": "READ",
+            "verifiedAt": "2026-11-16T08:44:48Z"
+          },
+          {
+            "accessModes": [
+              "PUBLIC"
+            ],
+            "adapterFunction": "app.adapters.douyin.collector.collect_content_detail",
+            "category": "CONTENT",
+            "code": "CONTENT_DETAIL",
+            "contractVersion": "1.0",
+            "evidence": {
+              "accepted": true,
+              "contentHash": "bde2e6f2a97c138dc990d806130fd7140402b2e7be74ae4bea9704801b0d377f",
+              "method": "REAL_PLATFORM_RUN",
+              "scope": {
+                "accessModes": [
+                  "PUBLIC"
+                ],
+                "adapterFunction": "app.adapters.douyin.collector.collect_content_detail",
+                "capabilityCode": "CONTENT_DETAIL",
+                "connectorCode": "DOUYIN_PUBLIC",
+                "connectorVersion": "1.0.0",
+                "contractVersion": "1.0",
+                "implementationHash": "31b7bb1f699b82b76213f8d668808144d5dd56f37c09b27e8f9fff8b43a0d5d4",
+                "sourceCode": "DOUYIN"
+              },
+              "verifiedAt": "2026-11-16T08:44:56Z"
+            },
+            "implementationStatus": "VERIFIED",
+            "inputSchema": {
+              "properties": {
+                "videoId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "videoId"
+              ],
+              "type": "object"
+            },
+            "name": "视频详情采集",
+            "note": "只读取公开页面上的标题、作者与点赞文案。",
+            "outputSchema": {
+              "properties": {
+                "author": {
+                  "type": "string"
+                },
+                "desc": {
+                  "type": "string"
+                },
+                "videoId": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "retryPolicy": {
+              "maxAttempts": 2,
+              "retryableErrors": [
+                "NETWORK",
+                "PLATFORM",
+                "SYSTEM"
+              ]
+            },
+            "semantics": "READ",
+            "verifiedAt": "2026-11-16T08:44:56Z"
+          },
+          {
+            "accessModes": [
+              "PUBLIC"
+            ],
+            "adapterFunction": "app.adapters.douyin.search.run_search",
+            "category": "SEARCH",
+            "code": "KEYWORD_SEARCH",
+            "contractVersion": "1.0",
+            "implementationStatus": "UNVERIFIED",
+            "inputSchema": {
+              "properties": {
+                "keyword": {
+                  "type": "string"
+                },
+                "limit": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "keyword"
+              ],
+              "type": "object"
+            },
+            "limits": {
+              "maxPageSize": 20,
+              "supportsPagination": true
+            },
+            "name": "关键词搜索发现",
+            "note": "从未在真实平台验证过（风控行为未知），固定保持 UNVERIFIED。",
+            "outputSchema": {
+              "items": {
+                "properties": {
+                  "awemeId": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "retryPolicy": {
+              "maxAttempts": 2,
+              "retryableErrors": [
+                "NETWORK",
+                "RATE_LIMIT",
+                "SYSTEM"
+              ]
+            },
+            "semantics": "READ"
+          }
+        ],
+        "connectorCode": "DOUYIN_PUBLIC",
+        "connectorVersion": "1.0.0",
+        "schemaVersion": "1.1",
+        "sourceCode": "DOUYIN"
+      }
+    ],
+    "schemaVersion": "1.1"
+  },
+  "error": null,
+  "items": [
+    {
+      "comments": false,
+      "keywordSearch": false,
+      "note": "stub 适配器，仅用于链路验证，不代表真实平台能力",
+      "sourceCode": "STUB",
+      "status": "PENDING"
+    },
+    {
+      "comments": true,
+      "keywordSearch": false,
+      "note": "抖音公开网页接入；评论采集已实测，关键词搜索未验证",
+      "sourceCode": "DOUYIN",
+      "status": "AVAILABLE"
+    }
+  ],
+  "meta": {
+    "traceId": "9a690e835a5f46fb"
+  },
+  "msg": "ok",
+  "schemaVersion": "1.1"
+}

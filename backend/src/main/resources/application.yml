@@ -1,0 +1,104 @@
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:coolpilot_insight}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:root}
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 100MB
+  # Boot 4 使用 Jackson 3（tools.jackson），部分旧属性已移除（如 serialization.fail-on-empty-beans），
+  # 写了会导致 JacksonProperties 绑定失败、整个 Web 上下文起不来。
+  jackson:
+    deserialization:
+      # 前端按 code/message 处理错误，未知字段不应导致 400（网关或多传字段时容忍）
+      fail-on-unknown-properties: false
+  # Flyway：唯一数据库结构变更入口（ADR-001）
+  # 禁止 baseline-on-migrate —— 只允许在空库上从 V1 建起
+  flyway:
+    enabled: ${FLYWAY_ENABLED:true}
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+    validate-on-migrate: true
+    out-of-order: false
+    encoding: UTF-8
+server:
+  port: ${SERVER_PORT:8080}
+
+# 原生 MyBatis（MyBatis-Plus 已移除：3.5.x 依赖 javax 版 mybatis-spring，与 Boot 4 不兼容）
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.coolpilot.insight.entity,
+    com.coolpilot.insight.system.domain
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+# 可观测性：/actuator/health、/actuator/metrics（含 hikaricp.connections.*）
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: coolpilot-insight
+
+# p6spy：打印带耗时的 SQL，便于排查慢查询。生产环境请保持关闭（有性能开销）
+decorator:
+  datasource:
+    p6spy:
+      # 注意：该 starter 的开关是 enable-logging，不是 enable/enabled（实测无效）
+      enable-logging: ${P6SPY_ENABLED:false}
+      logging: slf4j
+      log-format: "\n### SQL %(executionTime) ms | %(category) | %(sql)"
+
+jwt:
+  secret: ${JWT_SECRET:}
+  expire: ${JWT_EXPIRE:86400000}
+
+# ---- 运行期路径与服务地址（均可用环境变量覆盖，便于容器化部署）----
+app:
+  # 项目根目录；留空时取当前工作目录的上一级
+  project-root: ${APP_PROJECT_ROOT:}
+  # Python 解释器；留空时自动探测 .venv 或系统 python
+  python-exe: ${PYTHON_EXE:}
+  # Py_Data 目录（爬虫脚本所在目录）
+  python-data-dir: ${PY_DATA_DIR:}
+  # 清洗脚本目录（clean_main.py / wordcloud_service.py）
+  python-clean-dir: ${PY_CLEAN_DIR:}
+  # 采集 CSV 数据目录
+  datas-dir: ${PY_DATAS_DIR:}
+  # Flask 分词服务地址
+  flask-base-url: ${FLASK_BASE_URL:http://127.0.0.1:5000}
+  # 是否由本进程自动拉起 Flask（容器部署时设为 false，改用独立 flask 服务）
+  flask-autostart: ${FLASK_AUTOSTART:true}
+  # 采集服务地址（方案 A 独立容器）。**与 Flask 是两个不同的服务**，
+  # 健康状态必须分别判断，不能互相替代。
+  collection-service-url: ${COLLECTION_SERVICE_URL:http://127.0.0.1:5001}
+  # AI（分词 / 分析）服务地址
+  ai-service-url: ${AI_SERVICE_URL:http://127.0.0.1:5000}
+  # 采集服务间调用令牌（与采集服务的 INTERNAL_TOKEN 对应）
+  collection-internal-token: ${COLLECTION_INTERNAL_TOKEN:}
+  # ---- 采集执行（SOURCE-06）----
+  collection:
+    # http（默认）＝ 提交作业给采集服务并轮询；process ＝ 旧的子进程实现（已废弃，仅作回滚）
+    executor: ${COLLECTION_EXECUTOR:http}
+    # 评论采集的接入实现。当前链路只处理抖音，故用默认值而不是从入参推断。
+    default-connector: ${COLLECTION_DEFAULT_CONNECTOR:DOUYIN_PUBLIC}
+  # ---- 能力快照（SOURCE-04-02）----
+  capability:
+    # Observed 统一快照的缓存 TTL（秒）。超 TTL 未刷新则不得作为执行准入依据。
+    observed-ttl-seconds: ${CAPABILITY_SNAPSHOT_TTL_SECONDS:60}
+  # 首次启动把哨兵管理员置为可用密码；留空则账号保持不可登录
+  admin-init-password: ${ADMIN_INIT_PASSWORD:}
+
+logging:
+  level:
+    # 包名写错会导致"日志配置看着生效、其实一条都不输出"（旧值 com.dy.comment 已不存在）。
+    # 默认 INFO；排查期用 APP_LOG_LEVEL=DEBUG 打开，事后恢复。
+    com.coolpilot.insight: ${APP_LOG_LEVEL:INFO}

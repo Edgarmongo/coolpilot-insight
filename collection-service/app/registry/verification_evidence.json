@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "2.0",
+  "note": "验证证据由 tools/verify_capability.py 在真实平台跑通后写出。每条记录带 contentHash（记录本体哈希）与 scope.implementationHash（声明 + 目标函数指纹），任一被改动或实现变更都会使证据失效。手工编辑本文件等同于伪造验证证据。",
+  "records": {
+    "DOUYIN_PUBLIC": {
+      "COMMENT": {
+        "implementationStatus": "VERIFIED",
+        "verifiedAt": "2026-11-16T19:29:54Z",
+        "method": "REAL_PLATFORM_RUN",
+        "scope": {
+          "sourceCode": "DOUYIN",
+          "connectorCode": "DOUYIN_PUBLIC",
+          "connectorVersion": "1.0.0",
+          "capabilityCode": "COMMENT",
+          "accessModes": [
+            "PUBLIC",
+            "AUTHENTICATED"
+          ],
+          "contractVersion": "1.0",
+          "adapterFunction": "app.adapters.douyin.collector.collect_comments",
+          "implementationHash": "cffb5fb0efe15a08e0ab884c58e1d92d2b505e783dbcbd149c7aa396129f9b72"
+        },
+        "observed": {
+          "target": "7703721523349239951",
+          "collected": 19,
+          "cidCoverage": "19/19",
+          "finishedReason": "NO_RESPONSE",
+          "pages": 3
+        },
+        "message": "评论采集成功且全部带 cid",
+        "contentHash": "0bc454e8a71c5f2d02a0968c9f5bb947524be4c4a9cecfecaa6db0818e2a87da"
+      },
+      "COMMENT_REPLY": {
+        "implementationStatus": "VERIFIED",
+        "verifiedAt": "2026-11-16T19:30:28Z",
+        "method": "REAL_PLATFORM_RUN",
+        "scope": {
+          "sourceCode": "DOUYIN",
+          "connectorCode": "DOUYIN_PUBLIC",
+          "connectorVersion": "1.0.0",
+          "capabilityCode": "COMMENT_REPLY",
+          "accessModes": [
+            "PUBLIC",
+            "AUTHENTICATED"
+          ],
+          "contractVersion": "1.0",
+          "adapterFunction": "app.adapters.douyin.collector.collect_comments",
+          "implementationHash": "0fd5f9dadfd3bffa857fc85ec637e6e2a970d51fbcbf4979472e2cfd583d6a32"
+        },
+        "observed": {
+          "target": "7703721523349239951",
+          "collected": 19,
+          "replies": 6,
+          "finishedReason": "NO_RESPONSE"
+        },
+        "message": "读取到 6 条楼中楼回复",
+        "contentHash": "f25c2bb2c89fcfba8bf9328a762e0d7dc2a3dee3e631c65d1bf97e6a81e8e4f4"
+      },
+      "CONTENT_DETAIL": {
+        "implementationStatus": "VERIFIED",
+        "verifiedAt": "2026-11-16T19:30:34Z",
+        "method": "REAL_PLATFORM_RUN",
+        "scope": {
+          "sourceCode": "DOUYIN",
+          "connectorCode": "DOUYIN_PUBLIC",
+          "connectorVersion": "1.0.0",
+          "capabilityCode": "CONTENT_DETAIL",
+          "accessModes": [
+            "PUBLIC"
+          ],
+          "contractVersion": "1.0",
+          "adapterFunction": "app.adapters.douyin.collector.collect_content_detail",
+          "implementationHash": "31b7bb1f699b82b76213f8d668808144d5dd56f37c09b27e8f9fff8b43a0d5d4"
+        },
+        "observed": {
+          "target": "7703721523349239951",
+          "hasDesc": true,
+          "hasAuthor": false,
+          "title": "云南球盲热情的送大连球迷水杯大连球迷还回去说大连扔的#球迷看台文化 #球赛名场面 #球迷看台 #云南玉溪 #大连英博 - 抖音"
+        },
+        "message": "取到视频详情",
+        "contentHash": "5f25c5ac3f373cdb873200b364640b4c8de5d6b64e4370f42898515bf96d9a4b"
+      }
+    }
+  },
+  "updatedAt": "2026-11-16T19:30:34Z"
+}

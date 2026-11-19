@@ -1,0 +1,5 @@
+# 根目录统一入口：真正的编排定义在 deploy/compose/docker-compose.yml
+# 用 include 而不是移动文件，是为了保留 `docker compose up -d` 这一条命令，
+# 同时让 .env（仓库根目录）仍能被自动读取。
+include:
+  - path: deploy/compose/docker-compose.yml

@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 由 tools/codegen/generate_mybatis_crud.py 生成，替代 MyBatis-Plus BaseMapper。
+     语义与 MP 一致：insert/updateById 跳过 null 字段，id 自增回填。手工业务 SQL 请追加在本文件末尾。 -->
+<mapper namespace="com.coolpilot.insight.mapper.KeywordMapper">
+
+    <resultMap id="BaseResultMap" type="com.coolpilot.insight.entity.Keyword">
+        <id column="id" property="id"/>
+        <result column="keyword" property="keyword"/>
+        <result column="normalized" property="normalized"/>
+        <result column="description" property="description"/>
+        <result column="owner_user_id" property="ownerUserId"/>
+        <result column="status" property="status"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">id, keyword, normalized, description, owner_user_id, status, created_at, updated_at</sql>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM keyword WHERE id = #{id}
+    </select>
+
+    <select id="selectBatchIds" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM keyword
+        WHERE id IN
+        <foreach collection="collection" item="it" open="(" separator="," close=")">#{it}</foreach>
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO keyword
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="keyword != null">keyword,</if>
+            <if test="normalized != null">normalized,</if>
+            <if test="description != null">description,</if>
+            <if test="ownerUserId != null">owner_user_id,</if>
+            <if test="status != null">status,</if>
+            <if test="createdAt != null">created_at,</if>
+            <if test="updatedAt != null">updated_at,</if>
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="keyword != null">#{keyword},</if>
+            <if test="normalized != null">#{normalized},</if>
+            <if test="description != null">#{description},</if>
+            <if test="ownerUserId != null">#{ownerUserId},</if>
+            <if test="status != null">#{status},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+            <if test="updatedAt != null">#{updatedAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateById">
+        UPDATE keyword
+        <set>
+            <if test="keyword != null">keyword = #{keyword},</if>
+            <if test="normalized != null">normalized = #{normalized},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="ownerUserId != null">owner_user_id = #{ownerUserId},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM keyword WHERE id = #{id}
+    </delete>
+</mapper>

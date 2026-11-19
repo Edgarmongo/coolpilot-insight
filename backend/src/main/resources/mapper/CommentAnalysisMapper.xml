@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 由 tools/codegen/generate_mybatis_crud.py 生成，替代 MyBatis-Plus BaseMapper。
+     语义与 MP 一致：insert/updateById 跳过 null 字段，id 自增回填。手工业务 SQL 请追加在本文件末尾。 -->
+<mapper namespace="com.coolpilot.insight.mapper.CommentAnalysisMapper">
+
+    <resultMap id="BaseResultMap" type="com.coolpilot.insight.entity.CommentAnalysis">
+        <id column="id" property="id"/>
+        <result column="comment_id" property="commentId"/>
+        <result column="profile_id" property="profileId"/>
+        <result column="analysis_task_id" property="analysisTaskId"/>
+        <result column="analysis_task_item_id" property="analysisTaskItemId"/>
+        <result column="sentiment" property="sentiment"/>
+        <result column="intent" property="intent"/>
+        <result column="topics_json" property="topicsJson"/>
+        <result column="pain_points_json" property="painPointsJson"/>
+        <result column="user_need" property="userNeed"/>
+        <result column="purchase_intent" property="purchaseIntent"/>
+        <result column="scenario_tags_json" property="scenarioTagsJson"/>
+        <result column="product_suggestions_json" property="productSuggestionsJson"/>
+        <result column="competitor_mentions_json" property="competitorMentionsJson"/>
+        <result column="confidence" property="confidence"/>
+        <result column="is_uncertain" property="isUncertain"/>
+        <result column="review_status" property="reviewStatus"/>
+        <result column="reviewed_by" property="reviewedBy"/>
+        <result column="reviewed_at" property="reviewedAt"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">id, comment_id, profile_id, analysis_task_id, analysis_task_item_id, sentiment, intent, topics_json, pain_points_json, user_need, purchase_intent, scenario_tags_json, product_suggestions_json, competitor_mentions_json, confidence, is_uncertain, review_status, reviewed_by, reviewed_at, created_at</sql>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM comment_analysis WHERE id = #{id}
+    </select>
+
+    <select id="selectBatchIds" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM comment_analysis
+        WHERE id IN
+        <foreach collection="collection" item="it" open="(" separator="," close=")">#{it}</foreach>
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO comment_analysis
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="commentId != null">comment_id,</if>
+            <if test="profileId != null">profile_id,</if>
+            <if test="analysisTaskId != null">analysis_task_id,</if>
+            <if test="analysisTaskItemId != null">analysis_task_item_id,</if>
+            <if test="sentiment != null">sentiment,</if>
+            <if test="intent != null">intent,</if>
+            <if test="topicsJson != null">topics_json,</if>
+            <if test="painPointsJson != null">pain_points_json,</if>
+            <if test="userNeed != null">user_need,</if>
+            <if test="purchaseIntent != null">purchase_intent,</if>
+            <if test="scenarioTagsJson != null">scenario_tags_json,</if>
+            <if test="productSuggestionsJson != null">product_suggestions_json,</if>
+            <if test="competitorMentionsJson != null">competitor_mentions_json,</if>
+            <if test="confidence != null">confidence,</if>
+            <if test="isUncertain != null">is_uncertain,</if>
+            <if test="reviewStatus != null">review_status,</if>
+            <if test="reviewedBy != null">reviewed_by,</if>
+            <if test="reviewedAt != null">reviewed_at,</if>
+            <if test="createdAt != null">created_at,</if>
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="commentId != null">#{commentId},</if>
+            <if test="profileId != null">#{profileId},</if>
+            <if test="analysisTaskId != null">#{analysisTaskId},</if>
+            <if test="analysisTaskItemId != null">#{analysisTaskItemId},</if>
+            <if test="sentiment != null">#{sentiment},</if>
+            <if test="intent != null">#{intent},</if>
+            <if test="topicsJson != null">#{topicsJson},</if>
+            <if test="painPointsJson != null">#{painPointsJson},</if>
+            <if test="userNeed != null">#{userNeed},</if>
+            <if test="purchaseIntent != null">#{purchaseIntent},</if>
+            <if test="scenarioTagsJson != null">#{scenarioTagsJson},</if>
+            <if test="productSuggestionsJson != null">#{productSuggestionsJson},</if>
+            <if test="competitorMentionsJson != null">#{competitorMentionsJson},</if>
+            <if test="confidence != null">#{confidence},</if>
+            <if test="isUncertain != null">#{isUncertain},</if>
+            <if test="reviewStatus != null">#{reviewStatus},</if>
+            <if test="reviewedBy != null">#{reviewedBy},</if>
+            <if test="reviewedAt != null">#{reviewedAt},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateById">
+        UPDATE comment_analysis
+        <set>
+            <if test="commentId != null">comment_id = #{commentId},</if>
+            <if test="profileId != null">profile_id = #{profileId},</if>
+            <if test="analysisTaskId != null">analysis_task_id = #{analysisTaskId},</if>
+            <if test="analysisTaskItemId != null">analysis_task_item_id = #{analysisTaskItemId},</if>
+            <if test="sentiment != null">sentiment = #{sentiment},</if>
+            <if test="intent != null">intent = #{intent},</if>
+            <if test="topicsJson != null">topics_json = #{topicsJson},</if>
+            <if test="painPointsJson != null">pain_points_json = #{painPointsJson},</if>
+            <if test="userNeed != null">user_need = #{userNeed},</if>
+            <if test="purchaseIntent != null">purchase_intent = #{purchaseIntent},</if>
+            <if test="scenarioTagsJson != null">scenario_tags_json = #{scenarioTagsJson},</if>
+            <if test="productSuggestionsJson != null">product_suggestions_json = #{productSuggestionsJson},</if>
+            <if test="competitorMentionsJson != null">competitor_mentions_json = #{competitorMentionsJson},</if>
+            <if test="confidence != null">confidence = #{confidence},</if>
+            <if test="isUncertain != null">is_uncertain = #{isUncertain},</if>
+            <if test="reviewStatus != null">review_status = #{reviewStatus},</if>
+            <if test="reviewedBy != null">reviewed_by = #{reviewedBy},</if>
+            <if test="reviewedAt != null">reviewed_at = #{reviewedAt},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM comment_analysis WHERE id = #{id}
+    </delete>
+</mapper>

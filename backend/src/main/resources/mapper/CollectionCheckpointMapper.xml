@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 由 tools/codegen/generate_mybatis_crud.py 生成，替代 MyBatis-Plus BaseMapper。
+     语义与 MP 一致：insert/updateById 跳过 null 字段，id 自增回填。手工业务 SQL 请追加在本文件末尾。 -->
+<mapper namespace="com.coolpilot.insight.collection.infrastructure.persistence.CollectionCheckpointMapper">
+
+    <resultMap id="BaseResultMap" type="com.coolpilot.insight.collection.domain.CollectionCheckpoint">
+        <id column="id" property="id"/>
+        <result column="task_item_id" property="taskItemId"/>
+        <result column="cursor_value" property="cursorValue"/>
+        <result column="page_no" property="pageNo"/>
+        <result column="last_cid" property="lastCid"/>
+        <result column="persisted_count" property="persistedCount"/>
+        <result column="last_success_at" property="lastSuccessAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">id, task_item_id, cursor_value, page_no, last_cid, persisted_count, last_success_at, updated_at</sql>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM collection_checkpoint WHERE id = #{id}
+    </select>
+
+    <select id="selectBatchIds" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM collection_checkpoint
+        WHERE id IN
+        <foreach collection="collection" item="it" open="(" separator="," close=")">#{it}</foreach>
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO collection_checkpoint
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="taskItemId != null">task_item_id,</if>
+            <if test="cursorValue != null">cursor_value,</if>
+            <if test="pageNo != null">page_no,</if>
+            <if test="lastCid != null">last_cid,</if>
+            <if test="persistedCount != null">persisted_count,</if>
+            <if test="lastSuccessAt != null">last_success_at,</if>
+            <if test="updatedAt != null">updated_at,</if>
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="taskItemId != null">#{taskItemId},</if>
+            <if test="cursorValue != null">#{cursorValue},</if>
+            <if test="pageNo != null">#{pageNo},</if>
+            <if test="lastCid != null">#{lastCid},</if>
+            <if test="persistedCount != null">#{persistedCount},</if>
+            <if test="lastSuccessAt != null">#{lastSuccessAt},</if>
+            <if test="updatedAt != null">#{updatedAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateById">
+        UPDATE collection_checkpoint
+        <set>
+            <if test="taskItemId != null">task_item_id = #{taskItemId},</if>
+            <if test="cursorValue != null">cursor_value = #{cursorValue},</if>
+            <if test="pageNo != null">page_no = #{pageNo},</if>
+            <if test="lastCid != null">last_cid = #{lastCid},</if>
+            <if test="persistedCount != null">persisted_count = #{persistedCount},</if>
+            <if test="lastSuccessAt != null">last_success_at = #{lastSuccessAt},</if>
+            <if test="updatedAt != null">updated_at = #{updatedAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM collection_checkpoint WHERE id = #{id}
+    </delete>
+</mapper>

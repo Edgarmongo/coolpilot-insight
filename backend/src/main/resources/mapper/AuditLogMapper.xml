@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 由 tools/codegen/generate_mybatis_crud.py 生成，替代 MyBatis-Plus BaseMapper。
+     语义与 MP 一致：insert/updateById 跳过 null 字段，id 自增回填。手工业务 SQL 请追加在本文件末尾。 -->
+<mapper namespace="com.coolpilot.insight.system.infrastructure.persistence.AuditLogMapper">
+
+    <resultMap id="BaseResultMap" type="com.coolpilot.insight.system.domain.AuditLog">
+        <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
+        <result column="action" property="action"/>
+        <result column="resource_type" property="resourceType"/>
+        <result column="resource_id" property="resourceId"/>
+        <result column="detail_json" property="detailJson"/>
+        <result column="client_ip" property="clientIp"/>
+        <result column="user_agent" property="userAgent"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">id, user_id, action, resource_type, resource_id, detail_json, client_ip, user_agent, created_at</sql>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM audit_log WHERE id = #{id}
+    </select>
+
+    <select id="selectBatchIds" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM audit_log
+        WHERE id IN
+        <foreach collection="collection" item="it" open="(" separator="," close=")">#{it}</foreach>
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO audit_log
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="userId != null">user_id,</if>
+            <if test="action != null">action,</if>
+            <if test="resourceType != null">resource_type,</if>
+            <if test="resourceId != null">resource_id,</if>
+            <if test="detailJson != null">detail_json,</if>
+            <if test="clientIp != null">client_ip,</if>
+            <if test="userAgent != null">user_agent,</if>
+            <if test="createdAt != null">created_at,</if>
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="userId != null">#{userId},</if>
+            <if test="action != null">#{action},</if>
+            <if test="resourceType != null">#{resourceType},</if>
+            <if test="resourceId != null">#{resourceId},</if>
+            <if test="detailJson != null">#{detailJson},</if>
+            <if test="clientIp != null">#{clientIp},</if>
+            <if test="userAgent != null">#{userAgent},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateById">
+        UPDATE audit_log
+        <set>
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="action != null">action = #{action},</if>
+            <if test="resourceType != null">resource_type = #{resourceType},</if>
+            <if test="resourceId != null">resource_id = #{resourceId},</if>
+            <if test="detailJson != null">detail_json = #{detailJson},</if>
+            <if test="clientIp != null">client_ip = #{clientIp},</if>
+            <if test="userAgent != null">user_agent = #{userAgent},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM audit_log WHERE id = #{id}
+    </delete>
+</mapper>

@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 由 tools/codegen/generate_mybatis_crud.py 生成，替代 MyBatis-Plus BaseMapper。
+     语义与 MP 一致：insert/updateById 跳过 null 字段，id 自增回填。手工业务 SQL 请追加在本文件末尾。 -->
+<mapper namespace="com.coolpilot.insight.collection.infrastructure.persistence.CollectionTaskItemMapper">
+
+    <resultMap id="BaseResultMap" type="com.coolpilot.insight.collection.domain.CollectionTaskItem">
+        <id column="id" property="id"/>
+        <result column="task_id" property="taskId"/>
+        <result column="video_id" property="videoId"/>
+        <result column="status" property="status"/>
+        <result column="active_flag" property="activeFlag"/>
+        <result column="worker_id" property="workerId"/>
+        <result column="retry_count" property="retryCount"/>
+        <result column="max_retry" property="maxRetry"/>
+        <result column="requested_max" property="requestedMax"/>
+        <result column="collected_count" property="collectedCount"/>
+        <result column="skipped_count" property="skippedCount"/>
+        <result column="heartbeat_at" property="heartbeatAt"/>
+        <result column="lease_until" property="leaseUntil"/>
+        <result column="started_at" property="startedAt"/>
+        <result column="finished_at" property="finishedAt"/>
+        <result column="error_code" property="errorCode"/>
+        <result column="error_message" property="errorMessage"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">id, task_id, video_id, status, active_flag, worker_id, retry_count, max_retry, requested_max, collected_count, skipped_count, heartbeat_at, lease_until, started_at, finished_at, error_code, error_message, created_at</sql>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM collection_task_item WHERE id = #{id}
+    </select>
+
+    <select id="selectBatchIds" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM collection_task_item
+        WHERE id IN
+        <foreach collection="collection" item="it" open="(" separator="," close=")">#{it}</foreach>
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO collection_task_item
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="taskId != null">task_id,</if>
+            <if test="videoId != null">video_id,</if>
+            <if test="status != null">status,</if>
+            <if test="activeFlag != null">active_flag,</if>
+            <if test="workerId != null">worker_id,</if>
+            <if test="retryCount != null">retry_count,</if>
+            <if test="maxRetry != null">max_retry,</if>
+            <if test="requestedMax != null">requested_max,</if>
+            <if test="collectedCount != null">collected_count,</if>
+            <if test="skippedCount != null">skipped_count,</if>
+            <if test="heartbeatAt != null">heartbeat_at,</if>
+            <if test="leaseUntil != null">lease_until,</if>
+            <if test="startedAt != null">started_at,</if>
+            <if test="finishedAt != null">finished_at,</if>
+            <if test="errorCode != null">error_code,</if>
+            <if test="errorMessage != null">error_message,</if>
+            <if test="createdAt != null">created_at,</if>
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="taskId != null">#{taskId},</if>
+            <if test="videoId != null">#{videoId},</if>
+            <if test="status != null">#{status},</if>
+            <if test="activeFlag != null">#{activeFlag},</if>
+            <if test="workerId != null">#{workerId},</if>
+            <if test="retryCount != null">#{retryCount},</if>
+            <if test="maxRetry != null">#{maxRetry},</if>
+            <if test="requestedMax != null">#{requestedMax},</if>
+            <if test="collectedCount != null">#{collectedCount},</if>
+            <if test="skippedCount != null">#{skippedCount},</if>
+            <if test="heartbeatAt != null">#{heartbeatAt},</if>
+            <if test="leaseUntil != null">#{leaseUntil},</if>
+            <if test="startedAt != null">#{startedAt},</if>
+            <if test="finishedAt != null">#{finishedAt},</if>
+            <if test="errorCode != null">#{errorCode},</if>
+            <if test="errorMessage != null">#{errorMessage},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateById">
+        UPDATE collection_task_item
+        <set>
+            <if test="taskId != null">task_id = #{taskId},</if>
+            <if test="videoId != null">video_id = #{videoId},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="activeFlag != null">active_flag = #{activeFlag},</if>
+            <if test="workerId != null">worker_id = #{workerId},</if>
+            <if test="retryCount != null">retry_count = #{retryCount},</if>
+            <if test="maxRetry != null">max_retry = #{maxRetry},</if>
+            <if test="requestedMax != null">requested_max = #{requestedMax},</if>
+            <if test="collectedCount != null">collected_count = #{collectedCount},</if>
+            <if test="skippedCount != null">skipped_count = #{skippedCount},</if>
+            <if test="heartbeatAt != null">heartbeat_at = #{heartbeatAt},</if>
+            <if test="leaseUntil != null">lease_until = #{leaseUntil},</if>
+            <if test="startedAt != null">started_at = #{startedAt},</if>
+            <if test="finishedAt != null">finished_at = #{finishedAt},</if>
+            <if test="errorCode != null">error_code = #{errorCode},</if>
+            <if test="errorMessage != null">error_message = #{errorMessage},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM collection_task_item WHERE id = #{id}
+    </delete>
+</mapper>

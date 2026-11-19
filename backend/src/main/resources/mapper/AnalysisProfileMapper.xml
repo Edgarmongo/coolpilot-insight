@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 由 tools/codegen/generate_mybatis_crud.py 生成，替代 MyBatis-Plus BaseMapper。
+     语义与 MP 一致：insert/updateById 跳过 null 字段，id 自增回填。手工业务 SQL 请追加在本文件末尾。 -->
+<mapper namespace="com.coolpilot.insight.mapper.AnalysisProfileMapper">
+
+    <resultMap id="BaseResultMap" type="com.coolpilot.insight.entity.AnalysisProfile">
+        <id column="id" property="id"/>
+        <result column="profile_key" property="profileKey"/>
+        <result column="provider" property="provider"/>
+        <result column="model_name" property="modelName"/>
+        <result column="prompt_version" property="promptVersion"/>
+        <result column="schema_version" property="schemaVersion"/>
+        <result column="taxonomy_version" property="taxonomyVersion"/>
+        <result column="params_json" property="paramsJson"/>
+        <result column="params_hash" property="paramsHash"/>
+        <result column="norm_version" property="normVersion"/>
+        <result column="status" property="status"/>
+        <result column="description" property="description"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">id, profile_key, provider, model_name, prompt_version, schema_version, taxonomy_version, params_json, params_hash, norm_version, status, description, created_at</sql>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM analysis_profile WHERE id = #{id}
+    </select>
+
+    <select id="selectBatchIds" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM analysis_profile
+        WHERE id IN
+        <foreach collection="collection" item="it" open="(" separator="," close=")">#{it}</foreach>
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO analysis_profile
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="profileKey != null">profile_key,</if>
+            <if test="provider != null">provider,</if>
+            <if test="modelName != null">model_name,</if>
+            <if test="promptVersion != null">prompt_version,</if>
+            <if test="schemaVersion != null">schema_version,</if>
+            <if test="taxonomyVersion != null">taxonomy_version,</if>
+            <if test="paramsJson != null">params_json,</if>
+            <if test="paramsHash != null">params_hash,</if>
+            <if test="normVersion != null">norm_version,</if>
+            <if test="status != null">status,</if>
+            <if test="description != null">description,</if>
+            <if test="createdAt != null">created_at,</if>
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="profileKey != null">#{profileKey},</if>
+            <if test="provider != null">#{provider},</if>
+            <if test="modelName != null">#{modelName},</if>
+            <if test="promptVersion != null">#{promptVersion},</if>
+            <if test="schemaVersion != null">#{schemaVersion},</if>
+            <if test="taxonomyVersion != null">#{taxonomyVersion},</if>
+            <if test="paramsJson != null">#{paramsJson},</if>
+            <if test="paramsHash != null">#{paramsHash},</if>
+            <if test="normVersion != null">#{normVersion},</if>
+            <if test="status != null">#{status},</if>
+            <if test="description != null">#{description},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateById">
+        UPDATE analysis_profile
+        <set>
+            <if test="profileKey != null">profile_key = #{profileKey},</if>
+            <if test="provider != null">provider = #{provider},</if>
+            <if test="modelName != null">model_name = #{modelName},</if>
+            <if test="promptVersion != null">prompt_version = #{promptVersion},</if>
+            <if test="schemaVersion != null">schema_version = #{schemaVersion},</if>
+            <if test="taxonomyVersion != null">taxonomy_version = #{taxonomyVersion},</if>
+            <if test="paramsJson != null">params_json = #{paramsJson},</if>
+            <if test="paramsHash != null">params_hash = #{paramsHash},</if>
+            <if test="normVersion != null">norm_version = #{normVersion},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="description != null">description = #{description},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM analysis_profile WHERE id = #{id}
+    </delete>
+</mapper>

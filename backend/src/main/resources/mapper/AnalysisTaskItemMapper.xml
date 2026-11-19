@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<!-- 由 tools/codegen/generate_mybatis_crud.py 生成，替代 MyBatis-Plus BaseMapper。
+     语义与 MP 一致：insert/updateById 跳过 null 字段，id 自增回填。手工业务 SQL 请追加在本文件末尾。 -->
+<mapper namespace="com.coolpilot.insight.mapper.AnalysisTaskItemMapper">
+
+    <resultMap id="BaseResultMap" type="com.coolpilot.insight.entity.AnalysisTaskItem">
+        <id column="id" property="id"/>
+        <result column="task_id" property="taskId"/>
+        <result column="batch_id" property="batchId"/>
+        <result column="target_type" property="targetType"/>
+        <result column="target_id" property="targetId"/>
+        <result column="status" property="status"/>
+        <result column="retry_count" property="retryCount"/>
+        <result column="allocated_input_tokens" property="allocatedInputTokens"/>
+        <result column="allocated_output_tokens" property="allocatedOutputTokens"/>
+        <result column="allocated_cost_amount" property="allocatedCostAmount"/>
+        <result column="error_code" property="errorCode"/>
+        <result column="error_message" property="errorMessage"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="finished_at" property="finishedAt"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">id, task_id, batch_id, target_type, target_id, status, retry_count, allocated_input_tokens, allocated_output_tokens, allocated_cost_amount, error_code, error_message, created_at, finished_at</sql>
+
+    <select id="selectById" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM analysis_task_item WHERE id = #{id}
+    </select>
+
+    <select id="selectBatchIds" resultMap="BaseResultMap">
+        SELECT <include refid="Base_Column_List"/> FROM analysis_task_item
+        WHERE id IN
+        <foreach collection="collection" item="it" open="(" separator="," close=")">#{it}</foreach>
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO analysis_task_item
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="taskId != null">task_id,</if>
+            <if test="batchId != null">batch_id,</if>
+            <if test="targetType != null">target_type,</if>
+            <if test="targetId != null">target_id,</if>
+            <if test="status != null">status,</if>
+            <if test="retryCount != null">retry_count,</if>
+            <if test="allocatedInputTokens != null">allocated_input_tokens,</if>
+            <if test="allocatedOutputTokens != null">allocated_output_tokens,</if>
+            <if test="allocatedCostAmount != null">allocated_cost_amount,</if>
+            <if test="errorCode != null">error_code,</if>
+            <if test="errorMessage != null">error_message,</if>
+            <if test="createdAt != null">created_at,</if>
+            <if test="finishedAt != null">finished_at,</if>
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            <if test="taskId != null">#{taskId},</if>
+            <if test="batchId != null">#{batchId},</if>
+            <if test="targetType != null">#{targetType},</if>
+            <if test="targetId != null">#{targetId},</if>
+            <if test="status != null">#{status},</if>
+            <if test="retryCount != null">#{retryCount},</if>
+            <if test="allocatedInputTokens != null">#{allocatedInputTokens},</if>
+            <if test="allocatedOutputTokens != null">#{allocatedOutputTokens},</if>
+            <if test="allocatedCostAmount != null">#{allocatedCostAmount},</if>
+            <if test="errorCode != null">#{errorCode},</if>
+            <if test="errorMessage != null">#{errorMessage},</if>
+            <if test="createdAt != null">#{createdAt},</if>
+            <if test="finishedAt != null">#{finishedAt},</if>
+        </trim>
+    </insert>
+
+    <update id="updateById">
+        UPDATE analysis_task_item
+        <set>
+            <if test="taskId != null">task_id = #{taskId},</if>
+            <if test="batchId != null">batch_id = #{batchId},</if>
+            <if test="targetType != null">target_type = #{targetType},</if>
+            <if test="targetId != null">target_id = #{targetId},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="retryCount != null">retry_count = #{retryCount},</if>
+            <if test="allocatedInputTokens != null">allocated_input_tokens = #{allocatedInputTokens},</if>
+            <if test="allocatedOutputTokens != null">allocated_output_tokens = #{allocatedOutputTokens},</if>
+            <if test="allocatedCostAmount != null">allocated_cost_amount = #{allocatedCostAmount},</if>
+            <if test="errorCode != null">error_code = #{errorCode},</if>
+            <if test="errorMessage != null">error_message = #{errorMessage},</if>
+            <if test="createdAt != null">created_at = #{createdAt},</if>
+            <if test="finishedAt != null">finished_at = #{finishedAt},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM analysis_task_item WHERE id = #{id}
+    </delete>
+</mapper>

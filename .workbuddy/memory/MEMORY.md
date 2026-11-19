@@ -1,13 +1,13 @@
 # 项目长期记忆 — CoolPilot Insight
 
 ## 定位
-AI 内容洞察平台（原 DY-Comment）。Spring Boot 2.7(JDK8) + Vue3 + Python(Flask/jieba/DrissionPage) + MySQL8，
-Docker Compose 四服务：`mysql` / `flask` / `backend`(内置 Python+Chrome) / `frontend`(Nginx)。
+AI 内容洞察平台（原 DY-Comment）。Spring Boot 4.1.2(JDK21) + Vue3 + Python(Flask/jieba/DrissionPage) + MySQL8，
+Docker Compose 四服务：`mysql` / `flask`(跑的是 **ai-service**) / `backend`(内置 Python+Chrome) / `frontend`(Nginx)。
 远程：`git@github.com:Edgarmongo/coolpilot-insight.git`（origin），旧仓库为 `upstream`。
 
-## 架构基线（2026-11-04 落地）
-- **Flyway 8.5.13 是唯一结构入口**（core + flyway-mysql 两个依赖缺一不可）。
-  V1~V6 建 25 张表，39 外键 / 23 唯一键 / 6 CHECK。禁 `baselineOnMigrate`，禁 initdb 挂载。
+## 架构基线（2026-11-04 落地，2026-11-16 更新）
+- **Flyway 是唯一结构入口**（core + flyway-mysql 两个依赖缺一不可）。
+  V1~V30 建 25 张表，39 外键 / 23 唯一键 / 6 CHECK。禁 `baselineOnMigrate`，禁 initdb 挂载。
 - `analysis_result` 已废弃；`analysis_result` 的统计字段历史上从未被读取。
 - 关键表：`video`(内部id + aweme_id)、`comment`(cid + dedup_key 双唯一键)、
   `collection_task/_item/_log/_checkpoint`、`analysis_profile/_task/_batch/_item`、
@@ -26,6 +26,26 @@ Docker Compose 四服务：`mysql` / `flask` / `backend`(内置 Python+Chrome) /
 6. Maven 官方源不可达，本地/容器均用阿里云 https settings（`-s` 指定）。
 7. 容器映射 MySQL→3307、前端→5173（本机 3306/3000 被占）。
 8. Docker 挂载在 Windows Git Bash 下需 `MSYS_NO_PATHCONV=1`。
+9. **Jackson 两代并存**（2026-11-17）：Boot 4 的消息转换器是 Jackson 3（`tools.jackson`），
+   业务代码普遍用 Jackson 2（`com.fasterxml`）。`@RequestBody com.fasterxml...JsonNode`
+   会在**读请求体阶段**500（报"抽象类型无法实例化"，与业务无关）。
+   需要严格判定入参时收**原始字符串**，在 service 内用 Jackson 2 解析。
+10. `docker compose` 必须带 `--env-file .env`（`.env` 在仓库根，compose 文件在 `deploy/compose/`）。
+
+## 数据源能力模型（2026-11-17 落地 SOURCE-04-06/07）
+- Flyway 现到 **V33**。V31 把 `capability_json` 迁到 v2（单条 UPDATE、可重入、
+  整行迁移或整行不动）；V32 权限点 `source:capability:view|manage`；V33 启用 `/sources` 菜单。
+- 接口：`GET/PUT /api/v1/source/sources/{code}/capabilities`（三态明细 / 覆盖写 Desired）。
+- 写入口唯一闸门 `DesiredWriteValidator`：类型严格、未知字段拒收、拒写 v1、
+  `accessModes` 为空不填默认值、落库 JSON 由**校验后的模型**重新序列化（幂等）。
+- 只写 `capability_json` 一列，不碰 `status` 与 `ds_account.auth_status`。
+- 列表接口 `capability` 旧字段改为由 Desired **派生**（v2 行不再回显整份文档，
+  旧状态词 `commentStatus`/`keywordStatus` 不再输出）。
+
+## 待裁决（2026-11-17）
+`COMMENT_REPLY` 是否由 v1 的 `comments:true` 派生：04-04 §1.1 示例含 4 条、
+§2.2 映射规则只产 3 条。当前按 §2.2 不推定，运行时显示 `NOT_DECLARED`。
+
 
 ## 已验证事实
 - 抖音评论接口**返回 cid**（19/19），楼中楼 `reply_comment` 有效。
@@ -42,14 +62,48 @@ DeepSeek Key 有效。评论级 19/19 成功；视频级洞察落 26 条证据�
 `analysis_task` 的 token/成本必须按 usage_record 分项聚合，早期用 `tokens/2` 对半拆是错的。
 
 ## 迁移与表结构
-Flyway 是唯一入口，当前 `V1~V8`。V8 给 `analysis_evidence` 补 `source_level`
-（实体有、V4 建表漏），缺它会让评论级分析整批 FAILED。
+Flyway 是唯一入口，当前 `V1~V30`（V9 source 模块 / V20 Run+Execution / V28 账号授权 / V30 账号权限码）。
+V8 给 `analysis_evidence` 补 `source_level`（实体有、V4 建表漏），缺它会让评论级分析整批 FAILED。
 改表前后跑 `tools/check_schema_drift.py`（实体字段转 snake_case vs information_schema）。
 
+## 能力模型 SOURCE-00~03（2026-11-16）
+- 三态模型：**Desired(Java `capability_json`) / Observed(Python Registry) / Effective(两侧核对)**。
+- Python 侧 Registry 在 `collection-service/app/registry/`；契约文档
+  `docs/architecture/collection/SOURCE-02-CONTRACT.md` + `SOURCE-02-capability-schema.json`。
+- **能力 = 声明 + 函数绑定**：`adapterFunction` 解析不到真实可调用函数 ⇒ 该能力不进入 Observed 清单。
+- **三层存在性要分清**：函数存在 / 函数可调用 / 函数执行成功。Registry 只证明前两层；
+  第三层靠 `app/registry/verification_evidence.json`（由 `tools/verify_capability.py` 实跑产出）。
+  代码里的声明一律从 `UNVERIFIED` 起步。
+- **枚举纪律**：`implementationStatus` 六值（UNVERIFIED/IMPLEMENTED/VERIFIED/DEGRADED/DISABLED/UNSUPPORTED）、
+  `effectiveStatus` 八值。`NOT_LOADED` 是适配器加载状态，`INVALID_IMPLEMENTATION` 是诊断原因码，
+  **都不是状态枚举**——别为了凑场景说明表扩枚举。
+- 已验证：DOUYIN_PUBLIC 的 COMMENT/COMMENT_REPLY/CONTENT_DETAIL = VERIFIED（有真实证据）；
+  **KEYWORD_SEARCH 恒为 UNVERIFIED**（无验证器，风控未知）。
+- **采集服务已独立容器化（方案 A，`cpi-collection`，端口 5001）**：Dockerfile
+  `deploy/docker/collection.Dockerfile`；与 backend **共享同一宿主 CSV 目录**
+  （`collection-service/datas`）与 `chrome-data` 卷。约束：**两容器不得并发启动 Chrome**。
+- **探活必须分开**：`AccountVerificationService` 曾把 ai-service 当采集服务探活（两者都返 200，
+  错误长期未暴露）。现由 `integration/health/ServiceHealthProbe` 显式绑定服务名；
+  `COLLECTION_SERVICE` 不可达 → `SERVICE_UNAVAILABLE` 且**不改 auth_status**，
+  `AI_SERVICE` 不可达 → 不影响账号判定。配置键 `app.collection-service-url` / `app.ai-service-url`。
+- **契约 Schema 已升 1.1**：新增 `capabilities[].semantics`（枚举**仅 `READ`**）。
+  写能力在 Schema 里没有表达位置 ⇒ `COMMENT_REPLY` 只可能是"读取楼中楼回复"。
+- **验证证据 schema 2.0**：每条记录带 `contentHash`（记录本体哈希）
+  + `scope`（sourceCode/connectorCode/connectorVersion/capabilityCode/accessModes/contractVersion）
+  + `scope.implementationHash`（声明 + 目标函数源码指纹），TTL 默认 30 天
+  （`CAPABILITY_EVIDENCE_TTL_DAYS`）。篡改记录/改实现/改版本/超期 **四类都会被拒绝**并产生诊断。
+  `contentHash` 算法公开 → 能防误改，**不能防恶意伪造**（签名属 SOURCE-09）。
+- 生产采集仍走**子进程**：`python comment.py <id> <max>` → CSV `<aweme_id>.csv`（Java 读文件，
+  不读 stdout）；`search.py` 的 stdout 协议 `VIDEO|aweme_id|title|author|likes|url` 被 DiscoveryService 解析。
+  这三条是硬契约，改脚本时不得破坏。
+
 ## 快速改后端（免重建镜像）
-`mvn -s docker/maven-settings.xml -DskipTests compile` → zipfile 替换 `/app/app.jar` 里对应
+`mvn -s deploy/docker/maven-settings.xml -DskipTests compile` → zipfile 替换 `/app/app.jar` 里对应
 `.class`（迁移文件放 `BOOT-INF/classes/db/migration/`）→ `docker restart cpi-backend`。
 重建后用 `zipfile.testzip()` 校验，正常应有 65 个 `BOOT-INF/lib/` 条目。
+改 `collection-service/` 的 Python 脚本必须 `docker compose build backend`（代码是 COPY 进镜像，
+只有 `collection-service/datas` 是 bind mount）；临时验证可直接 `docker cp collection-service/. cpi-backend:/app/collection-service`。
 
 ## 待验证
-`douyin_search.py` 真实关键词搜索（风控未知）；`file_asset` 未接入上传落库。
+`douyin_search.py` 真实关键词搜索（风控未知）；`file_asset` 未接入上传落库；
+Java 消费 Python `/v1/capabilities`（SOURCE-04-02）；Desired/Observed/Effective 核对（SOURCE-04-03）。
