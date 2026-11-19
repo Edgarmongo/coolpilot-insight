@@ -34,8 +34,9 @@ CoolPilot Insight 面向**个人知识产品与技术服务的经营者**：从�
 
 **抖音视频链接 → 评论采集 → 清洗（情感/去重） → AI 需求与话题分析 → 人工复核 → 报告导出**
 
-也就是说：**采集与分析已经能跑通，从需求到线索的转化还未建设。**
-`docs/audit/` 里有逐项的实现度判定与证据，`docs/product/01-positioning.md` 有目标架构与路线图。
+也就是说：**采集、清洗、AI 分析与报告导出已经跑通；商业洞察与行业研究尚未建设。**
+产品定位与路线图见 `docs/product/PRODUCT-VISION.md`、`PRODUCT-ROADMAP.md`；
+当前实现映射与差距见 `docs/architecture/product-baseline/`。
 
 ### 能力现状（诚实版）
 
@@ -276,13 +277,11 @@ coolpilot-insight/
 ├── tools/                           # 迁移与校验脚本（代码生成、表结构漂移检查）
 ├── compose.yaml                     # 统一入口：include deploy/compose/docker-compose.yml
 ├── .env.example                     # 环境变量模板（复制为 .env）
-├── coolpilot_insight.sql            # 建库建表 SQL（历史方案，正式以 Flyway 为准）
 └── README.md
 ```
 
-> `frontend/` `backend/` `collection-service/` `ai-service/` 是**目标组织方式**，
-> Java 根包已迁移为 `com.coolpilot.insight`；业务模块尚未按 `source/collection/content/analysis/lead/...`
-> 拆分模块——那属于 P1 阶段工作，见 `docs/audit/06-migration-recommendations.md`。
+> `source` / `collection` / `content` / `system` 已按模块拆分（Java 根包 `com.coolpilot.insight`），
+> 其余分析类能力仍在传统分层（`service/`、`controller/`）中；数据库结构以 **Flyway（当前 V33）为唯一入口**。
 
 ---
 
@@ -498,11 +497,8 @@ cd backend && mvn -s ../deploy/docker/maven-settings.xml test
 - [需求设计文档](需求设计（抖音多视频评论分析与可视化平台）.md) — 完整的需求分析、功能设计、数据表设计
 - [Docker 部署指南](deploy/docker/DOCKER部署指南.md) — 一键容器化启动、架构说明、常见问题
 - [爬虫维护笔记](抖音爬虫维护笔记.md) — 爬虫故障排查指南
-- [简洁版使用指南](简洁版使用指南.txt) — 快速上手指南
-> ⚠️ **架构重构进行中**：common/system/source/collection 已模块化，content/analysis/lead/conversion/analytics 尚未迁移，
-> 数据库仍为旧结构（新基线已就绪未切换）。进度与交接见 [重构状态](docs/architecture/refactor/STATUS-handover.md)。
-
-- [产品定位与能力矩阵](docs/product/01-positioning.md) — 目标形态、八大中心、路线图与产品边界
+- [产品愿景与定位](docs/product/PRODUCT-VISION.md) — 定位、业务域、行业场景与研究边界
+- [产品架构](docs/product/PRODUCT-ARCHITECTURE.md) / [路线图](docs/product/PRODUCT-ROADMAP.md)
 - [工程基线审计](docs/audit/01-project-baseline.md) — 升级前的技术栈、模块、API、采集能力与风险清单（6 篇）
 - [仓库结构说明](docs/architecture/01-repo-structure.md) — 目录职责、依赖方向、compose include 的原因与未完成项
 - [Boot 4 迁移记录](docs/migration/2026-11-15-boot4-jdk21-mybatis.md) — Spring Boot 4 + JDK 21 + 原生 MyBatis 的变更、语义陷阱与验证结果

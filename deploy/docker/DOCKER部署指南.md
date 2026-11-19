@@ -41,9 +41,9 @@ docker compose logs -f backend
 
 ### 默认管理员账号
 
-`coolpilot_insight.sql` 初始化时已自动创建管理员：
+管理员账号由 Flyway 迁移预置（哨兵密码，首次启动由 `ADMIN_INIT_PASSWORD` 初始化）：
 
-- 手机号：`13800000000`（或 `10000000000`）
+- 手机号：`00000000001`（或 `00000000002`）
 - 密码：`123456`
 
 普通用户可在前端「注册」页自行创建。
@@ -92,9 +92,9 @@ docker compose down -v
 
 | 服务 | 镜像 | 职责 |
 |------|------|------|
-| `mysql` | mysql:8.0 | 数据存储，首次启动自动执行 `coolpilot_insight.sql` |
+| `mysql` | mysql:8.0 | 数据存储，结构由 Flyway 迁移（V1–V33）建立 |
 | `flask` | python:3.12-slim | jieba 分词 + DeepSeek AI 话题分析 |
-| `backend` | eclipse-temurin:8-jre-jammy | Spring Boot 主服务，内置 Python/Chrome 以执行爬虫与清洗脚本 |
+| `backend` | eclipse-temurin:21-jre-jammy | Spring Boot 主服务，内置 Python/Chrome 以执行清洗脚本 |
 | `frontend` | node:18-alpine → nginx:alpine | 构建前端静态产物并托管，反代 `/api` |
 
 ---
@@ -213,8 +213,8 @@ docker compose logs mysql
 docker compose exec backend curl -s "http://localhost:8080/api/analysis/summary?video_id=test"
 ```
 
-MySQL 首次启动会自动导入 `coolpilot_insight.sql`（约 30 秒）。
-若修改过该脚本，需 `docker compose down -v` 后重建数据卷。
+MySQL 首次启动时由 **Flyway** 自动执行 `backend/src/main/resources/db/migration/` 下的迁移（当前到 V33）。
+不要再手工导入建表脚本——`baselineOnMigrate` 与 initdb 挂载都已被禁用。
 
 ### 端口被占用
 
